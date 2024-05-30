@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+    <title>Add Package</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+</head>
+<body>
+    <div class="container">
+        <h1>Add New Package</h1>
+        <form method="post">
+            <label for="name">Name</label>
+            <input type="text" name="name" id="name" required>
+            <label for="version">Version</label>
+            <input type="text" name="version" id="version" required>
+            <label for="release">Release</label>
+            <input type="text" name="release" id="release" required>
+            <label for="repo">Repo</label>
+            <input type="text" name="repo" id="repo" required>
+            <label for="build_status">Build Status</label>
+            <input type="text" name="build_status" id="build_status" required>
+            <button type="submit">Add Package</button>
+            <a href="{{ url_for('index') }}" class="btn btn-secondary">Cancel</a>
+        </form>
+    </div>
+</body>
+</html>
