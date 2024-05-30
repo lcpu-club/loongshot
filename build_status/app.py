@@ -68,6 +68,23 @@ def delete(id):
     conn.close()
     return redirect(url_for('index'))
 
+@app.route('/update', methods=('POST',))
+def update():
+    name = request.form['name']
+    print(name)
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute('SELECT * FROM packages WHERE name = ?', (name,))
+    package = cursor.fetchone()
+
+    if package:
+        build_status = request.form['build_status']
+        cursor.execute('UPDATE packages SET build_status = ? WHERE name = ?',
+                       (build_status, name))
+        conn.commit()
+        conn.close()
+    return redirect(url_for('index'))
+
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000)
 

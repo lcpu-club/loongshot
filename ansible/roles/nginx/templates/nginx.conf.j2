@@ -48,6 +48,13 @@ http {
 
             proxy_pass http://unix:/srv/http/status/build-status.sock;
         }
+
+        location /update {
+            allow 10.88.0.0/16;
+            deny all;
+
+            proxy_pass http://unix:/srv/http/status/build-status.sock;
+        }
     }
 }
 
