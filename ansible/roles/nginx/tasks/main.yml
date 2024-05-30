@@ -1,0 +1,25 @@
+- name: Ensure Python and nginx are installed
+  pacman:
+    name: python,python-flask,gunicorn,nginx
+    state: present
+
+- name: Create systemd service for Gunicorn
+  template:
+    src: build-status.service.j2
+    dest: /etc/systemd/system/build-status.service
+
+- name: Start and enable Gunicorn service
+  systemd:
+    name: build-status
+    enabled: yes
+    state: started
+
+- name: Configure Nginx to proxy requests to Gunicorn
+  template:
+    src: nginx.conf.j2
+    dest: /etc/nginx/nginx.conf
+
+- name: Restart Nginx
+  systemd:
+    name: nginx
+    state: restarted

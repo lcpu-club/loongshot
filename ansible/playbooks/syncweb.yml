@@ -1,0 +1,10 @@
+- name: Sync flask code to the server
+  hosts: arch2
+  become: true
+
+  vars:
+    src_dir: "../../build_status"
+    dest_dir: "/srv/http/status/"
+  roles:
+    - syncweb
+

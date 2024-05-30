@@ -1,0 +1,53 @@
+worker_processes auto;
+
+events {
+    worker_connections  1024;
+}
+
+http {
+    include       mime.types;
+    default_type  application/octet-stream;
+
+    sendfile        on;
+    #tcp_nopush     on;
+    gzip    on;
+    gzip_comp_level 6;
+
+    keepalive_timeout  65;
+
+    server {
+        listen 80;
+        listen [::]:80;
+        server_name {{ nginx_server_name }};
+
+        location /static/ {
+            alias /srv/http/status/static/;
+        }
+
+        location / {
+            proxy_pass http://unix:/srv/http/status/build-status.sock;
+        }
+
+        location /edit {
+            allow 10.88.0.0/16;
+            deny all;
+
+            proxy_pass http://unix:/srv/http/status/build-status.sock;
+        }
+
+        location /add {
+            allow 10.88.0.0/16;
+            deny all;
+
+            proxy_pass http://unix:/srv/http/status/build-status.sock;
+        }
+
+        location /delete {
+            allow 10.88.0.0/16;
+            deny all;
+
+            proxy_pass http://unix:/srv/http/status/build-status.sock;
+        }
+    }
+}
+

@@ -1,0 +1,26 @@
+- name: Ensure destination directory exists
+  file:
+    path: "{{ dest_dir}}"
+    state: directory
+    owner: http
+    group: http
+    mode: 0755
+  check_mode: no
+
+- name: Sync source tree
+  synchronize:
+    src:  "{{ src_dir }}"
+    dest: "{{ dest_dir }}"
+    rsync_opts: "-avz --delete --exclude '*.db'"
+
+- name: Change ownership of destination directory
+  file:
+    path: "{{ dest_dir }}"
+    owner: http
+    group: http
+    recurse: yes
+
+- name: Restart gunicorn
+  systemd:
+    name: build-status
+    state: restarted

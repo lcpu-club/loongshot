@@ -1,0 +1,10 @@
+- name: Deploy web server
+  hosts: arch2
+  become: true
+  vars:
+    app_user: http
+    app_group: http
+    nginx_server_name: arch.madeinpku.club
+  roles:
+    - common
+    - nginx
