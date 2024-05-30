@@ -9,7 +9,6 @@
 <body>
     <div class="container">
         <h1>Package List</h1>
-        <a href="{{ url_for('add') }}" class="btn btn-primary">Add New Package</a>
         <table>
             <thead>
                 <tr>
@@ -18,7 +17,6 @@
                     <th>Release</th>
                     <th>Repo</th>
                     <th>Build Status</th>
-                    <th>Actions</th>
                 </tr>
             </thead>
             <tbody>
@@ -29,12 +27,6 @@
                     <td>{{ package.release }}</td>
                     <td>{{ package.repo }}</td>
                     <td>{{ package.build_status }}</td>
-                    <td>
-                        <a href="{{ url_for('edit', id=package['rowid']) }}" class="btn btn-warning">Edit</a>
-                        <form action="{{ url_for('delete', id=package['rowid']) }}" method="post" style="display:inline;">
-                            <button type="submit" class="btn btn-danger">Delete</button>
-                        </form>
-                    </td>
                 </tr>
                 {% endfor %}
             </tbody>
