@@ -27,8 +27,11 @@ def add():
 
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute('INSERT INTO packages (name, version, release, repo, build_status) VALUES (?, ?, ?, ?, ?)',
+    try:
+        cursor.execute('INSERT INTO packages (name, version, release, repo, build_status) VALUES (?, ?, ?, ?, ?)',
                    (name, version, release, repo, build_status))
+    except:
+        pass
     conn.commit()
     conn.close()
     return redirect(url_for('index'))
