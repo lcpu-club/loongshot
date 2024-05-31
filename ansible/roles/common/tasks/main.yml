@@ -6,9 +6,11 @@
     group: root
     mode: 0644
 
-- name: Update package cache
+- name: Full system upgrade (equivalent to `pacman -Syu`)
   pacman:
     update_cache: yes
+    upgrade: yes
+    extra_args: --noconfirm
 
 - name: Install essential tools
   pacman:

@@ -1,10 +1,13 @@
 - name: Deploy web server
-  hosts: arch2
+  hosts: web
   become: true
   vars:
     app_user: http
     app_group: http
-    nginx_server_name: arch.madeinpku.club
+    nginx_server_name: loongarch.lcpu.dev
+    src_dir: "../../build_status/"
+    dest_dir: "/srv/http/status"
   roles:
     - common
     - nginx
+    - syncweb
