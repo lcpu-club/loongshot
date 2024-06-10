@@ -1,4 +1,4 @@
-# Used for debugging
+ Used for debugging
 - name: Install wireguard-tools
   pacman: name=wireguard-tools state=present
 
@@ -9,16 +9,16 @@
     - {src: wg0.network.j2, dest: wg0.network}
   notify: Reload wireguard
 
-- name: Create wireguard zone
-  ansible.posix.firewalld: zone=wireguard permanent=yes state=present
-  register: result
-
-- name: Reload firewalld
-  service: name=firewalld state=reloaded
-  when: result.changed
-
-- name: Add wg0 to the wireguard zone
-  ansible.posix.firewalld: zone=wireguard interface=wg0 permanent=yes immediate=yes state=enabled
-
-- name: Open firewall holes
-  ansible.posix.firewalld: service=wireguard permanent=yes immediate=yes state=enabled
+#- name: Create wireguard zone
+#  ansible.posix.firewalld: zone=wireguard permanent=yes state=present
+#  register: result
+#
+#- name: Reload firewalld
+#  service: name=firewalld state=reloaded
+#  when: result.changed
+#
+#- name: Add wg0 to the wireguard zone
+#  ansible.posix.firewalld: zone=wireguard interface=wg0 permanent=yes immediate=yes state=enabled
+#
+#- name: Open firewall holes
+#  ansible.posix.firewalld: service=wireguard permanent=yes immediate=yes state=enabled
