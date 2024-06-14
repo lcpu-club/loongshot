@@ -25,6 +25,7 @@ detail = common_header + '''
 <thead><tr><th>package</th><th>x86_64</th><th>loong64</th><th>repo</th></tr></thead><tbody>
 '''
 pkgdata = {}
+pkgrepo = {}
 pkgcount = {}
 
 # x86_64 as baseline
@@ -35,6 +36,7 @@ for repo in DBS:
     pkgcount[repo] = 0
     for package in db_handle.search(""):
         pkgdata[package.name] = package.version
+        pkgrepo[package.name] = repo
         pkgcount[repo] += 1
     summary += f"<td>{pkgcount[repo]}</td><td>0</td><td>0</td>"
 summary += "</tr>"
@@ -55,13 +57,20 @@ for repo in DBS:
                 uptodate += 1
             else:
                 detail += f"<tr><td>{package.name}</td><td>{pkgdata[package.name]}</td>"
-                detail += f"<td>{package.version}</td><td>{repo}</td></tr>"
+                detail += f"<td>{package.version}</td><td>{repo}</td></tr>\n"
                 outdated += 1
+            del pkgdata[package.name]
+        else:
+            detail += f"<tr><td><font color=orange>{package.name}</td><td></td><td>"
+            detail += f"{package.version}</td><td>{repo}</td></tr>\n"
     percent = round((uptodate * 100.0 / pkgcount[repo]), 2)
     summary += f"<td><font color=green>{uptodate} ({percent}%)</font></td>"
     summary += f"<td><font color=orange>{outdated}</font></td>"
     summary += f"<td><font color=red>{pkgcount[repo] - uptodate - outdated}</font></td>"
 summary += "</tr></tbody></table></div>"
+for pkg in pkgdata.keys():
+    detail += f"<tr><td><font color=red>{pkg}</td><td>{pkgdata[pkg]}</td>"
+    detail += f"<td><font color=red>missing</td><td>{pkgrepo[pkg]}</td></tr>\n"
 detail += "</tbody></table></div>"
 # Write the HTML content to a file
 with open('summary.html', 'w') as f:
