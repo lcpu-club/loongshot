@@ -4,7 +4,7 @@
   vars:
     app_user: http
     app_group: http
-    nginx_server_name: loongarch.lcpu.dev
+    nginx_server_name: loongarchlinux.lcpu.dev
     src_dir: "../../build_status/"
     dest_dir: "/srv/http/status"
   roles:
