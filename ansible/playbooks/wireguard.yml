@@ -1,0 +1,5 @@
+- name: Deploy Wireguard
+  hosts: all
+  become: true
+  roles:
+    - wireguard
