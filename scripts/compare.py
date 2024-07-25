@@ -5,6 +5,7 @@
 
 import pyalpm
 import os
+import sqlite3
 
 DBS = ["core", "extra"]
 
@@ -27,6 +28,9 @@ detail = common_header + '''
 pkgdata = {}
 pkgrepo = {}
 pkgcount = {}
+conn = sqlite3.connect('packages.db')
+conn.row_factory = sqlite3.Row
+cursor = conn.cursor()
 
 # x86_64 as baseline
 summary += "<tr><td>x86_64</td>"
@@ -40,6 +44,7 @@ for repo in DBS:
         pkgcount[repo] += 1
     summary += f"<td>{pkgcount[repo]}</td><td>0</td><td>0</td>"
 summary += "</tr>"
+conn.commit()
 
 # loong64 as comparison
 arch="loong64"
@@ -50,6 +55,10 @@ for repo in DBS:
     outdated = 0
     for package in db_handle.search(""):
         if package.name in pkgdata:
+            try:
+                cursor.execute("insert into packages(name,loong_ver,x86_ver,repo,build_status) values (?,?,?,?,?)", (package.name, package.version, pkgdata[package.name], repo, "void"))
+            except:
+                pass
             version = package.version.split("-")
             version[1] = version[1].split(".")[0]
             version = "-".join(version)
@@ -63,14 +72,24 @@ for repo in DBS:
         else:
             detail += f"<tr><td><font color=orange>{package.name}</td><td></td><td>"
             detail += f"{package.version}</td><td>{repo}</td></tr>\n"
+            try:
+                cursor.execute("insert into packages(name,loong_ver,x86_ver,repo,build_status) values (?,?,?,?,?)", (package.name, package.version, "missing", repo, "void"))
+            except:
+                pass
     percent = round((uptodate * 100.0 / pkgcount[repo]), 2)
     summary += f"<td><font color=green>{uptodate} ({percent}%)</font></td>"
     summary += f"<td><font color=orange>{outdated}</font></td>"
     summary += f"<td><font color=red>{pkgcount[repo] - uptodate - outdated}</font></td>"
 summary += "</tr></tbody></table></div>"
+conn.commit()
 for pkg in pkgdata.keys():
     detail += f"<tr><td><font color=red>{pkg}</td><td>{pkgdata[pkg]}</td>"
     detail += f"<td><font color=red>missing</td><td>{pkgrepo[pkg]}</td></tr>\n"
+    try:
+        cursor.execute("insert into packages(name,loong_ver,x86_ver,repo,build_status) values (?,?,?,?,?)", (pkg, "missing", pkgdata[pkg], pkgrepo[pkg], "void"))
+    except:
+        pass
+conn.commit()
 detail += "</tbody></table></div>"
 # Write the HTML content to a file
 with open('summary.html', 'w') as f:
