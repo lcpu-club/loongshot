@@ -25,32 +25,36 @@ http {
         }
 
         location / {
+            alias /srv/http/status/html/;
+        }
+
+        location /status {
             proxy_pass http://unix:/srv/http/status/build-status.sock;
         }
 
         location /edit {
-            allow 10.88.0.0/16;
+            allow 100.87.1.0/24;
             deny all;
 
             proxy_pass http://unix:/srv/http/status/build-status.sock;
         }
 
         location /add {
-            allow 10.88.0.0/16;
+            allow 100.87.1.0/24;
             deny all;
 
             proxy_pass http://unix:/srv/http/status/build-status.sock;
         }
 
         location /delete {
-            allow 10.88.0.0/16;
+            allow 100.87.1.0/24;
             deny all;
 
             proxy_pass http://unix:/srv/http/status/build-status.sock;
         }
 
         location /update {
-            allow 10.88.0.0/16;
+            allow 100.87.1.0/24;
             deny all;
 
             proxy_pass http://unix:/srv/http/status/build-status.sock;
