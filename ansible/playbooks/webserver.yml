@@ -5,7 +5,7 @@
     app_user: http
     app_group: http
     nginx_server_name: loongarchlinux.lcpu.dev
-    src_dir: "../../build_status/"
+    src_dir: "../../web_server/"
     dest_dir: "/srv/http/status"
   roles:
     - common
