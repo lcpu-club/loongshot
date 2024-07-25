@@ -8,7 +8,7 @@ def get_db_connection():
     conn.row_factory = sqlite3.Row
     return conn
 
-@app.route('/')
+@app.route('/status')
 def index():
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -17,19 +17,28 @@ def index():
     conn.close()
     return render_template('index.html', packages=packages)
 
+@app.route('/show/<name>')
+def show(name):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute('SELECT rowid,* FROM packages where name=?',(name,))
+    packages = cursor.fetchall()
+    conn.close()
+    return render_template('index.html', packages=packages)
+
 @app.route('/add', methods=('POST',))
 def add():
     name = request.form['name']
-    version = request.form['version']
-    release = request.form['release']
+    loong_ver = request.form['loong_ver']
+    x86_ver = request.form['x86_ver']
     repo = request.form['repo']
     build_status = request.form['build_status']
 
     conn = get_db_connection()
     cursor = conn.cursor()
     try:
-        cursor.execute('INSERT INTO packages (name, version, release, repo, build_status) VALUES (?, ?, ?, ?, ?)',
-                   (name, version, release, repo, build_status))
+        cursor.execute('INSERT INTO packages (name, loong_ver, x86_ver, repo, build_status) VALUES (?, ?, ?, ?, ?)',
+                   (name, loong_ver, x86_ver, repo, build_status))
     except:
         pass
     conn.commit()
@@ -43,13 +52,13 @@ def edit(name):
     cursor.execute('SELECT * FROM packages WHERE name = ?', (name,))
     package = cursor.fetchone()
 
-    version = request.form['version']
-    release = request.form['release']
+    loong_ver = request.form['loong_ver']
+    x86_ver = request.form['x86_ver']
     repo = request.form['repo']
     build_status = request.form['build_status']
 
-    cursor.execute('UPDATE packages SET version = ?, release = ?, repo = ?, build_status = ? WHERE name = ?',
-                   (version, release, repo, build_status, name))
+    cursor.execute('UPDATE packages SET loong_ver = ?, x86_ver = ?, repo = ?, build_status = ? WHERE name = ?',
+                   (loong_ver, x86_ver, repo, build_status, name))
     conn.commit()
     conn.close()
     return redirect(url_for('index'))

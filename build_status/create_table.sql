@@ -1,7 +1,7 @@
 CREATE TABLE packages (
     name TEXT PRIMARY KEY,
-    version TEXT,
-    release INT,
+    loong_ver TEXT,
+    x86_ver TEXT,
     repo TEXT,
     build_status TEXT
 );
