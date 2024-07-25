@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, redirect, url_for
+from flask import Flask, render_template, request, redirect, url_for, jsonify
 import sqlite3
 
 app = Flask(__name__)
@@ -21,10 +21,20 @@ def index():
 def show(name):
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute('SELECT rowid,* FROM packages where name=?',(name,))
+    cursor.execute('SELECT * FROM packages where name=?',(name,))
     packages = cursor.fetchall()
     conn.close()
-    return render_template('index.html', packages=packages)
+    if packages:
+        data = {
+                'name' : packages[0]['name'],
+                'loong_ver' : packages[0]['loong_ver'],
+                'x86_ver' : packages[0]['x86_ver'],
+                'repo' : packages[0]['repo'],
+                'build_status' : packages[0]['build_status']
+        }
+        return jsonify(data)
+    else:
+        return jsonify({'error': 'no package found.'})
 
 @app.route('/add', methods=('POST',))
 def add():
