@@ -34,6 +34,7 @@ http {
 
         location /edit {
             allow 100.87.1.0/24;
+            allow 127.0.0.1/8;
             deny all;
 
             proxy_pass http://unix:/srv/http/status/build-status.sock;
@@ -41,6 +42,7 @@ http {
 
         location /add {
             allow 100.87.1.0/24;
+            allow 127.0.0.1/8;
             deny all;
 
             proxy_pass http://unix:/srv/http/status/build-status.sock;
@@ -48,6 +50,7 @@ http {
 
         location /delete {
             allow 100.87.1.0/24;
+            allow 127.0.0.1/8;
             deny all;
 
             proxy_pass http://unix:/srv/http/status/build-status.sock;
@@ -55,6 +58,15 @@ http {
 
         location /update {
             allow 100.87.1.0/24;
+            allow 127.0.0.1/8;
+            deny all;
+
+            proxy_pass http://unix:/srv/http/status/build-status.sock;
+        }
+
+        location /show {
+            allow 100.87.1.0/24;
+            allow 127.0.0.1/8;
             deny all;
 
             proxy_pass http://unix:/srv/http/status/build-status.sock;

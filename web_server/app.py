@@ -34,7 +34,7 @@ def show(name):
         }
         return jsonify(data)
     else:
-        return jsonify({'error': 'no package found.'})
+        return jsonify({'error': 'no package found.'}),404
 
 @app.route('/add', methods=('POST',))
 def add():
