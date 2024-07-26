@@ -5,3 +5,4 @@ This repository contains documents and tools necessary to support building Arch 
 ## Status
 
 It's still in very early stage, looking for help and comments.
+Visite [project homepage](https://loongarchlinux.lcpu.dev) for more informations.
