@@ -24,6 +24,13 @@ http {
             alias /srv/http/status/static/;
         }
 
+        location /loongarch/ {
+            alias /srv/http/loongarch/;
+            autoindex on;
+            autoindex_exact_size on;
+            autoindex_localtime on;
+        }
+
         location / {
             alias /srv/http/status/html/;
         }
