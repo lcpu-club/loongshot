@@ -17,7 +17,7 @@ def index():
     conn.close()
     return render_template('index.html', packages=packages)
 
-@app.route('/show/<name>')
+@app.route('/op/show/<name>')
 def show(name):
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -36,7 +36,7 @@ def show(name):
     else:
         return jsonify({'error': 'no package found.'}),404
 
-@app.route('/add', methods=('POST',))
+@app.route('/op/add', methods=('POST',))
 def add():
     name = request.form['name']
     loong_ver = request.form['loong_ver']
@@ -55,25 +55,21 @@ def add():
     conn.close()
     return redirect(url_for('index'))
 
-@app.route('/edit/<name>', methods=('POST',))
+@app.route('/op/edit/<name>', methods=('POST',))
 def edit(name):
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute('SELECT * FROM packages WHERE name = ?', (name,))
-    package = cursor.fetchone()
-
     loong_ver = request.form['loong_ver']
     x86_ver = request.form['x86_ver']
     repo = request.form['repo']
     build_status = request.form['build_status']
-
     cursor.execute('UPDATE packages SET loong_ver = ?, x86_ver = ?, repo = ?, build_status = ? WHERE name = ?',
                    (loong_ver, x86_ver, repo, build_status, name))
     conn.commit()
     conn.close()
     return redirect(url_for('index'))
 
-@app.route('/delete/<name>', methods=('POST',))
+@app.route('/op/delete/<name>', methods=('POST',))
 def delete(name):
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -82,7 +78,7 @@ def delete(name):
     conn.close()
     return redirect(url_for('index'))
 
-@app.route('/update/<name>', methods=('POST',))
+@app.route('/op/update/<name>', methods=('POST',))
 def update(name):
     conn = get_db_connection()
     cursor = conn.cursor()
