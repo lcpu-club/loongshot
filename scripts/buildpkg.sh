@@ -1,9 +1,10 @@
 #!/bin/bash
 
-# variable should defined in loong.sh:
+# Variables should be defined in loong.sh:
 # 1. LOONGREPO, local dir of loongarch-package repository
 # 2. BUILDER, build server to use
 # 3. WORKDIR, local working dir
+# 4. REPOS, loongarch repo mirror path for testing
 
 . loong.sh
 PKGDIR=$1
@@ -17,6 +18,8 @@ else
     cd $PKGDIR
 fi
 
+PKGVERREL=$(source PKGBUILD; echo $pkgver-$pkgrel)
+
 # apply patch
 if [[ -d "$LOONGREPO/$PKGDIR" ]]; then
     cat $LOONGREPO/$PKGDIR/loong.patch | patch -p0  || exit 1
@@ -29,3 +32,15 @@ rsync -avzP $WORKDIR/$PKGDIR/ $BUILDER:/home/arch/repos/$PKGDIR/ --delete --excl
 ssh -t $BUILDER "cd /home/arch/repos/$PKGDIR; extra-loong64-build -- -- -A" || exit 1
 
 rsync -avzP $BUILDER:/home/arch/repos/$PKGDIR/ $WORKDIR/build/$PKGDIR/ || exit 1
+
+cd $WORKDIR/build/$PKGDIR
+
+JSON=$(curl -s -X GET $WEBSRV/op/show/$PKGDIR) || (echo "Failed to GET"; exit 1)
+
+repo_value=${JSON#*\"repo\":\"}
+repo_value=${repo_value%%\"*}-testing
+
+repo-add $REPOS/$repo_value/os/loong64/$repo_value.db.tar.gz $PKGDIR-$PKGVERREL-loong64.pkg.tar.zst
+cp $PKGDIR-$PKGVERREL-loong64.pkg.tar.zst $REPOS/$repo_value/os/loong64/
+
+curl -s -X POST $WEBSRV/op/edit/$PKGDIR -d "loong_ver=$PKGVERREL&x86_ver=$PKGVERREL&repo=${repo_value%%-testing}&build_status=testing"
