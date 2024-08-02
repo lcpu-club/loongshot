@@ -99,6 +99,7 @@ def update(name):
         build_status = request.form['build_status']
         cursor.execute('UPDATE packages SET build_status = ? WHERE name = ?',
                        (build_status, name))
+        cursor.execute('INSERT INTO logs(name,operation,result) VALUES (?,?,?)', (name, 'build', build_status))
         conn.commit()
         conn.close()
     return redirect(url_for('index'))

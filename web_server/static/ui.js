@@ -10,11 +10,10 @@ document.addEventListener("DOMContentLoaded", function() {
             var x86Cell = cells[2].innerText;
             var statusCell = cells[4];
 
-            if (loongCell === x86Cell) {
-                statusCell.classList.add("highlight-green");
-            }
-            if (statusCell === "failed") {
+            if (statusCell.innerText.includes("fail")) {
                 statusCell.classList.add("highlight-red");
+            } else if (loongCell === x86Cell) {
+                statusCell.classList.add("highlight-green");
             }
         }
     }
