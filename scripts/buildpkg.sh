@@ -18,12 +18,15 @@ else
     cd $PKGDIR
 fi
 
-PKGVERREL=$(source PKGBUILD; echo $pkgver-$pkgrel)
+# version info may change after patching
+ARCHVERREL=$(source PKGBUILD; echo $pkgver-$pkgrel)
 
 # apply patch
 if [[ -d "$LOONGREPO/$PKGDIR" ]]; then
     cat $LOONGREPO/$PKGDIR/loong.patch | patch -p0  || exit 1
 fi
+
+PKGVERREL=$(source PKGBUILD; echo $pkgver-$pkgrel)
 
 # copy package source to build server
 rsync -avzP $WORKDIR/$PKGDIR/ $BUILDER:/home/arch/repos/$PKGDIR/ --delete --exclude=.*
@@ -43,4 +46,4 @@ repo_value=${repo_value%%\"*}-testing
 repo-add $REPOS/$repo_value/os/loong64/$repo_value.db.tar.gz $PKGDIR-$PKGVERREL-loong64.pkg.tar.zst
 cp $PKGDIR-$PKGVERREL-loong64.pkg.tar.zst $REPOS/$repo_value/os/loong64/
 
-curl -s -X POST $WEBSRV/op/edit/$PKGDIR -d "loong_ver=$PKGVERREL&x86_ver=$PKGVERREL&repo=${repo_value%%-testing}&build_status=testing"
+curl -s -X POST $WEBSRV/op/edit/$PKGDIR -d "loong_ver=$PKGVERREL&x86_ver=$ARCHVERREL&repo=${repo_value%%-testing}&build_status=testing"
