@@ -20,6 +20,7 @@ fi
 
 # version info may change after patching
 ARCHVERREL=$(source PKGBUILD; echo $pkgver-$pkgrel)
+ARCH=$(source PKGBUILD; echo $arch)
 
 # apply patch
 if [[ -d "$LOONGREPO/$PKGDIR" ]]; then
@@ -43,7 +44,7 @@ JSON=$(curl -s -X GET $WEBSRV/op/show/$PKGDIR) || (echo "Failed to GET"; exit 1)
 repo_value=${JSON#*\"repo\":\"}
 repo_value=${repo_value%%\"*}-testing
 
-repo-add $REPOS/$repo_value/os/loong64/$repo_value.db.tar.gz $PKGDIR-$PKGVERREL-loong64.pkg.tar.zst
-cp $PKGDIR-$PKGVERREL-loong64.pkg.tar.zst $REPOS/$repo_value/os/loong64/
+repo-add $REPOS/$repo_value/os/loong64/$repo_value.db.tar.gz $PKGDIR-$PKGVERREL-$ARCH.pkg.tar.zst
+cp $PKGDIR-$PKGVERREL-$ARCH.pkg.tar.zst $REPOS/$repo_value/os/loong64/
 
 curl -s -X POST $WEBSRV/op/edit/$PKGDIR -d "loong_ver=$PKGVERREL&x86_ver=$ARCHVERREL&repo=${repo_value%%-testing}&build_status=testing"
