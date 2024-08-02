@@ -21,6 +21,9 @@ fi
 # version info may change after patching
 ARCHVERREL=$(source PKGBUILD; echo $pkgver-$pkgrel)
 ARCH=$(source PKGBUILD; echo $arch)
+if [[ "$ARCH" != "any" ]]; then
+    ARCH="loong64"
+fi
 
 # apply patch
 if [[ -d "$LOONGREPO/$PKGDIR" ]]; then
