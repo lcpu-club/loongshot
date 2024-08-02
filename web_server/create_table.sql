@@ -5,3 +5,10 @@ CREATE TABLE packages (
     repo TEXT,
     build_status TEXT
 );
+
+CREATE TABLE logs (
+    name TEXT,
+    operation TEXT,
+    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+    result TEXT
+);

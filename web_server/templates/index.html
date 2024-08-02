@@ -22,7 +22,7 @@
             <tbody>
                 {% for package in packages %}
                 <tr>
-                    <td>{{ package.name }}</td>
+                    <td><a href="/status/logs/{{ package.name }}">{{ package.name }}</a></td>
                     <td>{{ package.loong_ver}}</td>
                     <td>{{ package.x86_ver}}</td>
                     <td>{{ package.repo }}</td>

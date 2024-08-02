@@ -17,6 +17,15 @@ def index():
     conn.close()
     return render_template('index.html', packages=packages)
 
+@app.route('/status/logs/<name>')
+def show_logs(name):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM logs WHERE name = ?", (name,))
+    logs = cursor.fetchall()
+    conn.close()
+    return render_template('logs.html', logs=logs, name=name)
+
 @app.route('/op/show/<name>')
 def show(name):
     conn = get_db_connection()
@@ -65,6 +74,7 @@ def edit(name):
     build_status = request.form['build_status']
     cursor.execute('UPDATE packages SET loong_ver = ?, x86_ver = ?, repo = ?, build_status = ? WHERE name = ?',
                    (loong_ver, x86_ver, repo, build_status, name))
+    cursor.execute('INSERT INTO logs(name,operation,result) VALUES (?,?,?)', (name, 'build', build_status))
     conn.commit()
     conn.close()
     return redirect(url_for('index'))

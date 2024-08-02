@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="{{ url_for('static', filename='chota.min.css') }}">
+    <title>Package Build Logs</title>
+</head>
+<body>
+    <div class="container">
+      <h1>Logs for {{ name }}</h1>
+      <table class="striped">
+        <tr>
+            <th>Operation</th>
+            <th>Timestamp</th>
+            <th>Details</th>
+        </tr>
+        {% for log in logs %}
+        <tr>
+            <td>{{ log.operation }}</td>
+            <td>{{ log.timestamp }}</td>
+            <td>{{ log.result }}</td>
+        </tr>
+        {% endfor %}
+      </table>
+    </div>
+</body>
+</html>
+
