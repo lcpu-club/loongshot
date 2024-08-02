@@ -17,6 +17,7 @@ PKGDIR=$1
 # clone arch package repo
 if [[ -d $WORKDIR/$PKGDIR ]]; then
     cd $WORKDIR/$PKGDIR
+    git reset HEAD --hard
     git pull
 else
     cd $WORKDIR
@@ -33,7 +34,7 @@ fi
 
 # apply patch
 if [[ -d "$LOONGREPO/$PKGDIR" ]]; then
-    cat $LOONGREPO/$PKGDIR/loong.patch | patch -p0  || exit $E_PATCH
+    cat $LOONGREPO/$PKGDIR/loong.patch | patch -p1 || exit $E_PATCH
 fi
 
 PKGVERREL=$(source PKGBUILD; echo $pkgver-$pkgrel)
