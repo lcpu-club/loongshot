@@ -1,75 +1,12 @@
-body {
-    font-family: Arial, sans-serif;
-    margin: 0;
-    padding: 0;
+.highlight-red {
+    color: red;
 }
-
-.container {
-    max-width: 800px;
-    margin: 20px auto;
-    padding: 0 20px;
+.highlight-black {
+    color: black;
 }
-
-h1 {
-    margin-top: 30px;
+.highlight-blue{
+    color: blue;
 }
-
-table {
-    width: 100%;
-    border-collapse: collapse;
-    margin-top: 20px;
-}
-
-th, td {
-    border: 1px solid #ddd;
-    padding: 8px;
-    text-align: left;
-}
-
-th {
-    background-color: #f2f2f2;
-}
-
-tr:nth-child(even) {
-    background-color: #f2f2f2;
-}
-
-.btn {
-    display: inline-block;
-    padding: 6px 12px;
-    margin-bottom: 0;
-    font-size: 14px;
-    font-weight: 400;
-    line-height: 1.42857143;
-    text-align: center;
-    white-space: nowrap;
-    vertical-align: middle;
-    cursor: pointer;
-    border: 1px solid transparent;
-    border-radius: 4px;
-    user-select: none;
-}
-
-.btn-primary {
-    color: #fff;
-    background-color: #007bff;
-    border-color: #007bff;
-}
-
-.btn-danger {
-    color: #fff;
-    background-color: #dc3545;
-    border-color: #dc3545;
-}
-
-.btn-success {
-    color: #fff;
-    background-color: #28a745;
-    border-color: #28a745;
-}
-
-.btn-warning {
-    color: #fff;
-    background-color: #ffc107;
-    border-color: #ffc107;
+.highlight-green{
+    color: green;
 }

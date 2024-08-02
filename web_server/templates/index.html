@@ -5,11 +5,13 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
     <title>Package List</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='chota.min.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+    <script src="{{ url_for('static', filename='ui.js') }}"></script>
 </head>
 <body>
     <div class="container">
         <h1>Package List</h1>
-        <table class="striped">
+        <table class="striped" id="pkgTable">
             <thead>
                 <tr>
                     <th>Name</th>
