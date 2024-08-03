@@ -13,6 +13,25 @@ E_NET=5
 
 . loong.sh
 PKGDIR=$1
+shift
+
+NOKEEP="--delete"
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --keepsrc)
+            NOKEEP=
+            shift
+            ;;
+        --)
+            shift
+            break
+            ;;
+        *)
+            shift
+            ;;
+    esac
+done
 
 # clone arch package repo
 if [[ -d $WORKDIR/$PKGDIR ]]; then
@@ -41,7 +60,7 @@ fi
 PKGVERREL=$(source PKGBUILD; echo $pkgver-$pkgrel)
 
 # copy package source to build server
-rsync -avzP $WORKDIR/$PKGDIR/ $BUILDER:/home/arch/repos/$PKGDIR/ --delete --exclude=.*
+rsync -avzP $WORKDIR/$PKGDIR/ $BUILDER:/home/arch/repos/$PKGDIR/ $NOKEEP --exclude=.*
 
 check_build() {
     ssh $BUILDER "cd /home/arch/repos/$PKGDIR; ls *.log"
@@ -55,7 +74,7 @@ check_build() {
     fi
 }
 # build package on server
-ssh -t $BUILDER "cd /home/arch/repos/$PKGDIR; extra-loong64-build -- -- -A" || check_build
+ssh -t $BUILDER "cd /home/arch/repos/$PKGDIR; extra-loong64-build -- -- -A $@" || check_build
 
 rsync -avzP $BUILDER:/home/arch/repos/$PKGDIR/ $WORKDIR/build/$PKGDIR/ || exit 1
 
