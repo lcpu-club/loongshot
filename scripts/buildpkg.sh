@@ -66,7 +66,11 @@ JSON=$(curl -s -X GET $WEBSRV/op/show/$PKGDIR) || (echo "Failed to GET"; exit 1)
 repo_value=${JSON#*\"repo\":\"}
 repo_value=${repo_value%%\"*}-testing
 
-repo-add $REPOS/$repo_value/os/loong64/$repo_value.db.tar.gz $PKGDIR-$PKGVERREL-$ARCH.pkg.tar.zst
-cp $PKGDIR-$PKGVERREL-$ARCH.pkg.tar.zst $REPOS/$repo_value/os/loong64/
+add_to_repo() {
+    repo-add $REPOS/$repo_value/os/loong64/$repo_value.db.tar.gz $1
+    cp $1 $REPOS/$repo_value/os/loong64/
+    curl -s -X POST $WEBSRV/op/edit/$PKGDIR -d "loong_ver=$PKGVERREL&x86_ver=$ARCHVERREL&repo=${repo_value%%-testing}&build_status=testing" || (echo "Failed to POST result"; exit 1)
+}
 
-curl -s -X POST $WEBSRV/op/edit/$PKGDIR -d "loong_ver=$PKGVERREL&x86_ver=$ARCHVERREL&repo=${repo_value%%-testing}&build_status=testing" || (echo "Failed to POST result"; exit 1)
+(source PKGBUILD; for pkg in ${pkgname[@]}; do add_to_repo $pkg-$PKGVERREL-$ARCH.pkg.tar.zst; done)
+
