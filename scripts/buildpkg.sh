@@ -54,7 +54,7 @@ fi
 # apply patch
 if [[ -d "$LOONGREPO/$PKGDIR" ]]; then
     cat $LOONGREPO/$PKGDIR/loong.patch | patch -p1 || exit $E_PATCH
-    find $LOONGREPO/$PKGDIR -name "*.patch" ! -name "loong.patch" -exec cp {} . \;
+    find $LOONGREPO/$PKGDIR -type f -name "*" ! -name "loong.patch" -exec cp {} . \;
 fi
 
 PKGVERREL=$(source PKGBUILD; echo $pkgver-$pkgrel)
