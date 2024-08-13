@@ -15,7 +15,7 @@ E_NET=5
 PKGDIR=$1
 shift
 
-NOKEEP="--delete"
+NOKEEP="--delete --delete-excluded"
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
