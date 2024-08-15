@@ -50,6 +50,7 @@ ARCH=$(source PKGBUILD; echo $arch)
 if [[ "$ARCH" != "any" ]]; then
     ARCH="loong64"
 fi
+EPOCH=$(source PKGBUILD; echo $epoch)
 
 # apply patch
 if [[ -d "$LOONGREPO/$PKGDIR" ]]; then
@@ -58,6 +59,9 @@ if [[ -d "$LOONGREPO/$PKGDIR" ]]; then
 fi
 
 PKGVERREL=$(source PKGBUILD; echo $pkgver-$pkgrel)
+if [ ! -z "$EPOCH" ]; then
+    PKGVERREL=$EPOCH:$PKGVERREL
+fi
 
 # copy package source to build server
 rsync -avzP $WORKDIR/$PKGDIR/ $BUILDER:/home/arch/repos/$PKGDIR/ $NOKEEP --exclude=.*
