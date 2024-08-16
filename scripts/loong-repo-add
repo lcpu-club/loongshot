@@ -1,0 +1,42 @@
+#!/bin/bash
+
+if [[ $# -lt 2 ]]; then
+    echo "Usage: ${0##*/} <repo-name> <pkg-file> [option]"
+    echo "Option:"
+    echo "  --sign Sign the database file."
+    exit 1
+fi
+
+REPO=$1
+PKG=$2
+shift
+shift
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --sign)
+            SIGN=-s
+            shift
+            ;;
+        *)
+            shift
+            ;;
+    esac
+done
+
+TIER0SERVER=arch2
+_remote_path=/srv/http/loongarch/archlinux/
+
+WORKDIR=$(mktemp -d)
+
+cp $PKG $WORKDIR/
+[[ -e $PKG.sig ]] && cp $PKG.sig $WORKDIR/
+cd $WORKDIR
+if [[ ! -e $PKG.sig ]]; then
+    gpg --detach-sign $PKG
+fi
+
+rsync -e ssh -p '--chmod=ug=rw,o=r' -c -h -L --progress --partial -y ./$PKG{,.sig} $TIER0SERVER:$_remote_path/$REPO/os/loong64/
+ssh -tt $TIER0SERVER "cd $_remote_path/$REPO/os/loong64/; flock /tmp/loong-repo-$REPO.lck repo-add $SIGN -R $REPO.db.tar.gz $PKG"
+
+rm -rf $WORKDIR
