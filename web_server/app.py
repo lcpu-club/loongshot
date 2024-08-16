@@ -117,6 +117,24 @@ def update(name):
         conn.close()
     return jsonify({'result': result})
 
+@app.route('/op/upx86/<name>', methods=('POST',))
+def upx86(name):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute('SELECT * FROM packages WHERE name = ?', (name,))
+    package = cursor.fetchone()
+    result = 'Not found'
+    if package:
+        result = 'OK'
+        ver = request.form['ver']
+        try:
+            cursor.execute('UPDATE packages SET x86_ver = ? WHERE name = ?', (ver, name))
+        except:
+            result = 'Error'
+        conn.commit()
+        conn.close()
+    return jsonify({'result': result})
+
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000)
 
