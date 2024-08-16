@@ -94,7 +94,7 @@ repo_value=${JSON#*\"repo\":\"}
 repo_value=${repo_value%%\"*}-testing
 
 add_to_repo() {
-    repo-add $SIGN $REPOS/$repo_value/os/loong64/$repo_value.db.tar.gz $1-$PKGVERREL-$ARCH.pkg.tar.zst
+    flock /tmp/loong-repo-$REPO.lck repo-add $SIGN -R $REPOS/$repo_value/os/loong64/$repo_value.db.tar.gz $1-$PKGVERREL-$ARCH.pkg.tar.zst
     cp $1-$PKGVERREL-$ARCH.pkg.tar.zst $REPOS/$repo_value/os/loong64/
     if [ ! -z "$SIGN" ]; then
         gpg --pinentry-mode loopback --detach-sign $1-$PKGVERREL-$ARCH.pkg.tar.zst
