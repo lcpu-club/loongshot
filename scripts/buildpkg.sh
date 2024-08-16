@@ -94,12 +94,12 @@ repo_value=${JSON#*\"repo\":\"}
 repo_value=${repo_value%%\"*}-testing
 
 add_to_repo() {
-    flock /tmp/loong-repo-$REPO.lck repo-add $SIGN -R $REPOS/$repo_value/os/loong64/$repo_value.db.tar.gz $1-$PKGVERREL-$ARCH.pkg.tar.zst
-    cp $1-$PKGVERREL-$ARCH.pkg.tar.zst $REPOS/$repo_value/os/loong64/
     if [ ! -z "$SIGN" ]; then
         gpg --pinentry-mode loopback --detach-sign $1-$PKGVERREL-$ARCH.pkg.tar.zst
         cp $1-$PKGVERREL-$ARCH.pkg.tar.zst.sig $REPOS/$repo_value/os/loong64/
     fi
+    flock /tmp/loong-repo-$REPO.lck repo-add $SIGN -R $REPOS/$repo_value/os/loong64/$repo_value.db.tar.gz $1-$PKGVERREL-$ARCH.pkg.tar.zst
+    cp $1-$PKGVERREL-$ARCH.pkg.tar.zst $REPOS/$repo_value/os/loong64/
     curl -s -X POST $WEBSRV/op/edit/$1 -d "loong_ver=$PKGVERREL&x86_ver=$ARCHVERREL&repo=${repo_value%%-testing}&build_status=testing" || (echo "Failed to POST result"; exit 1)
 }
 
