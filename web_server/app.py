@@ -55,14 +55,15 @@ def add():
 
     conn = get_db_connection()
     cursor = conn.cursor()
+    result = 'OK'
     try:
         cursor.execute('INSERT INTO packages (name, loong_ver, x86_ver, repo, build_status) VALUES (?, ?, ?, ?, ?)',
                    (name, loong_ver, x86_ver, repo, build_status))
     except:
-        pass
+        result = 'Error'
     conn.commit()
     conn.close()
-    return redirect(url_for('index'))
+    return jsonify({'result': result})
 
 @app.route('/op/edit/<name>', methods=('POST',))
 def edit(name):
@@ -72,21 +73,29 @@ def edit(name):
     x86_ver = request.form['x86_ver']
     repo = request.form['repo']
     build_status = request.form['build_status']
-    cursor.execute('UPDATE packages SET loong_ver = ?, x86_ver = ?, repo = ?, build_status = ? WHERE name = ?',
-                   (loong_ver, x86_ver, repo, build_status, name))
-    cursor.execute('INSERT INTO logs(name,operation,result) VALUES (?,?,?)', (name, 'build', build_status))
+    result = 'OK'
+    try:
+        cursor.execute('UPDATE packages SET loong_ver = ?, x86_ver = ?, repo = ?, build_status = ? WHERE name = ?',
+                       (loong_ver, x86_ver, repo, build_status, name))
+        cursor.execute('INSERT INTO logs(name,operation,result) VALUES (?,?,?)', (name, 'build', build_status))
+    except:
+        result = 'Error'
     conn.commit()
     conn.close()
-    return redirect(url_for('index'))
+    return jsonify({'result': result})
 
 @app.route('/op/delete/<name>', methods=('POST',))
 def delete(name):
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute('DELETE FROM packages WHERE name = ?', (name,))
+    result = 'OK'
+    try:
+        cursor.execute('DELETE FROM packages WHERE name = ?', (name,))
+    except:
+        result = 'Error'
     conn.commit()
     conn.close()
-    return redirect(url_for('index'))
+    return jsonify({'result': result})
 
 @app.route('/op/update/<name>', methods=('POST',))
 def update(name):
@@ -94,15 +103,19 @@ def update(name):
     cursor = conn.cursor()
     cursor.execute('SELECT * FROM packages WHERE name = ?', (name,))
     package = cursor.fetchone()
-
+    result = 'Not found'
     if package:
+        result = 'OK'
         build_status = request.form['build_status']
-        cursor.execute('UPDATE packages SET build_status = ? WHERE name = ?',
-                       (build_status, name))
-        cursor.execute('INSERT INTO logs(name,operation,result) VALUES (?,?,?)', (name, 'build', build_status))
+        try:
+            cursor.execute('UPDATE packages SET build_status = ? WHERE name = ?',
+                           (build_status, name))
+            cursor.execute('INSERT INTO logs(name,operation,result) VALUES (?,?,?)', (name, 'build', build_status))
+        except:
+            result = 'Error'
         conn.commit()
         conn.close()
-    return redirect(url_for('index'))
+    return jsonify({'result': result})
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000)
