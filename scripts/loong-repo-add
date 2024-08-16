@@ -12,6 +12,13 @@ PKG=$2
 shift
 shift
 
+# get pkgname and version infor from $PKG
+TEMP=${PKG%-*}
+REL=${TEMP##*-}
+TEMP2=${TEMP%-*}
+VER=${TEMP2##*-}
+NAME=${TEMP2%-*}
+
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --sign)
@@ -37,6 +44,6 @@ if [[ ! -e $PKG.sig ]]; then
 fi
 
 rsync -e ssh -p '--chmod=ug=rw,o=r' -c -h -L --progress --partial -y ./$PKG{,.sig} $TIER0SERVER:$_remote_path/$REPO/os/loong64/
-ssh -tt $TIER0SERVER "cd $_remote_path/$REPO/os/loong64/; flock /tmp/loong-repo-$REPO.lck repo-add $SIGN -R $REPO.db.tar.gz $PKG"
+ssh -tt $TIER0SERVER "cd $_remote_path/$REPO/os/loong64/; flock /tmp/loong-repo-$REPO.lck repo-add $SIGN -R $REPO.db.tar.gz $PKG; curl -X POST http://127.0.0.1/op/uploong/$NAME -d 'ver=$VER-$REL'"
 
 rm -rf $WORKDIR
