@@ -27,6 +27,10 @@ while [[ $# -gt 0 ]]; do
             SIGN=-s
             shift
             ;;
+        --debug)
+            DEBUG=1
+            shift
+            ;;
         --)
             shift
             break
@@ -75,6 +79,9 @@ check_build() {
     if [[ "$?" -eq 2 ]]; then
         exit $E_NET # probably network issue
     else
+        if [ ! -z "$DEBUG" ]; then
+            exit 1
+        fi
         # sync back logs
         rsync -avzP $BUILDER:/home/arch/repos/$PKGDIR/ $WORKDIR/build/$PKGDIR/ || exit 1
         curl -s -X POST $WEBSRV/op/update/$PKGDIR -d "build_status=fail" || (echo "Failed to POST faillog"; exit 1)
@@ -85,7 +92,9 @@ check_build() {
 ssh -t $BUILDER "cd /home/arch/repos/$PKGDIR; extra-loong64-build -- -- -A $@" || check_build
 
 rsync -avzP $BUILDER:/home/arch/repos/$PKGDIR/ $WORKDIR/build/$PKGDIR/ || exit 1
-
+if [ ! -z "$DEBUG" ]; then
+    exit 1
+fi
 cd $WORKDIR/build/$PKGDIR
 
 JSON=$(curl -s -X GET $WEBSRV/op/show/$PKGDIR) || (echo "Failed to GET"; exit 1)
