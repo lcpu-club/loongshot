@@ -14,6 +14,7 @@ E_NET=5
 . loong.sh
 PKGDIR=$1
 shift
+TESTING="testing"
 
 if [[ $# -lt 2 ]]; then
     echo "Usage: ${0##*/} <pkg-file> [option]"
@@ -21,11 +22,14 @@ if [[ $# -lt 2 ]]; then
     echo "  --sign     Sign the final package file and database file."
     echo "  --keepsrc  Don't re-download the source code to build."
     echo "  --debug    Debug the building, don't upload."
+    echo "  --stag     Use staging repo."
+    echo "  --core     New package add to core."
     echo "  --         Options after this will be passed to makepkg."
     exit 1
 fi
 
 NOKEEP="--delete --delete-excluded"
+CORE="extra"
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -39,6 +43,14 @@ while [[ $# -gt 0 ]]; do
             ;;
         --debug)
             DEBUG=1
+            shift
+            ;;
+        --stag)
+            TESTING="staging"
+            shift
+            ;;
+        --core)
+            CORE="core"
             shift
             ;;
         --)
@@ -111,7 +123,7 @@ check_build() {
     fi
 }
 # build package on server
-ssh -t $BUILDER "cd /home/arch/repos/$PKGDIR; extra-loong64-build -- -- -A $@" || check_build
+ssh -t $BUILDER "cd /home/arch/repos/$PKGDIR; extra-$TESTING-loong64-build -- -- -A $@" || check_build
 
 rsync -avzP $BUILDER:/home/arch/repos/$PKGDIR/ $WORKDIR/build/$PKGDIR/ || exit 1
 if [ ! -z "$DEBUG" ]; then
@@ -121,8 +133,12 @@ cd $WORKDIR/build/$PKGDIR
 
 JSON=$(curl -s -X GET $WEBSRV/op/show/$PKGDIR) || (echo "Failed to GET"; exit 1)
 
-repo_value=${JSON#*\"repo\":\"}
-repo_value=${repo_value%%\"*}-testing
+if [[ "$JSON" == *"no package found"* ]]; then
+   repo_value=$CORE-$TESTING
+else
+   repo_value=${JSON#*\"repo\":\"}
+   repo_value=${repo_value%%\"*}-$TESTING
+fi
 
 add_to_repo() {
     if [ ! -z "$SIGN" ]; then
@@ -131,7 +147,7 @@ add_to_repo() {
     fi
     flock /tmp/loong-repo-$REPO.lck repo-add $SIGN -R $REPOS/$repo_value/os/loong64/$repo_value.db.tar.gz $1-$PKGVERREL-$ARCH.pkg.tar.zst
     cp $1-$PKGVERREL-$ARCH.pkg.tar.zst $REPOS/$repo_value/os/loong64/
-    curl -s -X POST $WEBSRV/op/edit/$1 -d "loong_ver=$PKGVERREL&x86_ver=$ARCHVERREL&repo=${repo_value%%-testing}&build_status=testing" || (echo "Failed to POST result"; exit 1)
+    curl -s -X POST $WEBSRV/op/edit/$1 -d "loong_ver=$PKGVERREL&x86_ver=$ARCHVERREL&repo=${repo_value%%-$TESTING}&build_status=testing" || (echo "Failed to POST result"; exit 1)
 }
 
 (source PKGBUILD; for pkg in ${pkgname[@]}; do add_to_repo $pkg; done)
