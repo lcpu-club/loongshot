@@ -81,6 +81,10 @@ if [ ! -z "$EPOCH" ]; then
     PKGVERREL=$EPOCH:$PKGVERREL
 fi
 
+# for rust packages, $CARCH need to change to `uname -m`=loongarch64
+sed -i '/cargo fetch/s/\$CARCH/`uname -m`/' PKGBUILD
+sed -i '/cargo fetch/s/\x86_64/`uname -m`/' PKGBUILD
+
 # insert two lines of code after cd to the source.
 update_config() {
     cd $WORKDIR/$PKGDIR
