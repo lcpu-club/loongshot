@@ -15,6 +15,16 @@ E_NET=5
 PKGDIR=$1
 shift
 
+if [[ $# -lt 2 ]]; then
+    echo "Usage: ${0##*/} <pkg-file> [option]"
+    echo "Option:"
+    echo "  --sign     Sign the final package file and database file."
+    echo "  --keepsrc  Don't re-download the source code to build."
+    echo "  --debug    Debug the building, don't upload."
+    echo "  --         Options after this will be passed to makepkg."
+    exit 1
+fi
+
 NOKEEP="--delete --delete-excluded"
 
 while [[ $# -gt 0 ]]; do
