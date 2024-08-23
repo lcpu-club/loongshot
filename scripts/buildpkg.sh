@@ -113,11 +113,11 @@ check_build() {
     if [[ "$?" -eq 2 ]]; then
         exit $E_NET # probably network issue
     else
-        if [ ! -z "$DEBUG" ]; then
-            exit 1
-        fi
         # sync back logs
-        rsync -avzP $BUILDER:/home/arch/repos/$PKGDIR/ $WORKDIR/build/$PKGDIR/ || exit 1
+        rsync -avzP $BUILDER:/home/arch/repos/$PKGDIR/*.log $WORKDIR/build/$PKGDIR/ || exit 1
+        if [ ! -z "$DEBUG" ]; then
+            exit 1 # Don't update log
+        fi
         curl -s -X POST $WEBSRV/op/update/$PKGDIR -d "build_status=fail" || (echo "Failed to POST faillog"; exit 1)
         exit $E_BUILD
     fi
@@ -125,7 +125,7 @@ check_build() {
 # build package on server
 ssh -t $BUILDER "cd /home/arch/repos/$PKGDIR; extra-$TESTING-loong64-build -- -- -A $@" || check_build
 
-rsync -avzP $BUILDER:/home/arch/repos/$PKGDIR/ $WORKDIR/build/$PKGDIR/ || exit 1
+rsync -avzP $BUILDER:/home/arch/repos/$PKGDIR/*.log $WORKDIR/build/$PKGDIR/ || exit 1
 if [ ! -z "$DEBUG" ]; then
     exit 1
 fi
