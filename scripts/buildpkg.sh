@@ -142,7 +142,7 @@ fi
 
 add_to_repo() {
     if [ ! -z "$SIGN" ]; then
-        gpg --pinentry-mode loopback --detach-sign $1-$PKGVERREL-$ARCH.pkg.tar.zst
+        gpg --detach-sign $1-$PKGVERREL-$ARCH.pkg.tar.zst
         cp $1-$PKGVERREL-$ARCH.pkg.tar.zst.sig $REPOS/$repo_value/os/loong64/
     fi
     flock /tmp/loong-repo-$REPO.lck repo-add $SIGN -R $REPOS/$repo_value/os/loong64/$repo_value.db.tar.gz $1-$PKGVERREL-$ARCH.pkg.tar.zst
