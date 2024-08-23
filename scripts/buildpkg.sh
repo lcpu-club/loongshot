@@ -12,11 +12,7 @@ E_BUILD=4
 E_NET=5
 
 . loong.sh
-PKGDIR=$1
-shift
-TESTING="testing"
-
-if [[ $# -lt 2 ]]; then
+if [[ $# -lt 1 ]]; then
     echo "Usage: ${0##*/} <pkg-file> [option]"
     echo "Option:"
     echo "  --sign     Sign the final package file and database file."
@@ -27,6 +23,10 @@ if [[ $# -lt 2 ]]; then
     echo "  --         Options after this will be passed to makepkg."
     exit 1
 fi
+
+PKGDIR=$1
+shift
+TESTING="testing"
 
 NOKEEP="--delete --delete-excluded"
 CORE="extra"
@@ -69,7 +69,7 @@ if [[ -d $WORKDIR/$PKGDIR ]]; then
     git reset HEAD --hard
     git pull
 else
-    cd $WORKDIR
+    cd $WORKDIR || exit 1
     pkgctl repo clone --protocol=https $PKGDIR || exit $E_CLONE
     cd $PKGDIR
 fi
