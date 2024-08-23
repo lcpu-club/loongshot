@@ -123,9 +123,9 @@ check_build() {
     fi
 }
 # build package on server
-ssh -t $BUILDER "cd /home/arch/repos/$PKGDIR; extra-$TESTING-loong64-build -- -- -A $@" || check_build
+ssh -t $BUILDER "cd /home/arch/repos/$PKGDIR; extra-$TESTING-loong64-build -- -- -A -L $@" || check_build
 
-rsync -avzP $BUILDER:/home/arch/repos/$PKGDIR/*.log $WORKDIR/build/$PKGDIR/ || exit 1
+rsync -avzP $BUILDER:/home/arch/repos/$PKGDIR/ --include='PKGBUILD' --include='*.log' --include='*.zst' --exclude='*' $WORKDIR/build/$PKGDIR/ || exit 1
 if [ ! -z "$DEBUG" ]; then
     exit 1
 fi
