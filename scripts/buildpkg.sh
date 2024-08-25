@@ -141,9 +141,16 @@ else
 fi
 
 add_to_repo() {
+    rm -f $1-$PKGVERREL-$ARCH.pkg.tar.zst.sig # remove sig first if exists
     if [ ! -z "$SIGN" ]; then
         gpg --detach-sign $1-$PKGVERREL-$ARCH.pkg.tar.zst
+    fi
+    # signing might fail
+    if [ -f $1-$PKGVERREL-$ARCH.pkg.tar.zst.sig ]; then
         cp $1-$PKGVERREL-$ARCH.pkg.tar.zst.sig $REPOS/$repo_value/os/loong64/
+    else
+        # remove the old sig file in repos if exists
+        rm -f $REPOS/$repo_value/os/loong64/$1-$PKGVERREL-$ARCH.pkg.tar.zst.sig
     fi
     flock /tmp/loong-repo-$REPO.lck repo-add $SIGN -R $REPOS/$repo_value/os/loong64/$repo_value.db.tar.gz $1-$PKGVERREL-$ARCH.pkg.tar.zst
     cp $1-$PKGVERREL-$ARCH.pkg.tar.zst $REPOS/$repo_value/os/loong64/
