@@ -31,6 +31,13 @@ http {
             autoindex_localtime on;
         }
 
+        location /buildlogs/ {
+            alias /home/arch/workdir/build/;
+            autoindex on;
+            autoindex_exact_size on;
+            autoindex_localtime on;
+        }
+
         location / {
             alias /srv/http/status/html/;
         }

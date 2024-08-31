@@ -3,10 +3,12 @@ import sqlite3
 
 app = Flask(__name__)
 
+
 def get_db_connection():
     conn = sqlite3.connect('packages.db')
     conn.row_factory = sqlite3.Row
     return conn
+
 
 @app.route('/status')
 def index():
@@ -16,6 +18,18 @@ def index():
     packages = cursor.fetchall()
     conn.close()
     return render_template('index.html', packages=packages)
+
+
+@app.route('/build')
+def show_build_fails():
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute('SELECT * FROM logs where result=? ORDER by timestamp DESC LIMIT 100',
+                   ('fail',))
+    logs = cursor.fetchall()
+    conn.close()
+    return render_template('fails.html', logs=logs)
+
 
 @app.route('/status/logs/<name>')
 def show_logs(name):
