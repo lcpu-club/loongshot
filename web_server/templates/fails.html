@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="{{ url_for('static', filename='chota.min.css') }}">
+    <title>Package Build Fail Logs</title>
+    <script>
+        function convertUTCToLocal(utcDateStr) {
+            const utcDate = new Date(utcDateStr + 'Z');
+            return utcDate.toLocaleString();
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            const timestampElements = document.querySelectorAll('.timestamp');
+            timestampElements.forEach(el => {
+                const utcDateStr = el.getAttribute('data-utc');
+                el.textContent = convertUTCToLocal(utcDateStr);
+            });
+        });
+    </script>
+</head>
+<body>
+    <div class="container">
+      <h1>Recent Build Fails<h1>
+      <table class="striped">
+        <tr>
+            <th>Name</th>
+            <th>Timestamp</th>
+            <th>Details</th>
+        </tr>
+        {% for log in logs %}
+        <tr>
+            <td>{{ log.name}}</td>
+            <td class="timestamp" data-utc="{{ log.timestamp }}">{{ log.timestamp }}</td>
+            <td><a href="/buildlogs/{{ log.name }}">{{ log.result }}</a></td>
+        </tr>
+        {% endfor %}
+      </table>
+    </div>
+</body>
+</html>
+

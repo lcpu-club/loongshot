@@ -46,6 +46,10 @@ http {
             proxy_pass http://unix:/srv/http/status/build-status.sock;
         }
 
+        location /build {
+            proxy_pass http://unix:/srv/http/status/build-status.sock;
+        }
+
         location /op {
             allow 100.87.1.0/24;
             allow 127.0.0.1/8;
