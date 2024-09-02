@@ -5,6 +5,7 @@
 # 2. BUILDER, build server to use
 # 3. WORKDIR, local working dir
 # 4. REPOS, loongarch repo mirror path for testing
+# 5. PACKAGER, packager name
 
 E_CLONE=2
 E_PATCH=3
@@ -123,7 +124,7 @@ check_build() {
     fi
 }
 # build package on server
-ssh -t $BUILDER "cd /home/arch/repos/$PKGDIR; extra-$TESTING-loong64-build -- -- -A -L $@" || check_build
+ssh -t $BUILDER "cd /home/arch/repos/$PKGDIR; PACKAGER=\"$PACKAGER\" extra-$TESTING-loong64-build -- -- -A -L $@" || check_build
 
 rsync -avzP $BUILDER:/home/arch/repos/$PKGDIR/ --include='PKGBUILD' --include='*.log' --include='*.zst' --exclude='*' $WORKDIR/build/$PKGDIR/ || exit 1
 if [ ! -z "$DEBUG" ]; then
