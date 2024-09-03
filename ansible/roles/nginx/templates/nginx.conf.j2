@@ -46,7 +46,7 @@ http {
             proxy_pass http://unix:/srv/http/status/build-status.sock;
         }
 
-        location /build {
+        location /fails {
             proxy_pass http://unix:/srv/http/status/build-status.sock;
         }
 

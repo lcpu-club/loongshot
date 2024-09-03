@@ -31,7 +31,7 @@
         </tr>
         {% for log in logs %}
         <tr>
-            <td>{{ log.name}}</td>
+            <td><a href="/status/logs/{{ log.name }}">{{ log.name }}</a></td>
             <td class="timestamp" data-utc="{{ log.timestamp }}">{{ log.timestamp }}</td>
             <td><a href="/buildlogs/{{ log.name }}">{{ log.result }}</a></td>
         </tr>

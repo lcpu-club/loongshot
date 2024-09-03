@@ -20,12 +20,11 @@ def index():
     return render_template('index.html', packages=packages)
 
 
-@app.route('/build')
+@app.route('/fails')
 def show_build_fails():
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute('SELECT * FROM logs where result=? ORDER by timestamp DESC LIMIT 100',
-                   ('fail',))
+    cursor.execute("select p.name, l.timestamp, l.result from packages p join logs l on p.name = l.name where p.build_status='fail' and l.timestamp = ( select max(timestamp) from logs where name=p.name and operation='build') order by l.timestamp desc")
     logs = cursor.fetchall()
     conn.close()
     return render_template('fails.html', logs=logs)
