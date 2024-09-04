@@ -137,15 +137,21 @@ def upx86(name):
     cursor.execute('SELECT * FROM packages WHERE name = ?', (name,))
     package = cursor.fetchone()
     result = 'Not found'
+    ver = request.form['ver']
     if package:
         result = 'OK'
-        ver = request.form['ver']
         try:
             cursor.execute('UPDATE packages SET x86_ver = ? WHERE name = ?', (ver, name))
         except:
             result = 'Error'
-        conn.commit()
-        conn.close()
+    else:
+        result = 'Added'
+        try:
+            cursor.execute('INSERT INTO packages (name, loong_ver, x86_ver, repo, build_status) VALUES (?, ?, ?, ?, ?)', (name, 'missing', ver, 'extra', 'void'))
+        except:
+            result = 'Error'
+    conn.commit()
+    conn.close()
     return jsonify({'result': result})
 
 @app.route('/op/uploong/<name>', methods=('POST',))
