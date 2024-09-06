@@ -6,6 +6,7 @@
 # 3. WORKDIR, local working dir
 # 4. REPOS, loongarch repo mirror path for testing
 # 5. PACKAGER, packager name
+# 6. T0SERVER, repo server
 
 . loong.sh
 
@@ -25,6 +26,7 @@ E_CLONE=2
 E_PATCH=3
 E_BUILD=4
 E_NET=5
+T0REPOPATH=/srv/http/loongarch/archlinux/
 
 PKGBASE=$1
 shift
@@ -113,6 +115,22 @@ fi
 PKGVERREL=$(source PKGBUILD; echo $pkgver-$pkgrel)
 if [ ! -z "$EPOCH" ]; then
     PKGVERREL=$EPOCH:$PKGVERREL
+fi
+
+if [[ "$T0SERVER" == "localhost" ]]; then
+    pushd $PWD
+    cd $T0REPOPATH/$REPO/os/loong64
+    _PKGVER=`ls $PKGNAME-*-*-*.zst | grep -E "$PKGNAME(-[^-]*){3}[^-]*$" | awk -F- '{ print $(NF-2)"-"$(NF-1)}'`
+    popd
+else
+    _PKGVER=$(ssh -t $T0SERVER "cd $T0REPOPATH/$REPO/os/loong64;ls $PKGNAME-*-*-*.zst | grep -E \"$PKGNAME(-[^-]*){3}[^-]*$\" | awk -F- '{ print \$(NF-2)\"-\"\$(NF-1)}'")
+fi
+if [[ "$PKGVERREL" == "$_PKGVER" ]]; then
+    # Same package found in server. Incrementing point pkgrel...
+    PKGREL=${_PKGVER#*-}
+    PKGREL=$(echo $PKGREL + .1 | bc)
+    sed -i "s/^pkgrel=.*/pkgrel=$PKGREL/" PKGBUILD
+    PKGVERREL=${PKGVERREL%-*}-$PKGREL
 fi
 
 # for rust packages, $CARCH need to change to `uname -m`=loongarch64
