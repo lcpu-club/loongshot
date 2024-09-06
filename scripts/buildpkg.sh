@@ -7,12 +7,8 @@
 # 4. REPOS, loongarch repo mirror path for testing
 # 5. PACKAGER, packager name
 
-E_CLONE=2
-E_PATCH=3
-E_BUILD=4
-E_NET=5
-
 . loong.sh
+
 if [[ $# -lt 1 ]]; then
     echo "Usage: ${0##*/} <pkg-file> [option]"
     echo "Option:"
@@ -25,11 +21,16 @@ if [[ $# -lt 1 ]]; then
     exit 1
 fi
 
-PKGDIR=$1
+E_CLONE=2
+E_PATCH=3
+E_BUILD=4
+E_NET=5
+
+PKGBASE=$1
 shift
-TESTING="testing"
 
 NOKEEP="--delete --delete-excluded"
+TESTING="-testing"
 CORE="extra"
 
 while [[ $# -gt 0 ]]; do
@@ -47,7 +48,7 @@ while [[ $# -gt 0 ]]; do
             shift
             ;;
         --stag)
-            TESTING="staging"
+            TESTING="-staging"
             shift
             ;;
         --core)
@@ -65,14 +66,34 @@ while [[ $# -gt 0 ]]; do
 done
 
 # clone arch package repo
-if [[ -d $WORKDIR/$PKGDIR ]]; then
-    cd $WORKDIR/$PKGDIR
+if [[ -d $WORKDIR/$PKGBASE ]]; then
+    cd $WORKDIR/$PKGBASE
     git reset HEAD --hard
     git pull
 else
     cd $WORKDIR || exit 1
-    pkgctl repo clone --protocol=https $PKGDIR || exit $E_CLONE
-    cd $PKGDIR
+    pkgctl repo clone --protocol=https $PKGBASE || exit $E_CLONE
+    cd $PKGBASE
+fi
+
+# borrow code from felixonmars, get pkgver and repo name
+PKGNAME=$(. PKGBUILD; echo $pkgname)
+for _REPO in core extra; do
+    PKGVER=$(pacman -Sl $_REPO | grep "^$_REPO $PKGNAME " | cut -d " " -f 3)
+    if [[ -n "$PKGVER" ]]; then
+        REPO=$_REPO
+        break
+    fi
+done
+
+# switch to the current release tag
+pkgctl repo switch ${PKGVER//:/-} || exit $E_CLONE
+
+# no same pkg found in x86 repos
+if [[ -z "$REPO" ]]; then
+   repo_value=$CORE$TESTING
+else
+   repo_value=$REPO$TESTING
 fi
 
 # version info may change after patching
@@ -84,9 +105,9 @@ fi
 EPOCH=$(source PKGBUILD; echo $epoch)
 
 # apply patch
-if [[ -d "$LOONGREPO/$PKGDIR" ]]; then
-    cat $LOONGREPO/$PKGDIR/loong.patch | patch -p1 || exit $E_PATCH
-    find $LOONGREPO/$PKGDIR -type f -name "*" ! -name "loong.patch" -exec cp {} . \;
+if [[ -d "$LOONGREPO/$PKGBASE" ]]; then
+    cat $LOONGREPO/$PKGBASE/loong.patch | patch -p1 || exit $E_PATCH
+    find $LOONGREPO/$PKGBASE -type f -name "*" ! -name "loong.patch" -exec cp {} . \;
 fi
 
 PKGVERREL=$(source PKGBUILD; echo $pkgver-$pkgrel)
@@ -96,50 +117,46 @@ fi
 
 # for rust packages, $CARCH need to change to `uname -m`=loongarch64
 sed -i '/cargo fetch/s/\$CARCH/`uname -m`/' PKGBUILD
+sed -i '/cargo fetch/s/\${CARCH}/`uname -m`/' PKGBUILD
 sed -i '/cargo fetch/s/\x86_64/`uname -m`/' PKGBUILD
+
+# When use cpython, $CARCH also need to chage to `uname -m`
+sed -i 's/\$CARCH-cpython-/`uname -m`-cpython-/g' PKGBUILD
+sed -i 's/\${CARCH}-cpython-/`uname -m`-cpython-/g' PKGBUILD
 
 # insert two lines of code after cd to the source.
 update_config() {
-    cd $WORKDIR/$PKGDIR
+    cd $WORKDIR/$PKGBASE
     sed -i '/^build()/,/configure/ {/^[[:space:]]*cd[[:space:]]\+/ { s/$/\n  for c_s in $(find -type f -name config.sub -o -name configure.sub); do cp -f \/usr\/share\/automake-1.1?\/config.sub "$c_s"; done\n  for c_g in $(find -type f -name config.guess -o -name configure.guess); do cp -f \/usr\/share\/automake-1.1?\/config.guess "$c_g"; done/; t;};}' PKGBUILD
 }
 
-[[ $(grep "^$PKGDIR$" $LOONGREPO/update_config) ]] && update_config
+[[ $(grep "^$PKGBASE$" $LOONGREPO/update_config) ]] && update_config
 
 # copy package source to build server
-rsync -avzP $WORKDIR/$PKGDIR/ $BUILDER:/home/arch/repos/$PKGDIR/ $NOKEEP --exclude=.*
+rsync -avzP $WORKDIR/$PKGBASE/ $BUILDER:/home/arch/repos/$PKGBASE/ $NOKEEP --exclude=.*
 
 check_build() {
-    ssh $BUILDER "cd /home/arch/repos/$PKGDIR; ls *.log"
+    ssh $BUILDER "cd /home/arch/repos/$PKGBASE; ls *.log"
     if [[ "$?" -eq 2 ]]; then
         exit $E_NET # probably network issue
     else
         # sync back logs
-        rsync -avzP $BUILDER:/home/arch/repos/$PKGDIR/*.log $WORKDIR/build/$PKGDIR/ || exit 1
+        rsync -avzP $BUILDER:/home/arch/repos/$PKGBASE/*.log $WORKDIR/build/$PKGBASE/ || exit 1
         if [ ! -z "$DEBUG" ]; then
             exit 1 # Don't update log
         fi
-        curl -s -X POST $WEBSRV/op/update/$PKGDIR -d "build_status=fail" || (echo "Failed to POST faillog"; exit 1)
+        curl -s -X POST $WEBSRV/op/update/$PKGBASE -d "build_status=fail" || (echo "Failed to POST faillog"; exit 1)
         exit $E_BUILD
     fi
 }
 # build package on server
-ssh -t $BUILDER "cd /home/arch/repos/$PKGDIR; PACKAGER=\"$PACKAGER\" extra-$TESTING-loong64-build -- -- -A -L $@" || check_build
+ssh -t $BUILDER "cd /home/arch/repos/$PKGBASE; PACKAGER=\"$PACKAGER\" extra$TESTING-loong64-build -- -- -A -L $@" || check_build
 
-rsync -avzP $BUILDER:/home/arch/repos/$PKGDIR/ --include='PKGBUILD' --include='*.log' --include='*.zst' --exclude='*' $WORKDIR/build/$PKGDIR/ || exit 1
+rsync -avzP $BUILDER:/home/arch/repos/$PKGBASE/ --include='PKGBUILD' --include='*.log' --include='*.zst' --exclude='*' $WORKDIR/build/$PKGBASE/ || exit 1
 if [ ! -z "$DEBUG" ]; then
     exit 1
 fi
-cd $WORKDIR/build/$PKGDIR
-
-JSON=$(curl -s -X GET $WEBSRV/op/show/$PKGDIR) || (echo "Failed to GET"; exit 1)
-
-if [[ "$JSON" == *"no package found"* ]]; then
-   repo_value=$CORE-$TESTING
-else
-   repo_value=${JSON#*\"repo\":\"}
-   repo_value=${repo_value%%\"*}-$TESTING
-fi
+cd $WORKDIR/build/$PKGBASE
 
 add_to_repo() {
     rm -f $1-$PKGVERREL-$ARCH.pkg.tar.zst.sig # remove sig first if exists
@@ -155,7 +172,7 @@ add_to_repo() {
     fi
     flock /tmp/loong-repo-$REPO.lck repo-add -R $REPOS/$repo_value/os/loong64/$repo_value.db.tar.gz $1-$PKGVERREL-$ARCH.pkg.tar.zst
     cp $1-$PKGVERREL-$ARCH.pkg.tar.zst $REPOS/$repo_value/os/loong64/
-    curl -s -X POST $WEBSRV/op/edit/$1 --data-urlencode "loong_ver=$PKGVERREL" --data-urlencode "x86_ver=$ARCHVERREL" -d "repo=${repo_value%%-$TESTING}&build_status=testing" || (echo "Failed to POST result"; exit 1)
+    curl -s -X POST $WEBSRV/op/edit/$1 --data-urlencode "loong_ver=$PKGVERREL" --data-urlencode "x86_ver=$ARCHVERREL" -d "repo=${repo_value%%$TESTING}&build_status=testing" || (echo "Failed to POST result"; exit 1)
 }
 
 (source PKGBUILD; for pkg in ${pkgname[@]}; do add_to_repo $pkg; done)
