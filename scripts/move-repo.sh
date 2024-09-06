@@ -18,7 +18,7 @@ TO=$1
 
 # destination
 NEWPATH=/srv/http/loongarch/archlinux/$TO/os/loong64
-
+chmod 664 *.zst{,.sig}
 # arrary of packages
 ALLPKG=()
 
