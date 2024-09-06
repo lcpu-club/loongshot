@@ -118,12 +118,12 @@ if [ ! -z "$EPOCH" ]; then
 fi
 
 if [[ "$T0SERVER" == "localhost" ]]; then
-    pushd $PWD
+    pushd $PWD > /dev/null
     cd $T0REPOPATH/$REPO/os/loong64
-    _PKGVER=`ls $PKGNAME-*-*-*.zst | grep -E "$PKGNAME(-[^-]*){3}[^-]*$" | awk -F- '{ print $(NF-2)"-"$(NF-1)}'`
-    popd
+    _PKGVER=`ls $PKGNAME-*-*-*.zst 2>/dev/null | grep -E "$PKGNAME(-[^-]*){3}[^-]*$" | awk -F- '{ print $(NF-2)"-"$(NF-1)}'`
+    popd > /dev/null
 else
-    _PKGVER=$(ssh -t $T0SERVER "cd $T0REPOPATH/$REPO/os/loong64;ls $PKGNAME-*-*-*.zst | grep -E \"$PKGNAME(-[^-]*){3}[^-]*$\" | awk -F- '{ print \$(NF-2)\"-\"\$(NF-1)}'")
+    _PKGVER=$(ssh -t $T0SERVER "cd $T0REPOPATH/$REPO/os/loong64;ls $PKGNAME-*-*-*.zst 2>/dev/null | grep -E \"$PKGNAME(-[^-]*){3}[^-]*$\" | awk -F- '{ print \$(NF-2)\"-\"\$(NF-1)}'")
 fi
 if [[ "$PKGVERREL" == "$_PKGVER" ]]; then
     # Same package found in server. Incrementing point pkgrel...
