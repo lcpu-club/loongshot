@@ -89,13 +89,16 @@ for _REPO in core extra; do
 done
 
 # switch to the current release tag
-pkgctl repo switch ${PKGVER//:/-} || exit $E_CLONE
+if [[ ! -z "$PKGVER" ]]; then
+    pkgctl repo switch ${PKGVER//:/-} || exit $E_CLONE
+fi
 
 # no same pkg found in x86 repos
 if [[ -z "$REPO" ]]; then
-   repo_value=$CORE$TESTING
+    REPO=$CORE
+    repo_value=$CORE$TESTING
 else
-   repo_value=$REPO$TESTING
+    repo_value=$REPO$TESTING
 fi
 
 # version info may change after patching
