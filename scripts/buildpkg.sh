@@ -70,7 +70,7 @@ done
 # clone arch package repo
 if [[ -d $WORKDIR/$PKGBASE ]]; then
     cd $WORKDIR/$PKGBASE
-    git reset HEAD --hard
+    pkgctl repo switch main -f
     git pull
 else
     cd $WORKDIR || exit 1
