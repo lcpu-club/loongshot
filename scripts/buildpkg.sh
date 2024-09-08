@@ -18,6 +18,7 @@ if [[ $# -lt 1 ]]; then
     echo "  --debug    Debug the building, don't upload."
     echo "  --stag     Use staging repo."
     echo "  --core     New package add to core."
+    echo "  --ver      Build a specific version."
     echo "  --         Options after this will be passed to makepkg."
     exit 1
 fi
@@ -34,6 +35,7 @@ shift
 NOKEEP="--delete --delete-excluded"
 TESTING="-testing"
 CORE="extra"
+REPOTAG=""
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -55,6 +57,11 @@ while [[ $# -gt 0 ]]; do
             ;;
         --core)
             CORE="core"
+            shift
+            ;;
+        --ver)
+            shift
+            REPOTAG=$1
             shift
             ;;
         --)
@@ -80,13 +87,17 @@ fi
 
 # borrow code from felixonmars, get pkgver and repo name
 PKGNAME=$(. PKGBUILD; echo $pkgname)
-for _REPO in core extra; do
-    PKGVER=$(pacman -Sl $_REPO | grep "^$_REPO $PKGNAME " | cut -d " " -f 3)
-    if [[ -n "$PKGVER" ]]; then
-        REPO=$_REPO
-        break
-    fi
-done
+if [[ -z "$REPOTAG" ]]; then
+    for _REPO in core extra; do
+        PKGVER=$(pacman -Sl $_REPO | grep "^$_REPO $PKGNAME " | cut -d " " -f 3)
+        if [[ -n "$PKGVER" ]]; then
+            REPO=$_REPO
+            break
+        fi
+    done
+else
+    PKGVER=$REPOTAG
+fi
 
 # switch to the current release tag
 if [[ ! -z "$PKGVER" ]]; then
