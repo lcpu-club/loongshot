@@ -19,6 +19,7 @@ if [[ $# -lt 1 ]]; then
     echo "  --stag     Use staging repo."
     echo "  --core     New package add to core."
     echo "  --ver      Build a specific version."
+    echo "  --nocheck  Pass --nocheck to makepkg."
     echo "  --         Options after this will be passed to makepkg."
     exit 1
 fi
@@ -36,6 +37,7 @@ NOKEEP="--delete --delete-excluded"
 TESTING="-testing"
 CORE="extra"
 REPOTAG=""
+NOCHECK=""
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -64,6 +66,10 @@ while [[ $# -gt 0 ]]; do
             REPOTAG=$1
             shift
             ;;
+        --nocheck)
+            NOCHECK="--nocheck"
+            shift
+            ;;
         --)
             shift
             break
@@ -77,7 +83,7 @@ done
 # clone arch package repo
 if [[ -d $WORKDIR/$PKGBASE ]]; then
     cd $WORKDIR/$PKGBASE
-    pkgctl repo switch main -f
+    pkgctl repo switch main -f 2>/dev/null
     git pull
 else
     cd $WORKDIR || exit 1
@@ -101,7 +107,7 @@ fi
 
 # switch to the current release tag
 if [[ ! -z "$PKGVER" ]]; then
-    pkgctl repo switch ${PKGVER//:/-} || exit $E_CLONE
+    pkgctl repo switch ${PKGVER//:/-} 2>/dev/null || exit $E_CLONE
 fi
 
 # no same pkg found in x86 repos
@@ -182,13 +188,18 @@ check_build() {
     fi
 }
 # build package on server
-ssh -t $BUILDER "cd /home/arch/repos/$PKGBASE; PACKAGER=\"$PACKAGER\" extra$TESTING-loong64-build -- -- -A -L $@" || check_build
+ssh -t $BUILDER "cd /home/arch/repos/$PKGBASE; PACKAGER=\"$PACKAGER\" extra$TESTING-loong64-build -- -- -A -L $NOCHECK $@" || check_build
 
 rsync -avzP $BUILDER:/home/arch/repos/$PKGBASE/ --include='PKGBUILD' --include='*.log' --include='*.zst' --exclude='*' $WORKDIR/build/$PKGBASE/ || exit 1
 if [ ! -z "$DEBUG" ]; then
     exit 1
 fi
 cd $WORKDIR/build/$PKGBASE
+if [[ -z $NOCHECK ]]; then
+    rm -f .nocheck
+else
+    touch .nocheck
+fi
 
 add_to_repo() {
     rm -f $1-$PKGVERREL-$ARCH.pkg.tar.zst.sig # remove sig first if exists
