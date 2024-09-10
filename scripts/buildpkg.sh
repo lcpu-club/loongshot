@@ -170,6 +170,8 @@ update_config() {
 
 [[ $(grep "^$PKGBASE$" $LOONGREPO/update_config) ]] && update_config
 
+[[ $(grep "^$PKGBASE$" $LOONGREPO/ruby_mapping) ]] && echo "checkdepends+=(ruby-mapping)" >> PKGBUILD
+
 # copy package source to build server
 rsync -avzP $WORKDIR/$PKGBASE/ $BUILDER:/home/arch/repos/$PKGBASE/ $NOKEEP --exclude=.*
 
