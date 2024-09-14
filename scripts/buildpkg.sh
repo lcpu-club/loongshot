@@ -92,6 +92,7 @@ else
 fi
 
 # borrow code from felixonmars, get pkgver and repo name
+sudo pacman -Sy
 PKGNAME=$(. PKGBUILD; echo $pkgname)
 if [[ -z "$REPOTAG" ]]; then
     for _REPO in core extra; do

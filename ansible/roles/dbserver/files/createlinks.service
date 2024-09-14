@@ -7,3 +7,5 @@ ExecStart=/usr/local/bin/createlinks
 Nice=19
 IOSchedulingClass=best-effort
 IOSchedulingPriority=7
+User=arch
+Group=arch
