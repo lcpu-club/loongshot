@@ -209,17 +209,17 @@ add_to_repo() {
     if [ ! -z "$SIGN" ]; then
         gpg --detach-sign $1-$PKGVERREL-$ARCH.pkg.tar.zst
     fi
-    # signing might fail
-    if [ -f $1-$PKGVERREL-$ARCH.pkg.tar.zst.sig ]; then
-        cp $1-$PKGVERREL-$ARCH.pkg.tar.zst.sig $REPOS/$repo_value/os/loong64/
-    else
-        # remove the old sig file in repos if exists
-        rm -f $REPOS/$repo_value/os/loong64/$1-$PKGVERREL-$ARCH.pkg.tar.zst.sig
-    fi
     if [[ "$T0SERVER" == "localhost" ]]; then
+        # signing might fail
+        if [ -f $1-$PKGVERREL-$ARCH.pkg.tar.zst.sig ]; then
+            cp $1-$PKGVERREL-$ARCH.pkg.tar.zst.sig $REPOS/$repo_value/os/loong64/
+        else
+            # remove the old sig file in repos if exists
+            rm -f $REPOS/$repo_value/os/loong64/$1-$PKGVERREL-$ARCH.pkg.tar.zst.sig
+        fi
         flock /tmp/loong-repo-$REPO.lck repo-add -R $REPOS/$repo_value/os/loong64/$repo_value.db.tar.gz $1-$PKGVERREL-$ARCH.pkg.tar.zst
         cp $1-$PKGVERREL-$ARCH.pkg.tar.zst $REPOS/$repo_value/os/loong64/
-        chmod 664 $REPOS/$repo_value/os/loong64/$1-$PKGVERREL-$ARCH.pkg.tar.zst
+        chmod 664 $REPOS/$repo_value/os/loong64/$1-$PKGVERREL-$ARCH.pkg.tar.zst{,.sig}
         curl -s -X POST $WEBSRV/op/edit/$1 --data-urlencode "loong_ver=$PKGVERREL" --data-urlencode "x86_ver=$ARCHVERREL" -d "repo=${repo_value%%$TESTING}&build_status=testing" || (echo "Failed to POST result"; exit 1)
     else
         loong-repo-add $repo_value $1-$PKGVERREL-$ARCH.pkg.tar.zst
