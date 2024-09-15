@@ -177,7 +177,7 @@ update_config() {
 rsync -avzP $WORKDIR/$PKGBASE/ $BUILDER:/home/arch/repos/$PKGBASE/ $NOKEEP --exclude=.*
 
 check_build() {
-    ssh $BUILDER "cd /home/arch/repos/$PKGBASE; ls *.log"
+    ssh $BUILDER "cd /home/arch/repos/$PKGBASE; ls *.log >/dev/null 2>&1"
     if [[ "$?" -eq 2 ]]; then
         exit $E_NET # probably network issue
     else
