@@ -119,13 +119,10 @@ else
     repo_value=$REPO$TESTING
 fi
 
-# version info may change after patching
-ARCHVERREL=$(source PKGBUILD; echo $pkgver-$pkgrel)
 ARCH=$(source PKGBUILD; echo $arch)
 if [[ "$ARCH" != "any" ]]; then
     ARCH="loong64"
 fi
-EPOCH=$(source PKGBUILD; echo $epoch)
 
 # apply patch
 if [[ -d "$LOONGREPO/$PKGBASE" ]]; then
@@ -133,9 +130,16 @@ if [[ -d "$LOONGREPO/$PKGBASE" ]]; then
     find $LOONGREPO/$PKGBASE -type f -name "*" ! -name "loong.patch" -exec cp {} . \;
 fi
 
-PKGVERREL=$(source PKGBUILD; echo $pkgver-$pkgrel)
-if [ ! -z "$EPOCH" ]; then
-    PKGVERREL=$EPOCH:$PKGVERREL
+# package may not in arch's repo
+if [[ -z "$PKGVER" ]]; then
+    EPOCH=$(source PKGBUILD; echo $epoch)
+    PKGVERREL=$(source PKGBUILD; echo $pkgver-$pkgrel)
+    if [ ! -z "$EPOCH" ]; then
+        PKGVERREL=$EPOCH:$PKGVERREL
+    fi
+    PKGVER="missing"
+else
+    PKGVERREL=$PKGVER
 fi
 
 if [[ "$T0SERVER" == "localhost" ]]; then
@@ -220,7 +224,7 @@ add_to_repo() {
         flock /tmp/loong-repo-$REPO.lck repo-add -R $REPOS/$repo_value/os/loong64/$repo_value.db.tar.gz $1-$PKGVERREL-$ARCH.pkg.tar.zst
         cp $1-$PKGVERREL-$ARCH.pkg.tar.zst $REPOS/$repo_value/os/loong64/
         chmod 664 $REPOS/$repo_value/os/loong64/$1-$PKGVERREL-$ARCH.pkg.tar.zst{,.sig}
-        curl -s -X POST $WEBSRV/op/edit/$1 --data-urlencode "loong_ver=$PKGVERREL" --data-urlencode "x86_ver=$ARCHVERREL" -d "repo=${repo_value%%$TESTING}&build_status=testing" || (echo "Failed to POST result"; exit 1)
+        curl -s -X POST $WEBSRV/op/edit/$1 --data-urlencode "loong_ver=$PKGVERREL" --data-urlencode "x86_ver=$PKGVER" -d "repo=${repo_value%%$TESTING}&build_status=testing" || (echo "Failed to POST result"; exit 1)
     else
         loong-repo-add $repo_value $1-$PKGVERREL-$ARCH.pkg.tar.zst
     fi
