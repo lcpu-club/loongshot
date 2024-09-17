@@ -46,7 +46,7 @@ do_move(){
     fi
 
     if [ -f $FROM.db.tar.gz ]; then
-        flock /tmp/loong-repo-$FROM.lck repo-remove "${ALLPKG[@]}"
+        flock /tmp/loong-repo-$FROM.lck repo-remove $FROM.db.tar.gz "${ALLPKG[@]}"
     fi
     flock /tmp/loong-repo-$TO.lck repo-add -R $NEWPATH/$TO.db.tar.gz "${ALLZST[@]}"
 
