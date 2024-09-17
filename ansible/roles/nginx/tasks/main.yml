@@ -23,3 +23,8 @@
   systemd:
     name: nginx
     state: restarted
+
+- name: Ensure Nginx is enabled
+  systemd:
+    name: nginx
+    enabled: yes

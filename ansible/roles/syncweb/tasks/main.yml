@@ -38,3 +38,8 @@
   systemd:
     name: build-status
     state: restarted
+
+- name: Ensure gunicorn is enabled
+  systemd:
+    name: build-status
+    enabled: yes
