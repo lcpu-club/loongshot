@@ -11,6 +11,8 @@ x86_repo_path = "x86"
 loong64_repo_path = "loong"
 mirror_x86 = "https://mirrors.pku.edu.cn/archlinux/"
 mirror_loong64 = "https://loongarchlinux.lcpu.dev/loongarch/archlinux/"
+x86_repos = ['core', 'extra']
+loong64_repos = ['core-testing', 'core-staging', 'extra-testing', 'extra-staging']
 
 headers = { "User-Agent": "Mozilla/5.0", }
 
@@ -29,12 +31,13 @@ def download_file(source, dest):
 
 
 def update_repo():
-    for repo in ['core', 'extra']:
+    for repo in x86_repos:
         download_file(f"{mirror_x86}{repo}/os/x86_64/{repo}.db",
                       f"{x86_repo_path}/sync/{repo}.db")
-    for repo in ['core-testing', 'extra-testing', 'core-staging', 'extra-staging']:
+    for repo in loong64_repos:
         download_file(f"{mirror_loong64}{repo}/os/loong64/{repo}.db",
                       f"{loong64_repo_path}/sync/{repo}.db")
+
 
 # Load the repository database
 def load_repo(repo_path, repo):
@@ -45,6 +48,31 @@ def load_repo(repo_path, repo):
     except pyalpm.error as e:
         print(f"Failed to load repo {repo_path}: {e}")
         return None
+
+
+# Compare all packages in both repos
+def compare_all():
+    x86 = {}
+    for repo in x86_repos:
+        x86_db = load_repo(os.path.join(pwd, x86_repo_path), repo)
+        x86_pkg = {pkg.base: pkg.version for pkg in x86_db.pkgcache}
+        x86 = {**x86, **x86_pkg}
+    loong = {}
+    for repo in loong64_repos:
+        loong_db = load_repo(os.path.join(pwd, loong64_repo_path), repo)
+        loong_pkg = {pkg.base: pkg.version for pkg in loong_db.pkgcache}
+        loong = {**loong, **loong_pkg}
+    allpkg = {**loong, **x86}
+    for pkg_name in allpkg:
+        if pkg_name in x86:
+            x86_version = x86[pkg_name]
+        else:
+            x86_version = 'missing'
+        if pkg_name in loong:
+            loong64_version = loong[pkg_name]
+        else:
+            loong64_version = 'missing'
+        print(f"{pkg_name:24} {x86_version:24} {loong64_version:24}")
 
 
 # Compare the packages in both repos
@@ -66,7 +94,7 @@ def compare_repos(x86_db, loong64_db, loong64_db2):
         loong_relver = loong_relver.split('.')[0]
         if x86_pkgver == loong_pkgver and x86_relver == loong_relver:
             continue
-        print(f"{pkg_name:15} {x86_version:15} {loong64_version:15}")
+        print(f"{pkg_name:24} {x86_version:24} {loong64_version:24}")
 
 
 # compare one package
@@ -82,6 +110,7 @@ def main():
     parser.add_argument("-H", "--header", action="store_true", help="Output header.")
     parser.add_argument("-C", "--core", action="store_true", help="Compare core db.")
     parser.add_argument("-E", "--extra", action="store_true", help="Compare extra db.")
+    parser.add_argument("-A", "--all", action="store_true", help="Compare all dbs.")
     parser.add_argument("-p", "--package", type=str, help="The name of the package to compare.")
 
     args = parser.parse_args()
@@ -89,8 +118,12 @@ def main():
     if args.sync:
         update_repo()
 
-    if args.header and (args.core or args.extra):
-        print("Package         x86_ver         loong64_ver")
+    if args.header and (args.core or args.extra or args.all):
+        print("Package                  x86_ver                  loong64_ver")
+        print("-----------------------------------------------------------------")
+
+    if args.all:
+        compare_all()
 
     if args.core:
         x86_db = load_repo(os.path.join(pwd, x86_repo_path), "core")
