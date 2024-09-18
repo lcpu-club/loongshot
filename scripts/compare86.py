@@ -2,29 +2,39 @@
 import os
 import pyalpm
 import argparse
-import subprocess
+import urllib.request
 
 pwd = os.getcwd()
 
 # Define the repo file paths
 x86_repo_path = "x86"
 loong64_repo_path = "loong"
+mirror_x86 = "https://mirrors.pku.edu.cn/archlinux/"
+mirror_loong64 = "https://loongarchlinux.lcpu.dev/loongarch/archlinux/"
 
+headers = { "User-Agent": "Mozilla/5.0", }
 
-def update_repo(arch, dbpath):
-    pacman_command = [ "sudo", "pacman", "--arch", arch, "--dbpath", dbpath, "-Sy" ]
-    if not os.path.exists(dbpath):
-        os.makedirs(dbpath)
+def download_file(source, dest):
+    repo_path = os.path.dirname(dest)
+    if not os.path.exists(repo_path):
+        os.makedirs(repo_path)
     try:
-        result = subprocess.run(pacman_command, check=True, text=True, capture_output=True)
-        # print("Pacman output:", result.stdout)
-    except subprocess.CalledProcessError as e:
-        print(f"Error occurred: {e}")
-        print("Pacman error output:", e.stderr)
-    current_user = subprocess.run("whoami", capture_output=True, text=True).stdout.strip()
-    command = ["sudo", "chown", "-R", f"{current_user}:{current_user}", dbpath]
-    subprocess.run(command, check=True)
+        # Download the file and save it to dest_path
+        request = urllib.request.Request(source, headers=headers)
+        with urllib.request.urlopen(request) as response:
+            with open(dest, 'wb') as out_file:
+                out_file.write(response.read())
+    except Exception as e:
+        print(f"Error downloading file: {e}")
 
+
+def update_repo():
+    for repo in ['core', 'extra']:
+        download_file(f"{mirror_x86}{repo}/os/x86_64/{repo}.db",
+                      f"{x86_repo_path}/sync/{repo}.db")
+    for repo in ['core-testing', 'extra-testing', 'core-staging', 'extra-staging']:
+        download_file(f"{mirror_loong64}{repo}/os/loong64/{repo}.db",
+                      f"{loong64_repo_path}/sync/{repo}.db")
 
 # Load the repository database
 def load_repo(repo_path, repo):
@@ -77,10 +87,9 @@ def main():
     args = parser.parse_args()
 
     if args.sync:
-        update_repo("x86_64", x86_repo_path)
-        update_repo("loong64", loong64_repo_path)
+        update_repo()
 
-    if args.header:
+    if args.header and (args.core or args.extra):
         print("Package         x86_ver         loong64_ver")
 
     if args.core:
