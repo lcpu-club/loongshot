@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Package Status</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+        table, th, td {
+            border: 1px solid #ddd;
+        }
+        th, td {
+            padding: 8px;
+            text-align: left;
+        }
+        th {
+            background-color: #f2f2f2;
+        }
+        /* 设置最大宽度并允许水平滚动 */
+        .table-container {
+            max-width: 100%;
+            overflow-x: auto;
+        }
+        td {
+            max-width: 150px;  /* 设置单元格最大宽度 */
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;  /* 超出内容用省略号表示 */
+        }
+        .stats {
+            margin-bottom: 20px;
+            font-size: 16px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Package Status</h1>
+    
+    <!-- 统计信息显示区域 -->
+    <div id="stats" class="stats">
+        <!-- 统计信息将由 JavaScript 动态插入 -->
+    </div>
+    
+    <div class="table-container">
+        <table id="packageTable">
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Base</th>
+                    <th>Repo</th>
+                    <th>x86 Version</th>
+                    <th>Loong Version</th>
+                    <th>Loong Testing Version</th>
+                    <th>Loong Staging Version</th>
+                    <th>Comparison Result</th> <!-- 新增一列 -->
+                </tr>
+            </thead>
+            <tbody>
+                <!-- Data will be inserted here dynamically -->
+            </tbody>
+        </table>
+    </div>
+
+    <script>
+        // Function to create a new row and append to table
+        function createRow(package) {
+            const row = document.createElement('tr');
+
+            // Compare versions and determine the symbol to display
+            const x86Version = package.x86_version;
+            const loongVersion = package.loong_version;
+            const loongTestingVersion = package.loong_testing_version;
+            const loongStagingVersion = package.loong_staging_version;
+
+            let comparisonResult;
+
+            // 如果 loongVersion、loongTestingVersion 和 loongStagingVersion 都是 'N/A'，显示 ❌
+            if ((!loongVersion || loongVersion === 'N/A') &&
+                (!loongTestingVersion || loongTestingVersion === 'N/A') &&
+                (!loongStagingVersion || loongStagingVersion === 'N/A')) {
+                comparisonResult = '❌';
+            }
+            // 如果 loongVersion 和 x86Version 一致，显示 ✅
+            else if (loongVersion === x86Version) {
+                comparisonResult = '✅';
+            }
+            // 如果 loongTestingVersion 或 loongStagingVersion 和 x86Version 一致，显示 ☯
+            else if (loongTestingVersion === x86Version || loongStagingVersion === x86Version) {
+                comparisonResult = '☯';
+            }
+            // 如果三者都不一致，但有值，显示 ⭕
+            else {
+                comparisonResult = '⭕';
+            }
+
+            row.innerHTML = `
+                <td>${package.name || 'N/A'}</td>
+                <td>${package.base || 'N/A'}</td>
+                <td>${package.repo || 'N/A'}</td>
+                <td>${x86Version || 'N/A'}</td>
+                <td>${loongVersion || 'N/A'}</td>
+                <td>${loongTestingVersion || 'N/A'}</td>
+                <td>${loongStagingVersion || 'N/A'}</td>
+                <td>${comparisonResult}</td> <!-- 新增比较结果的列 -->
+            `;
+
+            return { row, comparisonResult };
+        }
+
+        // Function to calculate statistics and update the stats section
+        function updateStats(data) {
+            let coreTotal = 0, extraTotal = 0;
+            let coreMatch = 0, corePartialMatch = 0, coreNoMatch = 0, coreDiff = 0;
+            let extraMatch = 0, extraPartialMatch = 0, extraNoMatch = 0, extraDiff = 0;
+
+            data.forEach(package => {
+                const x86Version = package.x86_version;
+                const loongVersion = package.loong_version;
+                const loongTestingVersion = package.loong_testing_version;
+                const loongStagingVersion = package.loong_staging_version;
+
+                let comparisonResult;
+
+                // 如果 loongVersion、loongTestingVersion 和 loongStagingVersion 都是 'N/A'，显示 ❌
+                if ((!loongVersion || loongVersion === 'N/A') &&
+                    (!loongTestingVersion || loongTestingVersion === 'N/A') &&
+                    (!loongStagingVersion || loongStagingVersion === 'N/A')) {
+                    comparisonResult = '❌';
+                }
+                // 如果 loongVersion 和 x86Version 一致，显示 ✅
+                else if (loongVersion === x86Version) {
+                    comparisonResult = '✅';
+                }
+                // 如果 loongTestingVersion 或 loongStagingVersion 和 x86Version 一致，显示 ☯
+                else if (loongTestingVersion === x86Version || loongStagingVersion === x86Version) {
+                    comparisonResult = '☯';
+                }
+                // 如果三者都不一致，但有值，显示 ⭕
+                else {
+                    comparisonResult = '⭕';
+                }
+
+                if (package.repo === 'core') {
+                    coreTotal++;
+                    if (comparisonResult === '✅') {
+                        coreMatch++;
+                    } else if (comparisonResult === '☯') {
+                        corePartialMatch++;
+                    } else if (comparisonResult === '⭕') {
+                        coreDiff++;
+                    } else {
+                        coreNoMatch++;
+                    }
+                } else if (package.repo === 'extra') {
+                    extraTotal++;
+                    if (comparisonResult === '✅') {
+                        extraMatch++;
+                    } else if (comparisonResult === '☯') {
+                        extraPartialMatch++;
+                    } else if (comparisonResult === '⭕') {
+                        extraDiff++;
+                    } else {
+                        extraNoMatch++;
+                    }
+                }
+            });
+
+            const coreStats = `${coreMatch + corePartialMatch}/${coreTotal} 
+                (✅: ${coreMatch}, ☯: ${corePartialMatch}, ⭕: ${coreDiff}, ❌: ${coreNoMatch})`;
+            const extraStats = `${extraMatch + extraPartialMatch}/${extraTotal} 
+                (✅: ${extraMatch}, ☯: ${extraPartialMatch}, ⭕: ${extraDiff}, ❌: ${extraNoMatch})`;
+
+            const statsDiv = document.getElementById('stats');
+            statsDiv.innerHTML = `
+                <p><strong>Core Repo:</strong> ${coreStats}</p>
+                <p><strong>Extra Repo:</strong> ${extraStats}</p>
+            `;
+        }
+
+        // Function to fetch data from API and display incrementally
+        async function fetchData() {
+            try {
+                const response = await fetch('/api/packages/status');
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder('utf-8');
+                let tableBody = document.querySelector('#packageTable tbody');
+                let partialData = ''; // Used to store partial JSON data
+                
+                let allData = []; // Store all data for stats
+                
+                // Keep reading data stream until it's done
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break; // Exit when stream is done
+
+                    // Decode the chunk and concatenate with previous partial data
+                    partialData += decoder.decode(value, { stream: true });
+                    
+                    // Attempt to parse JSON array
+                    try {
+                        const data = JSON.parse(partialData);
+                        // Clear table first, in case of previous data
+                        tableBody.innerHTML = '';
+                        allData = data; // Store data for statistics
+                        
+                        // Insert each package row by row
+                        data.forEach(pkg => {
+                            const { row, comparisonResult } = createRow(pkg);
+                            tableBody.appendChild(row);
+                        });
+
+                        // Update statistics after all data is processed
+                        updateStats(data);
+                    } catch (e) {
+                        // If the partial data is not a complete JSON yet, continue fetching more
+                    }
+                }
+            } catch (error) {
+                console.error('Error fetching data:', error);
+            }
+        }
+
+        // Fetch data when the page loads
+        window.onload = fetchData;
+    </script>
+</body>
+</html>
+
