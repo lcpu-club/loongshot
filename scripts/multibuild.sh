@@ -13,6 +13,7 @@ for i in $(cat pkg); do
     ((current_pkg++))
 
     while [[ $retries -lt $max_retries ]]; do
+        STARTTIME=$SECONDS
         ./buildpkg.sh "$i" $SIGN --stag --keepsrc -- --skipinteg | tee $ALLLOGS
         exit_code=${PIPESTATUS[0]}
         ((retries++))
@@ -24,6 +25,10 @@ for i in $(cat pkg); do
             break
         fi
     done
+    ENDTIME=$SECONDS
+    TIMECOST=$((ENDTIME - STARTTIME))
+    mkdir -p ~/workdir/build/$i/
+    echo $TIMECOST > ~/workdir/build/$i/.timecost
 
     # tracking the soname changes
     grep -A4 "WARNING.*Sonames differ" $ALLLOGS >> sonames
@@ -37,7 +42,6 @@ for i in $(cat pkg); do
     # download link breaks
     grep -q "The requested URL returned error: 404" $ALLLOGS && echo $i >> 404s
 
-    mkdir -p ~/workdir/build/$i/
     mv $ALLLOGS ~/workdir/build/$i/
 
     if [[ $exit_code -eq 5 ]]; then
