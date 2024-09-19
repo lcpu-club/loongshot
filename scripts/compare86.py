@@ -50,6 +50,25 @@ def load_repo(repo_path, repo):
         return None
 
 
+# Find packages with all depends satisfied
+def safe_tobuild():
+    x86 = {}
+    for repo in x86_repos:
+        x86_db = load_repo(os.path.join(pwd, x86_repo_path), repo)
+        for pkg in x86_db.pkgcache:
+            alldep = pkg.makedepends + pkg.checkdepends + pkg.depends
+            alldep = {dep.split("=")[0].split(">")[0].split("<")[0] for dep in alldep}
+            x86[pkg.base] = alldep
+    loong = {}
+    for repo in loong64_repos:
+        loong_db = load_repo(os.path.join(pwd, loong64_repo_path), repo)
+        loong_pkg = {pkg.base: pkg.version for pkg in loong_db.pkgcache}
+        loong = {**loong, **loong_pkg}
+    for pkg_name in x86:
+        if (not pkg_name in loong) and (all(pkg in loong for pkg in x86[pkg_name])):
+            print(f"{pkg_name:24}")
+
+
 # Compare all packages in both repos
 def compare_all():
     x86 = {}
@@ -111,12 +130,17 @@ def main():
     parser.add_argument("-C", "--core", action="store_true", help="Compare core db.")
     parser.add_argument("-E", "--extra", action="store_true", help="Compare extra db.")
     parser.add_argument("-A", "--all", action="store_true", help="Compare all dbs.")
+    parser.add_argument("-B", "--build", action="store_true", help="Find package to build.")
     parser.add_argument("-p", "--package", type=str, help="The name of the package to compare.")
+
 
     args = parser.parse_args()
 
     if args.sync:
         update_repo()
+
+    if args.build:
+        safe_tobuild()
 
     if args.header and (args.core or args.extra or args.all):
         print("Package                  x86_ver                  loong64_ver")
