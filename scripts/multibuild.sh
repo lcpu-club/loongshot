@@ -12,9 +12,15 @@ for i in $(cat pkg); do
     retries=0
     ((current_pkg++))
 
+    if [[ "$i" == *:nocheck ]]; then
+        NOCHECK=--nocheck
+        i=${i%:nocheck}
+    else
+        NOCHECK=""
+    fi
     while [[ $retries -lt $max_retries ]]; do
         STARTTIME=$SECONDS
-        ./buildpkg.sh "$i" $SIGN --stag --keepsrc -- --skipinteg | tee $ALLLOGS
+        ./buildpkg.sh "$i" $SIGN $NOCHECK "$@" | tee $ALLLOGS
         exit_code=${PIPESTATUS[0]}
         ((retries++))
 
