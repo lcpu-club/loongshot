@@ -143,14 +143,11 @@ else
 fi
 
 if [[ "$T0SERVER" == "localhost" ]]; then
-    pushd $PWD > /dev/null
-    cd $T0REPOPATH/$REPO/os/loong64
-    _PKGVER=`ls $PKGNAME-*-*-*.zst 2>/dev/null | grep -E "$PKGNAME(-[^-]*){3}[^-]*$" | awk -F- '{ print $(NF-2)"-"$(NF-1)}'`
-    popd > /dev/null
+    _PKGVER=$(findpkg.py $T0REPOPATH $repo_value $PKGNAME)
 else
-    _PKGVER=$(ssh -t $T0SERVER "cd $T0REPOPATH/$REPO/os/loong64;ls $PKGNAME-*-*-*.zst 2>/dev/null | grep -E \"$PKGNAME(-[^-]*){3}[^-]*$\" | awk -F- '{ print \$(NF-2)\"-\"\$(NF-1)}'")
+    _PKGVER=$(ssh -t $T0SERVER "findpkg.py $T0REPOPATH $repo_value $PKGNAME")
 fi
-if [[ "$PKGVERREL" == "$_PKGVER" ]]; then
+if [[ ! -z "$_PKGVER" ]] && [[ "$PKGVERREL" == "$_PKGVER"* ]]; then
     # Same package found in server. Incrementing point pkgrel...
     PKGREL=${_PKGVER#*-}
     PKGREL=$(echo $PKGREL + .1 | bc)
