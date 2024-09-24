@@ -16,7 +16,7 @@
   synchronize:
     src:  "{{ src_dir }}"
     dest: "{{ dest_dir }}"
-    rsync_opts: "-avz --delete --exclude '*.db' --exclude 'summary.html'"
+    rsync_opts: "-avz --delete --exclude '*.db' --exclude 'summary.html' --exclude 'buildfail.html'"
 
 - name: Check if packages.db exists
   stat:

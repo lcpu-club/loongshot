@@ -1,0 +1,17 @@
+<html>
+  <head>
+    <script src="https://cdn.jsdelivr.net/npm/ansi_up@5.1.0/ansi_up.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jquery@3.6.0/dist/jquery.min.js"></script>
+  </head>
+  <body>
+    <pre id="terminal"></pre>
+    <script>
+      var ansi_up = new AnsiUp;
+      let searchParams = new URLSearchParams(window.location.search);
+      let url = searchParams.get('url');
+      $.ajax({url: url + "?raw", success: function(result) {
+        $('#terminal').html(ansi_up.ansi_to_html(result));
+      }});
+    </script>
+  </body>
+</html>

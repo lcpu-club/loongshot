@@ -33,7 +33,7 @@
         <tr>
             <td><a href="/status/logs/{{ log.name }}">{{ log.name }}</a></td>
             <td class="timestamp" data-utc="{{ log.timestamp }}">{{ log.timestamp }}</td>
-            <td><a href="/buildlogs/{{ log.name }}">{{ log.result }}</a></td>
+            <td><a href="log.html?url=/buildlogs/{{ log.name }}/all.log">{{ log.result }}</a></td>
         </tr>
         {% endfor %}
       </table>
