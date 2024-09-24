@@ -14,9 +14,12 @@ mirror_loong64 = "https://loongarchlinux.lcpu.dev/loongarch/archlinux/"
 x86_repos = ['core', 'extra']
 loong64_repos = ['core-testing', 'core-staging', 'extra-testing', 'extra-staging']
 
-headers = { "User-Agent": "Mozilla/5.0", }
+pkgtime = {}
 
+
+# Download repo db from mirrors.
 def download_file(source, dest):
+    headers = { "User-Agent": "Mozilla/5.0", }
     repo_path = os.path.dirname(dest)
     if not os.path.exists(repo_path):
         os.makedirs(repo_path)
@@ -28,6 +31,14 @@ def download_file(source, dest):
                 out_file.write(response.read())
     except Exception as e:
         print(f"Error downloading file: {e}")
+
+
+# cache all package buildtime
+def get_builddate():
+    for repo in x86_repos:
+        x86_db = load_repo(os.path.join(pwd, x86_repo_path), repo)
+        for pkg in x86_db.pkgcache:
+            pkgtime[pkg.base] = pkg.builddate
 
 
 def update_repo():
@@ -96,6 +107,7 @@ def compare_all():
 
 # Compare the packages in both repos
 def compare_repos(x86_db, loong64_db, loong64_db2):
+    get_builddate()
     x86_pkg = {pkg.base: pkg.version for pkg in x86_db.pkgcache}
     loong64_pkg_dict = {pkg.base: pkg.version for pkg in loong64_db.pkgcache}
     loong64_pkg_dict2 = {pkg.base: pkg.version for pkg in loong64_db2.pkgcache}
@@ -103,7 +115,8 @@ def compare_repos(x86_db, loong64_db, loong64_db2):
 
     # Find common packages and compare their versions
     common_pkgs = set(x86_pkg.keys()) & set(loong64_pkg.keys())
-    for pkg_name in common_pkgs:
+    sorted_pkgs = sorted(common_pkgs, key=lambda pkg: pkgtime.get(pkg, 0))
+    for pkg_name in sorted_pkgs:
         x86_version = x86_pkg[pkg_name]
         loong64_version = loong64_pkg[pkg_name]
         if x86_version == loong64_version:
