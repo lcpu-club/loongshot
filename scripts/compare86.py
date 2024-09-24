@@ -2,7 +2,8 @@
 import os
 import pyalpm
 import argparse
-import urllib.request
+import requests
+from datetime import datetime
 
 pwd = os.getcwd()
 
@@ -24,11 +25,22 @@ def download_file(source, dest):
     if not os.path.exists(repo_path):
         os.makedirs(repo_path)
     try:
+        response = requests.head(source)
+        if response.status_code == 200:
+            last_modified = response.headers.get('Last-Modified')
+            file_last_modified = datetime.strptime(last_modified, "%a, %d %b %Y %H:%M:%S %Z")
+            #print(file_last_modified)
+        if os.path.exists(dest):
+            local_file_modified = datetime.fromtimestamp(os.path.getmtime(dest))
+            if (local_file_modified >= file_last_modified):
+                print("No need to download")
+                return
+
         # Download the file and save it to dest_path
-        request = urllib.request.Request(source, headers=headers)
-        with urllib.request.urlopen(request) as response:
-            with open(dest, 'wb') as out_file:
-                out_file.write(response.read())
+        response = requests.get(source, headers=headers)
+        response.raise_for_status()
+        with open(dest, 'wb') as out_file:
+            out_file.write(response.content)
     except Exception as e:
         print(f"Error downloading file: {e}")
 
