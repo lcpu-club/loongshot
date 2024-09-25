@@ -33,7 +33,7 @@ def download_file(source, dest):
         if os.path.exists(dest):
             local_file_modified = datetime.fromtimestamp(os.path.getmtime(dest))
             if (local_file_modified >= file_last_modified):
-                print("No need to download")
+                #print("No need to download")
                 return
 
         # Download the file and save it to dest_path
