@@ -2,6 +2,7 @@
 import os
 import pyalpm
 import argparse
+import sys
 
 pwd = os.getcwd()
 
@@ -35,25 +36,33 @@ def load_repo(repo_path, repo):
 def read_and_convert_file(file_path, kvp):
     data = []
     # Read the file line by line and convert to dict
-    with open(file_path, 'r') as f:
-        for line in f:
-            line = line.strip()  # Remove leading/trailing spaces
-            if line:  # Skip empty lines
-                if line.endswith(":nocheck"):
-                    pkg = line.split(":")[0]
-                    data.append(f"{kvp[pkg]}:nocheck")
-                else:
-                    data.append(kvp[line])
-    # Write the updated data back to the file
-    with open(file_path, 'w') as f:
+    if file_path is None:
+        istream = sys.stdin
+    else:
+        istream = open(file_path, 'r')
+    for line in istream:
+        line = line.strip()  # Remove leading/trailing spaces
+        if line:  # Skip empty lines
+            if line.endswith(":nocheck"):
+                pkg = line.split(":")[0]
+                data.append(f"{kvp[pkg]}:nocheck")
+            else:
+                data.append(kvp[line])
+    if file_path is None:
         for item in data:
-            f.write(f"{item}\n")
+            print(item)
+    else:
+        istream.close()
+        # Write the updated data back to the file
+        with open(file_path, 'w') as f:
+            for item in data:
+                f.write(f"{item}\n")
 
 def main():
     parser = argparse.ArgumentParser(description="convert from pkgname to pkgbase and vice versa.")
     parser.add_argument("-b", "--name-to-base", action="store_true", help="From pkgname to pkgbase.")
     parser.add_argument("-n", "--base-to-name", action="store_true", help="From pkgbase to pkgname.")
-    parser.add_argument("-f", "--file", required=True, type=str, help="The list file to process.")
+    parser.add_argument("-f", "--file", type=str, help="The list file to process.")
 
     args = parser.parse_args()
 
