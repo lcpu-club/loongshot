@@ -48,7 +48,7 @@ do_move(){
     if [ -f $FROM.db.tar.gz ]; then
         flock /tmp/loong-repo-$FROM.lck repo-remove $FROM.db.tar.gz "${ALLPKG[@]}"
     fi
-    flock /tmp/loong-repo-$TO.lck repo-add -R $NEWPATH/$TO.db.tar.gz "${ALLZST[@]}" || exit
+    flock /tmp/loong-repo-$TO.lck repo-add -R $NEWPATH/$TO.db.tar.gz "${ALLZST[@]}" || exit 2
 
     for i in "${ALLZST[@]}"; do
         echo "Moving file: $i ..."
@@ -63,7 +63,8 @@ do_move(){
 for pkg in ${ALLFILES[@]}; do
     ((fcount++))
     if [ ! -f $pkg.sig ]; then
-        gpg --detach-sign $pkg || exit 0
+        echo "Signing $pkg ..."
+        gpg --detach-sign $pkg || exit 1
         chmod 664 $pkg{,.sig}
     fi
     ALLZST+=($pkg)
