@@ -1,0 +1,33 @@
+- name: Install PostgreSQL packages on Arch
+  pacman:
+    name: postgresql,python-psycopg2
+    state: present
+
+- name: Check if PostgreSQL database is initialized
+  stat:
+    path: "/var/lib/postgres/data"
+  register: pg_init_status
+
+- name: Initialize PostgreSQL database
+  command: "sudo -u postgres initdb -D /var/lib/postgres/data"
+  when: not pg_init_status.stat.exists
+
+- name: Enable and start PostgreSQL service
+  systemd:
+    name: postgresql
+    state: started
+    enabled: yes
+
+- name: Create PostgreSQL user
+  become_user: postgres
+  postgresql_user:
+    name: "{{ postgres_user }}"
+    password: "{{ postgres_password }}"
+    state: present
+
+- name: Create PostgreSQL database
+  become_user: postgres
+  postgresql_db:
+    name: "{{ postgres_db }}"
+    owner: "{{ postgres_user }}"
+    state: present
