@@ -84,7 +84,7 @@ done
 if [[ -d $WORKDIR/$PKGBASE ]]; then
     cd $WORKDIR/$PKGBASE
     pkgctl repo switch main -f 2>/dev/null
-    git pull
+    git pull || exit $E_CLONE
 else
     cd $WORKDIR || exit 1
     pkgctl repo clone --protocol=https $PKGBASE || exit $E_CLONE
@@ -224,7 +224,7 @@ add_to_repo() {
         cp $1-$PKGVERREL-$ARCH.pkg.tar.zst $REPOS/$repo_value/os/loong64/
         chmod 664 $REPOS/$repo_value/os/loong64/$1-$PKGVERREL-$ARCH.pkg.tar.zst{,.sig}
     else
-        scp "$1-$PKGVERREL-$ARCH.pkg.tar.zst" $T0SERVER:$REPOS/os/loong64/
+        scp "./$1-$PKGVERREL-$ARCH.pkg.tar.zst" $T0SERVER:$REPOS/os/loong64/
         ssh -tt $T0SERVER "cd $REPOS/os/loong64/; repo-add -R local-repo.db.tar.gz $1-$PKGVERREL-$ARCH.pkg.tar.zst"
     fi
     curl -s -X POST $WEBSRV/op/edit/$1 --data-urlencode "loong_ver=$PKGVERREL" --data-urlencode "x86_ver=$PKGVER" -d "repo=${repo_value%%$TESTING}&build_status=testing" || (echo "Failed to POST result"; exit 1)
