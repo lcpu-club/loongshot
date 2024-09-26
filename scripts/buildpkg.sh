@@ -142,11 +142,13 @@ else
     PKGVERREL=$PKGVER
 fi
 
-if [[ "$T0SERVER" == "localhost" ]]; then
-    _PKGVER=$(findpkg.py $T0REPOPATH $repo_value $PKGNAME)
-else
-    _PKGVER=$(ssh -t $T0SERVER "findpkg.py $T0REPOPATH $repo_value $PKGNAME")
-fi
+#if [[ "$T0SERVER" == "localhost" ]]; then
+#    _PKGVER=$(findpkg.py $T0REPOPATH $repo_value $PKGNAME)
+#else
+#    _PKGVER=$(ssh -t $T0SERVER "findpkg.py $T0REPOPATH $repo_value $PKGNAME")
+#fi
+_PKGVER=$(findpkg.py $T0REPOPATH $repo_value $PKGNAME)
+
 if [[ ! -z "$_PKGVER" ]] && [[ "$PKGVERREL" == "$_PKGVER"* ]]; then
     # Same package found in server. Incrementing point pkgrel...
     PKGREL=${_PKGVER#*-}
@@ -221,10 +223,11 @@ add_to_repo() {
         flock /tmp/loong-repo-$REPO.lck repo-add -R $REPOS/$repo_value/os/loong64/$repo_value.db.tar.gz $1-$PKGVERREL-$ARCH.pkg.tar.zst
         cp $1-$PKGVERREL-$ARCH.pkg.tar.zst $REPOS/$repo_value/os/loong64/
         chmod 664 $REPOS/$repo_value/os/loong64/$1-$PKGVERREL-$ARCH.pkg.tar.zst{,.sig}
-        curl -s -X POST $WEBSRV/op/edit/$1 --data-urlencode "loong_ver=$PKGVERREL" --data-urlencode "x86_ver=$PKGVER" -d "repo=${repo_value%%$TESTING}&build_status=testing" || (echo "Failed to POST result"; exit 1)
     else
-        loong-repo-add $repo_value $1-$PKGVERREL-$ARCH.pkg.tar.zst
+        scp "$1-$PKGVERREL-$ARCH.pkg.tar.zst" $T0SERVER:$REPOS/os/loong64/
+        ssh -tt $T0SERVER "cd $REPOS/os/loong64/; repo-add -R local-repo.db.tar.gz $1-$PKGVERREL-$ARCH.pkg.tar.zst"
     fi
+    curl -s -X POST $WEBSRV/op/edit/$1 --data-urlencode "loong_ver=$PKGVERREL" --data-urlencode "x86_ver=$PKGVER" -d "repo=${repo_value%%$TESTING}&build_status=testing" || (echo "Failed to POST result"; exit 1)
 }
 
 (source PKGBUILD; for pkg in ${pkgname[@]}; do add_to_repo $pkg; done)
