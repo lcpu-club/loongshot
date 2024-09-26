@@ -21,3 +21,21 @@
 #
 #- name: Open firewall holes
 #  ansible.posix.firewalld: service=wireguard permanent=yes immediate=yes state=enabled
+
+- name: add host entry to /etc/hosts
+  lineinfile:
+    path: /etc/hosts
+    create: yes
+    line: "{{ hostvars[item].real_ip }} lcpu-{{ item }}"
+    state: present
+  when:
+    - hostvars[item].real_ip is defined
+  loop: "{{ groups['all'] }}"
+
+- name: add wireguard entry to /etc/hosts
+  lineinfile:
+    path: /etc/hosts
+    create: yes
+    line: "{{ hostvars[item].wireguard_address }} {{ item }}"
+    state: present
+  loop: "{{ groups['all'] }}"

@@ -1,11 +1,3 @@
-- name: Configure pacman mirror
-  copy:
-    src: mirrorlist
-    dest: /etc/pacman.d/mirrorlist
-    owner: root
-    group: root
-    mode: 0644
-
 - name: Full system upgrade (equivalent to `pacman -Syu`)
   pacman:
     update_cache: yes
