@@ -25,17 +25,6 @@ def download_file(source, dest):
     if not os.path.exists(repo_path):
         os.makedirs(repo_path)
     try:
-        response = requests.head(source)
-        if response.status_code == 200:
-            last_modified = response.headers.get('Last-Modified')
-            file_last_modified = datetime.strptime(last_modified, "%a, %d %b %Y %H:%M:%S %Z")
-            #print(file_last_modified)
-        if os.path.exists(dest):
-            local_file_modified = datetime.fromtimestamp(os.path.getmtime(dest))
-            if (local_file_modified >= file_last_modified):
-                #print("No need to download")
-                return
-
         # Download the file and save it to dest_path
         response = requests.get(source, headers=headers)
         response.raise_for_status()
@@ -118,8 +107,9 @@ def compare_all():
 
 
 # Compare the packages in both repos
-def compare_repos(x86_db, loong64_db, loong64_db2):
+def compare_repos(x86_db, loong64_db, loong64_db2, showtime):
     get_builddate()
+    time_now = datetime.now()
     x86_pkg = {pkg.base: pkg.version for pkg in x86_db.pkgcache}
     loong64_pkg_dict = {pkg.base: pkg.version for pkg in loong64_db.pkgcache}
     loong64_pkg_dict2 = {pkg.base: pkg.version for pkg in loong64_db2.pkgcache}
@@ -138,7 +128,12 @@ def compare_repos(x86_db, loong64_db, loong64_db2):
         loong_relver = loong_relver.split('.')[0]
         if x86_pkgver == loong_pkgver and x86_relver == loong_relver:
             continue
-        print(f"{pkg_name:24} {x86_version:24} {loong64_version:24}")
+        if showtime:
+            time_then = datetime.fromtimestamp(pkgtime[pkg_name])
+            delta = (time_now - time_then).days
+            print(f"{pkg_name:24} {x86_version:24} {loong64_version:24} {delta} days old")
+        else:
+            print(f"{pkg_name:24} {x86_version:24} {loong64_version:24}")
 
 
 # compare one package
@@ -156,10 +151,13 @@ def main():
     parser.add_argument("-E", "--extra", action="store_true", help="Compare extra db.")
     parser.add_argument("-A", "--all", action="store_true", help="Compare all dbs.")
     parser.add_argument("-B", "--build", action="store_true", help="Find package to build.")
+    parser.add_argument("-t", "--time", action="store_true", help="Show package freshness.")
     parser.add_argument("-p", "--package", type=str, help="The name of the package to compare.")
 
-
     args = parser.parse_args()
+
+    if args.time is None:
+        args.time = False
 
     if args.sync:
         update_repo()
@@ -178,13 +176,13 @@ def main():
         x86_db = load_repo(os.path.join(pwd, x86_repo_path), "core")
         loong64_db = load_repo(os.path.join(pwd, loong64_repo_path), "core-testing")
         loong64_db2 = load_repo(os.path.join(pwd, loong64_repo_path), "core-staging")
-        compare_repos(x86_db, loong64_db, loong64_db2)
+        compare_repos(x86_db, loong64_db, loong64_db2, args.time)
 
     if args.extra:
         x86_db = load_repo(os.path.join(pwd, x86_repo_path), "extra")
         loong64_db = load_repo(os.path.join(pwd, loong64_repo_path), "extra-testing")
         loong64_db2 = load_repo(os.path.join(pwd, loong64_repo_path), "extra-staging")
-        compare_repos(x86_db, loong64_db, loong64_db2)
+        compare_repos(x86_db, loong64_db, loong64_db2, args.time)
 
     if args.package:
         for r in ['core', 'extra']:
