@@ -1,4 +1,5 @@
 #!/bin/bash
+# check repo for old package files and delete them
 
 REPODIR=/srv/http/loongarch/archlinux
 
@@ -7,14 +8,17 @@ check() {
     echo "Checking repo $1 ..."
     WORKDIR=$(mktemp -d)
     cd $WORKDIR
+    all_files=()
     about_to_delete=()
-    tar xfz $REPODIR/$REPO/os/loong64/$REPO.db.tar.gz
     for i in $(ls $REPODIR/$REPO/os/loong64/*.zst); do
-        pkg=$(basename $i)
+        all_files+=($(basename $i))
+    done
+    tar xfz $REPODIR/$REPO/os/loong64/$REPO.db.tar.gz
+    for pkg in "${all_files[@]}"; do
         n1=${pkg%-loong64.pkg.tar.zst}
         n2=${n1%-any.pkg.tar.zst}
         if [ ! -d $n2 ]; then
-            echo $pkg
+            echo "$pkg"
             about_to_delete+=($pkg)
         fi
     done
@@ -34,7 +38,7 @@ check() {
     rm $WORKDIR -rf
 }
 
+check core-staging
+check core-testing
 check extra-testing
 check extra-staging
-check core-testing
-check core-staging
