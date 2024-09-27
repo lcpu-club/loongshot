@@ -1,0 +1,56 @@
+- name: Install loong-api
+  copy:
+    src: "{{ lsrc_dir }}/loong-api"
+    dest: "{{ ldest_dir }}/loong-api"
+    owner: arch
+    group: arch
+    mode: '0755'
+
+- name: Install loong-updator
+  copy:
+    src: "{{ lsrc_dir }}/loong-updator"
+    dest: "{{ ldest_dir }}/loong-updator"
+    owner: arch
+    group: arch
+    mode: '0755'
+
+- name: Install index.html
+  copy:
+    src: ../../loong-status/index.html
+    dest: /srv/http/status/html/new.html
+    owner: http
+    group: http
+    mode: '0644'
+
+- name: Create env file
+  ansible.builtin.copy:
+    dest: "{{ ldest_dir }}/.env"
+    content: "DATABASE_URL=postgresql://{{ postgres_user }}:{{ postgres_password }}@localhost/archdb"
+    owner: arch
+    group: arch
+    mode: '0644'
+
+- name: Install systemd service
+  template:
+    src: "{{ item }}.j2"
+    dest: "/etc/systemd/system/{{ item }}"
+    owner: root
+    group: root
+    mode: '0644'
+  with_items:
+    - lupdator.service
+    - lapi.service
+
+- name: Install systemd timer
+  copy:
+    src: updator_timer.timer
+    dest: /etc/systemd/system/updator_timer.timer
+    owner: root
+    group: root
+    mode: '0644'
+
+- name: Activate systemd timer and service
+  service: name={{ item }} enabled=yes state=started
+  with_items:
+    - updator_timer.timer
+    - lapi.service

@@ -1,0 +1,10 @@
+[Unit]
+Description=Run loong-updator every 5 minutes
+
+[Timer]
+OnBootSec=5min
+OnUnitActiveSec=5min
+Unit=lupdator.service
+
+[Install]
+WantedBy=timers.target

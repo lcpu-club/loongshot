@@ -1,0 +1,7 @@
+[Unit]
+Description=Run updator every 5 minutes
+
+[Service]
+Type=simple
+WorkingDirectory={{ ldest_dir }}
+ExecStart={{ ldest_dir }}/loong-updator

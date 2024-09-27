@@ -1,0 +1,12 @@
+[Unit]
+Description=loong-api
+
+[Service]
+Type=simple
+WorkingDirectory={{ ldest_dir }}
+ExecStart={{ ldest_dir }}/loong-api
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
