@@ -7,6 +7,7 @@ ALLLOGS=all.log
 max_retries=2
 total_pkgs=$(wc -l < pkg)
 current_pkg=0
+umask 022
 rm -f multistop
 for i in $(cat pkg); do
     retries=0
@@ -20,7 +21,7 @@ for i in $(cat pkg); do
     fi
     while [[ $retries -lt $max_retries ]]; do
         STARTTIME=$SECONDS
-        ./buildpkg.sh "$i" $SIGN $NOCHECK "$@" | tee $ALLLOGS
+        ./buildpkg.sh "$i" $SIGN $NOCHECK --keepsrc "$@" | tee $ALLLOGS
         exit_code=${PIPESTATUS[0]}
         ((retries++))
 
@@ -52,6 +53,10 @@ for i in $(cat pkg); do
 
     if [[ $exit_code -eq 5 ]]; then
         echo "$(date '+%Y-%m-%d %H:%M:%S') - $i" >> netfail
+    fi
+
+    if [[ $exit_code -eq 3 ]]; then
+        echo "$(date '+%Y-%m-%d %H:%M:%S') - $i" >> patchfail
     fi
 
     if [[ $exit_code -eq 4 ]]; then
