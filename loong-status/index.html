@@ -181,7 +181,7 @@
             const extraStats = `${extraMatch + extraPartialMatch}/${extraTotal} 
                 (✅: ${extraMatch}, ☯: ${extraPartialMatch}, ⭕: ${extraDiff}, 🗑: ${extraDeprecated}, ❌: ${extraNoMatch})`;
             const statsDiv = document.getElementById('stats');
-            fetch('https://loong-status.lcpu.dev/api/lastupdate')
+            fetch('/api/lastupdate')
                 .then(response => response.json())
                 .then(data => {
                     const lastUpdateUTC = data.last_update;
