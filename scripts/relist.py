@@ -4,7 +4,8 @@ import pyalpm
 import argparse
 import sys
 
-pwd = os.getcwd()
+home_dir = os.path.expanduser("~")
+cache_dir = os.path.join(home_dir, ".cache", "compare86")
 
 # Define the repo file paths
 x86_repo_path = "x86"
@@ -16,7 +17,7 @@ pkgname = {}
 # cache all package buildtime
 def get_pkgbase():
     for repo in x86_repos:
-        x86_db = load_repo(os.path.join(pwd, x86_repo_path), repo)
+        x86_db = load_repo(os.path.join(cache_dir, x86_repo_path), repo)
         for pkg in x86_db.pkgcache:
             pkgbase[pkg.name] = pkg.base
             pkgname[pkg.base] = pkg.name
