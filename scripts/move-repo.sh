@@ -48,8 +48,27 @@ do_move(){
     if [ -f $FROM.db.tar.gz ]; then
         flock /tmp/loong-repo-$FROM.lck repo-remove $FROM.db.tar.gz "${ALLPKG[@]}"
     fi
-    flock /tmp/loong-repo-$TO.lck repo-add -R $NEWPATH/$TO.db.tar.gz "${ALLZST[@]}" || exit 2
-
+    flock /tmp/loong-repo-$TO.lck repo-add -R $NEWPATH/$TO.db.tar.gz "${ALLZST[@]}" | tee add.log
+    exit_code=${PIPESTATUS[0]}
+    if [[ ! $exit_code -eq 0 ]]; then
+        exit 2
+    fi
+    about_to_delete=()
+    for pkg in $(grep -oP "Removing old package file '\K[^']*(?=')" add.log); do
+        echo "About to delete $pkg ..."
+        about_to_delete+=($pkg)
+    done
+    if [ ! "${#about_to_delete[@]}" -eq 0 ]; then
+        echo "Are you sure you want to delete all the files in the array? (y/n)"
+        read -r answer
+        if [ "$answer" == "y" ]; then
+            for file in "${about_to_delete[@]}"; do
+                echo "Deleting $file ..."
+                rm -f $NEWPATH/$file{,.sig}
+            done
+        fi
+    fi
+    rm -f add.log
     for i in "${ALLZST[@]}"; do
         echo "Moving file: $i ..."
         mv $i $NEWPATH
