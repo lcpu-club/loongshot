@@ -4,8 +4,10 @@ import pyalpm
 import argparse
 import requests
 from datetime import datetime
+from signal import signal, SIGPIPE, SIG_DFL
 
-pwd = os.getcwd()
+home_dir = os.path.expanduser("~")
+cache_dir = os.path.join(home_dir, ".cache", "compare86")
 
 # Define the repo file paths
 x86_repo_path = "x86"
@@ -17,10 +19,12 @@ loong64_repos = ['core-testing', 'core-staging', 'extra-testing', 'extra-staging
 
 pkgtime = {}
 
+signal(SIGPIPE, SIG_DFL)
+
 
 # Download repo db from mirrors.
 def download_file(source, dest):
-    headers = { "User-Agent": "Mozilla/5.0", }
+    headers = {"User-Agent": "Mozilla/5.0", }
     repo_path = os.path.dirname(dest)
     if not os.path.exists(repo_path):
         os.makedirs(repo_path)
@@ -37,7 +41,7 @@ def download_file(source, dest):
 # cache all package buildtime
 def get_builddate():
     for repo in x86_repos:
-        x86_db = load_repo(os.path.join(pwd, x86_repo_path), repo)
+        x86_db = load_repo(os.path.join(cache_dir, x86_repo_path), repo)
         for pkg in x86_db.pkgcache:
             pkgtime[pkg.base] = pkg.builddate
 
@@ -45,10 +49,10 @@ def get_builddate():
 def update_repo():
     for repo in x86_repos:
         download_file(f"{mirror_x86}{repo}/os/x86_64/{repo}.db",
-                      f"{x86_repo_path}/sync/{repo}.db")
+                      f"{cache_dir}/{x86_repo_path}/sync/{repo}.db")
     for repo in loong64_repos:
         download_file(f"{mirror_loong64}{repo}/os/loong64/{repo}.db",
-                      f"{loong64_repo_path}/sync/{repo}.db")
+                      f"{cache_dir}/{loong64_repo_path}/sync/{repo}.db")
 
 
 # Load the repository database
@@ -66,14 +70,14 @@ def load_repo(repo_path, repo):
 def safe_tobuild():
     x86 = {}
     for repo in x86_repos:
-        x86_db = load_repo(os.path.join(pwd, x86_repo_path), repo)
+        x86_db = load_repo(os.path.join(cache_dir, x86_repo_path), repo)
         for pkg in x86_db.pkgcache:
             alldep = pkg.makedepends + pkg.checkdepends + pkg.depends
             alldep = {dep.split("=")[0].split(">")[0].split("<")[0] for dep in alldep}
             x86[pkg.base] = alldep
     loong = {}
     for repo in loong64_repos:
-        loong_db = load_repo(os.path.join(pwd, loong64_repo_path), repo)
+        loong_db = load_repo(os.path.join(cache_dir, loong64_repo_path), repo)
         loong_pkg = {pkg.base: pkg.version for pkg in loong_db.pkgcache}
         loong = {**loong, **loong_pkg}
     for pkg_name in x86:
@@ -85,12 +89,12 @@ def safe_tobuild():
 def compare_all():
     x86 = {}
     for repo in x86_repos:
-        x86_db = load_repo(os.path.join(pwd, x86_repo_path), repo)
+        x86_db = load_repo(os.path.join(cache_dir, x86_repo_path), repo)
         x86_pkg = {pkg.base: pkg.version for pkg in x86_db.pkgcache}
         x86 = {**x86, **x86_pkg}
     loong = {}
     for repo in loong64_repos:
-        loong_db = load_repo(os.path.join(pwd, loong64_repo_path), repo)
+        loong_db = load_repo(os.path.join(cache_dir, loong64_repo_path), repo)
         loong_pkg = {pkg.base: pkg.version for pkg in loong_db.pkgcache}
         loong = {**loong, **loong_pkg}
     allpkg = {**loong, **x86}
@@ -159,6 +163,9 @@ def main():
     if args.time is None:
         args.time = False
 
+    if not os.path.exists(f"{cache_dir}/{x86_repo_path}"):
+        args.sync = True
+
     if args.sync:
         update_repo()
 
@@ -173,25 +180,25 @@ def main():
         compare_all()
 
     if args.core:
-        x86_db = load_repo(os.path.join(pwd, x86_repo_path), "core")
-        loong64_db = load_repo(os.path.join(pwd, loong64_repo_path), "core-testing")
-        loong64_db2 = load_repo(os.path.join(pwd, loong64_repo_path), "core-staging")
+        x86_db = load_repo(os.path.join(cache_dir, x86_repo_path), "core")
+        loong64_db = load_repo(os.path.join(cache_dir, loong64_repo_path), "core-testing")
+        loong64_db2 = load_repo(os.path.join(cache_dir, loong64_repo_path), "core-staging")
         compare_repos(x86_db, loong64_db, loong64_db2, args.time)
 
     if args.extra:
-        x86_db = load_repo(os.path.join(pwd, x86_repo_path), "extra")
-        loong64_db = load_repo(os.path.join(pwd, loong64_repo_path), "extra-testing")
-        loong64_db2 = load_repo(os.path.join(pwd, loong64_repo_path), "extra-staging")
+        x86_db = load_repo(os.path.join(cache_dir, x86_repo_path), "extra")
+        loong64_db = load_repo(os.path.join(cache_dir, loong64_repo_path), "extra-testing")
+        loong64_db2 = load_repo(os.path.join(cache_dir, loong64_repo_path), "extra-staging")
         compare_repos(x86_db, loong64_db, loong64_db2, args.time)
 
     if args.package:
         for r in ['core', 'extra']:
-            x86_db = load_repo(os.path.join(pwd, x86_repo_path), r)
+            x86_db = load_repo(os.path.join(cache_dir, x86_repo_path), r)
             ver = show_package(args.package, x86_db)
             if ver:
                 print(f"{args.package} found in repo {r} of x86_64 with ver={ver}")
         for r in ['core', 'extra', 'core-testing', 'extra-testing', 'core-staging', 'extra-staging']:
-            loong_db = load_repo(os.path.join(pwd, loong64_repo_path), r)
+            loong_db = load_repo(os.path.join(cache_dir, loong64_repo_path), r)
             ver = show_package(args.package, loong_db)
             if ver:
                 print(f"{args.package} found in repo {r} of loong64 with ver={ver}")
