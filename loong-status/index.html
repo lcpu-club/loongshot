@@ -40,16 +40,59 @@
             margin-bottom: 20px;
             font-size: 16px;
         }
-
-        .comments {
-            border-top: 1px solid #000000;
+	.status-heading {
+            display: inline-block;
+            vertical-align: middle;
+        }
+        .tooltip {
+            position: relative;
+            vertical-align: middle;
+            display: inline-block;
+            cursor: pointer;
+        }
+        .tooltip .tooltip-text {
+            visibility: hidden;
+            width: 550px;
+            background-color: black;
+            color: #fff;
+            text-align: left;
+            border-radius: 5px;
+            padding: 5px;
+            position: absolute;
+            z-index: 1;
+            bottom: 125%;
+            left: 50%;
+            margin-left: 20px;
             margin-bottom: 20px;
             font-size: 16px;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+        .tooltip:hover .tooltip-text {
+            visibility: visible;
+            opacity: 0.8;
         }
     </style>
 </head>
 <body>
-    <h1>Package Status</h1>
+    <h1 class="status-heading">Package Status</h1>
+    <div class="tooltip">❓
+        <div id="comments_zh-CN" class="tooltip-text">
+            <p>✅: loongVersion 和 x86Version 一致 </p>
+            <p>❌: loongVersion、loongTestingVersion 和 loongStagingVersion 都是 'N/A' </p>
+            <p>☯: loongTestingVersion 或 loongStagingVersion 和 x86Version 一致 </p>
+            <p>⭕: 三者都不一致，但有值 </p>
+            <p>🗑: x86Version 是 'N/A'，而 loongVersion、loongTestingVersion 或 loongStagingVersion 任意一个有值 </p>
+        </div>
+
+        <div id="comments_en-US" class="tooltip-text">
+            <p>✅: loongVersion and x86Version matches </p>
+            <p>❌: loongVersion, loongTestingVersion and loongStagingVersion are all 'N/A' </p>
+            <p>☯: loongTestingVersion or loongStagingVersion matches x86Version  </p>
+            <p>⭕: none of the versions are a match, but not 'N/A' either </p>
+            <p>🗑: x86Version is 'N/A', but loongVersion, loongTestingVersion or loongStagingVersion is not 'N/A' </p>
+        </div>
+    </div>
     
     <!-- 统计信息显示区域 -->
     <!-- Stats display region -->
@@ -57,23 +100,6 @@
         <!-- 统计信息将由 JavaScript 动态插入 -->
          <!-- Stats are inserted via Javascript dynamically -->
     </div>
-    
-    <div id="comments_zh-CN" class="comments">
-        <p>✅: loongVersion 和 x86Version 一致 </p>
-        <p>❌: loongVersion、loongTestingVersion 和 loongStagingVersion 都是 'N/A' </p>
-        <p>☯: loongTestingVersion 或 loongStagingVersion 和 x86Version 一致 </p>
-        <p>⭕: 三者都不一致，但有值 </p>
-        <p>🗑: x86Version 是 'N/A'，而 loongVersion、loongTestingVersion 或 loongStagingVersion 任意一个有值 </p>
-    </div>
-
-    <div id="comments_en-US" class="comments">
-        <p>✅: loongVersion and x86Version matches </p>
-        <p>❌: loongVersion, loongTestingVersion and loongStagingVersion are all 'N/A' </p>
-        <p>☯: loongTestingVersion or loongStagingVersion matches x86Version  </p>
-        <p>⭕: none of the versions are a match, but not 'N/A' either </p>
-        <p>🗑: x86Version is 'N/A', but loongVersion, loongTestingVersion or loongStagingVersion is not 'N/A' </p>
-    </div>
-
     <div class="table-container">
         <table id="packageTable">
             <thead>
@@ -290,7 +316,29 @@
 
         // Fetch data when the page loads
         window.onload = fetchData;
+
+        const userLang = navigator.language || navigator.userLanguage;
+
+        const chineseTooltip = document.getElementById('comments_zh-CN');
+        const englishTooltip = document.getElementById('comments_en-US');
+
+        if (userLang.startsWith('zh')) {
+            chineseTooltip.style.display = 'block';
+            englishTooltip.style.display = 'none';
+        } else {
+            chineseTooltip.style.display = 'none';
+            englishTooltip.style.display = 'block';
+        }
+
+        const tooltip = document.querySelector('.tooltip');
+        tooltip.addEventListener('mouseenter', () => {
+            const activeTooltip = userLang.startsWith('zh') ? chineseTooltip : englishTooltip;
+            const tooltipBox = activeTooltip.getBoundingClientRect();
+            const windowHeight = window.innerHeight;
+
+            activeTooltip.style.bottom = 'auto';
+            activeTooltip.style.top = '125%';
+        });
     </script>
 </body>
 </html>
-
