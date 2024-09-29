@@ -25,17 +25,24 @@
             background-color: #f2f2f2;
         }
         /* 设置最大宽度并允许水平滚动 */
+        /* Set maximum width and allow horizontal scrolling */
         .table-container {
             max-width: 100%;
             overflow-x: auto;
         }
         td {
-            max-width: 150px;  /* 设置单元格最大宽度 */
+            max-width: 150px;  /* 设置单元格最大宽度 */ /* Set maixumum width of a cell */
             white-space: nowrap;
             overflow: hidden;
-            text-overflow: ellipsis;  /* 超出内容用省略号表示 */
+            text-overflow: ellipsis;  /* 超出内容用省略号表示 */ /* Overflow content omitted */
         }
         .stats {
+            margin-bottom: 20px;
+            font-size: 16px;
+        }
+
+        .comments {
+            border-top: 1px solid #000000;
             margin-bottom: 20px;
             font-size: 16px;
         }
@@ -45,10 +52,28 @@
     <h1>Package Status</h1>
     
     <!-- 统计信息显示区域 -->
+    <!-- Stats display region -->
     <div id="stats" class="stats">
         <!-- 统计信息将由 JavaScript 动态插入 -->
+         <!-- Stats are inserted via Javascript dynamically -->
     </div>
     
+    <div id="comments_zh-CN" class="comments">
+        <p>✅: loongVersion 和 x86Version 一致 </p>
+        <p>❌: loongVersion、loongTestingVersion 和 loongStagingVersion 都是 'N/A' </p>
+        <p>☯: loongTestingVersion 或 loongStagingVersion 和 x86Version 一致 </p>
+        <p>⭕: 三者都不一致，但有值 </p>
+        <p>🗑: x86Version 是 'N/A'，而 loongVersion、loongTestingVersion 或 loongStagingVersion 任意一个有值 </p>
+    </div>
+
+    <div id="comments_en-US" class="comments">
+        <p>✅: loongVersion and x86Version matches </p>
+        <p>❌: loongVersion, loongTestingVersion and loongStagingVersion are all 'N/A' </p>
+        <p>☯: loongTestingVersion or loongStagingVersion matches x86Version  </p>
+        <p>⭕: none of the versions are a match, but not 'N/A' either </p>
+        <p>🗑: x86Version is 'N/A', but loongVersion, loongTestingVersion or loongStagingVersion is not 'N/A' </p>
+    </div>
+
     <div class="table-container">
         <table id="packageTable">
             <thead>
@@ -60,7 +85,7 @@
                     <th>Loong Version</th>
                     <th>Loong Testing Version</th>
                     <th>Loong Staging Version</th>
-                    <th>Comparison Result</th> <!-- 新增一列 -->
+                    <th>Comparison Result</th> <!-- 新增一列 --> <!-- Add an extra column -->
                 </tr>
             </thead>
             <tbody>
@@ -83,20 +108,24 @@
             let comparisonResult;
 
             // 如果 loongVersion、loongTestingVersion 和 loongStagingVersion 都是 'N/A'，显示 ❌
+            // if loongVersion,loongTestingVersion and loongStagingVersion are all 'N/A', display ❌
             if ((!loongVersion || loongVersion === 'N/A') &&
                 (!loongTestingVersion || loongTestingVersion === 'N/A') &&
                 (!loongStagingVersion || loongStagingVersion === 'N/A')) {
                 comparisonResult = '❌';
             }
             // 如果 loongVersion 和 x86Version 一致，显示 ✅
+            // if loongVersion and x86Version matches, display ✅
             else if (loongVersion === x86Version) {
                 comparisonResult = '✅';
             }
             // 如果 loongTestingVersion 或 loongStagingVersion 和 x86Version 一致，显示 ☯
+            // if loongTestingVersion or loongStagingVersion matches x86Version, display ☯
             else if (loongTestingVersion === x86Version || loongStagingVersion === x86Version) {
                 comparisonResult = '☯';
             }
             // 如果三者都不一致，但有值，显示 ⭕
+            // if none of the versions are a match, but not 'N/A' either, display ⭕
             else {
                 comparisonResult = '⭕';
             }
@@ -109,7 +138,7 @@
                 <td>${loongVersion || 'N/A'}</td>
                 <td>${loongTestingVersion || 'N/A'}</td>
                 <td>${loongStagingVersion || 'N/A'}</td>
-                <td>${comparisonResult}</td> <!-- 新增比较结果的列 -->
+                <td>${comparisonResult}</td> <!-- 新增比较结果的列 --> <!-- extra column for result comparison -->
             `;
 
             return { row, comparisonResult };
@@ -127,24 +156,29 @@
                 const loongStagingVersion = package.loong_staging_version;
                 let comparisonResult;
                 // 如果 x86Version 是 'N/A'，而 loongVersion、loongTestingVersion 或 loongStagingVersion 任意一个有值，显示 🗑
+                // if x86Version is 'N/A', but loongVersion, loongTestingVersion or loongStagingVersion is not 'N/A', display 🗑
                 if (x86Version === 'N/A' && (loongVersion || loongTestingVersion || loongStagingVersion)) {
                     comparisonResult = '🗑';
                 }
                 // 如果 loongVersion、loongTestingVersion 和 loongStagingVersion 都是 'N/A'，显示 ❌
+                // if loongVersion,loongTestingVersion and loongStagingVersion are all 'N/A', display ❌
                 else if ((!loongVersion || loongVersion === 'N/A') &&
                     (!loongTestingVersion || loongTestingVersion === 'N/A') &&
                     (!loongStagingVersion || loongStagingVersion === 'N/A')) {
                     comparisonResult = '❌';
                 }
                 // 如果 loongVersion 和 x86Version 一致，显示 ✅
+                // if loongVersion and x86Version matches, display ✅
                 else if (compareVersions(loongVersion, x86Version)) {
                     comparisonResult = '✅';
                 }
                 // 如果 loongTestingVersion 或 loongStagingVersion 和 x86Version 一致，显示 ☯
+                // if loongTestingVersion or loongStagingVersion matches x86Version, display ☯
                 else if (compareVersions(loongTestingVersion, x86Version) || compareVersions(loongStagingVersion, x86Version)) {
                     comparisonResult = '☯';
                 }
                 // 如果三者都不一致，但有值，显示 ⭕
+                // if none of the versions are a match, but not 'N/A' either, display ⭕
                 else {
                     comparisonResult = '⭕';
                 }
