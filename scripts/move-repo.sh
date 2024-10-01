@@ -8,7 +8,7 @@
 
 if [[ $# -lt 1 ]]; then
     echo "Usage: ${0##*/} <repo-name> [optional filelist]"
-    exit 0
+    exit 1
 fi
 
 FROM=$(basename `pwd | sed 's/\/os\/loong64$//g'`)
