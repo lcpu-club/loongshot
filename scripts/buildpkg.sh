@@ -165,6 +165,7 @@ sed -i '/cargo fetch/s/\x86_64/`uname -m`/' PKGBUILD
 # When use cpython, $CARCH also need to chage to `uname -m`
 sed -i 's/\$CARCH-cpython-/`uname -m`-cpython-/g' PKGBUILD
 sed -i 's/\${CARCH}-cpython-/`uname -m`-cpython-/g' PKGBUILD
+sed -i 's/lib.linux-x86_64-cpython/lib.linux-$(uname -m)-cpython/' PKGBUILD
 
 # insert two lines of code after cd to the source.
 update_config() {
