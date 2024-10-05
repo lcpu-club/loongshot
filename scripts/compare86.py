@@ -111,7 +111,7 @@ def compare_all():
 
 
 # Compare the packages in both repos
-def compare_repos(x86_db, loong64_db, loong64_db2, showtime):
+def compare_repos(x86_db, loong64_db, loong64_db2, showtime, show_newer=False):
     get_builddate()
     time_now = datetime.now()
     x86_pkg = {pkg.base: pkg.version for pkg in x86_db.pkgcache}
@@ -125,6 +125,8 @@ def compare_repos(x86_db, loong64_db, loong64_db2, showtime):
     for pkg_name in sorted_pkgs:
         x86_version = x86_pkg[pkg_name]
         loong64_version = loong64_pkg[pkg_name]
+        if pyalpm.vercmp(loong64_version, x86_version) >= 0 and (not show_newer):
+            continue # loong64's version > x86's version: not outdated
         if x86_version == loong64_version:
             continue
         x86_pkgver, x86_relver = x86_version.split('-')
@@ -157,6 +159,7 @@ def main():
     parser.add_argument("-B", "--build", action="store_true", help="Find package to build.")
     parser.add_argument("-t", "--time", action="store_true", help="Show package freshness.")
     parser.add_argument("-p", "--package", type=str, help="The name of the package to compare.")
+    parser.add_argument("-n", "--newer", action="store_true", help="Also show the packages that are newer than x86's.")
 
     args = parser.parse_args()
 
@@ -189,7 +192,7 @@ def main():
         x86_db = load_repo(os.path.join(cache_dir, x86_repo_path), "extra")
         loong64_db = load_repo(os.path.join(cache_dir, loong64_repo_path), "extra-testing")
         loong64_db2 = load_repo(os.path.join(cache_dir, loong64_repo_path), "extra-staging")
-        compare_repos(x86_db, loong64_db, loong64_db2, args.time)
+        compare_repos(x86_db, loong64_db, loong64_db2, args.time, args.newer)
 
     if args.package:
         for r in ['core', 'extra']:
