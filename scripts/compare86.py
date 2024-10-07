@@ -15,7 +15,7 @@ loong64_repo_path = "loong"
 mirror_x86 = "https://mirrors.pku.edu.cn/archlinux/"
 mirror_loong64 = "https://loongarchlinux.lcpu.dev/loongarch/archlinux/"
 x86_repos = ['core', 'extra']
-loong64_repos = ['core-testing', 'core-staging', 'extra-testing', 'extra-staging']
+loong64_repos = ['core-testing', 'core', 'extra-testing', 'extra']
 
 pkgtime = {}
 
@@ -85,6 +85,11 @@ def safe_tobuild():
             print(f"{pkg_name:24}")
 
 
+def merge_dicts(dict1, dict2):
+    merged_dict = dict1.copy()  # Start with a copy of the first dictionary
+    merged_dict.update(dict2)
+    return merged_dict
+
 # Compare all packages in both repos
 def compare_all():
     x86 = {}
@@ -93,10 +98,15 @@ def compare_all():
         x86_pkg = {pkg.base: pkg.version for pkg in x86_db.pkgcache}
         x86 = {**x86, **x86_pkg}
     loong = {}
-    for repo in loong64_repos:
-        loong_db = load_repo(os.path.join(cache_dir, loong64_repo_path), repo)
-        loong_pkg = {pkg.base: pkg.version for pkg in loong_db.pkgcache}
+
+    for i in [0, 1]:
+        loong_db1 = load_repo(os.path.join(cache_dir, loong64_repo_path), loong64_repos[i * 2])
+        loong_db2 = load_repo(os.path.join(cache_dir, loong64_repo_path), loong64_repos[i * 2 + 1])
+        loong_pkg1 = {pkg.base: pkg.version for pkg in loong_db1.pkgcache}
+        loong_pkg2 = {pkg.base: pkg.version for pkg in loong_db2.pkgcache}
+        loong_pkg = merge_dicts(loong_pkg1, loong_pkg2)
         loong = {**loong, **loong_pkg}
+
     allpkg = {**loong, **x86}
     for pkg_name in allpkg:
         if pkg_name in x86:
@@ -117,7 +127,7 @@ def compare_repos(x86_db, loong64_db, loong64_db2, showtime, show_newer=False):
     x86_pkg = {pkg.base: pkg.version for pkg in x86_db.pkgcache}
     loong64_pkg_dict = {pkg.base: pkg.version for pkg in loong64_db.pkgcache}
     loong64_pkg_dict2 = {pkg.base: pkg.version for pkg in loong64_db2.pkgcache}
-    loong64_pkg = {**loong64_pkg_dict, **loong64_pkg_dict2}
+    loong64_pkg = merge_dicts(loong64_pkg_dict, loong64_pkg_dict2)
 
     # Find common packages and compare their versions
     common_pkgs = set(x86_pkg.keys()) & set(loong64_pkg.keys())
@@ -184,14 +194,14 @@ def main():
 
     if args.core:
         x86_db = load_repo(os.path.join(cache_dir, x86_repo_path), "core")
-        loong64_db = load_repo(os.path.join(cache_dir, loong64_repo_path), "core-testing")
-        loong64_db2 = load_repo(os.path.join(cache_dir, loong64_repo_path), "core-staging")
-        compare_repos(x86_db, loong64_db, loong64_db2, args.time)
+        loong64_db = load_repo(os.path.join(cache_dir, loong64_repo_path), "core")
+        loong64_db2 = load_repo(os.path.join(cache_dir, loong64_repo_path), "core-testing")
+        compare_repos(x86_db, loong64_db, loong64_db2, args.time, args.newer)
 
     if args.extra:
         x86_db = load_repo(os.path.join(cache_dir, x86_repo_path), "extra")
-        loong64_db = load_repo(os.path.join(cache_dir, loong64_repo_path), "extra-testing")
-        loong64_db2 = load_repo(os.path.join(cache_dir, loong64_repo_path), "extra-staging")
+        loong64_db = load_repo(os.path.join(cache_dir, loong64_repo_path), "extra")
+        loong64_db2 = load_repo(os.path.join(cache_dir, loong64_repo_path), "extra-testing")
         compare_repos(x86_db, loong64_db, loong64_db2, args.time, args.newer)
 
     if args.package:
