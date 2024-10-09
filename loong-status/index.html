@@ -40,7 +40,7 @@
             margin-bottom: 20px;
             font-size: 16px;
         }
-	.status-heading {
+        .status-heading {
             display: inline-block;
             vertical-align: middle;
         }
@@ -93,11 +93,9 @@
             <p>🗑: x86Version is 'N/A', but loongVersion, loongTestingVersion or loongStagingVersion is not 'N/A' </p>
         </div>
     </div>
-    
-    <!-- 统计信息显示区域 -->
+
     <!-- Stats display region -->
     <div id="stats" class="stats">
-        <!-- 统计信息将由 JavaScript 动态插入 -->
          <!-- Stats are inserted via Javascript dynamically -->
     </div>
     <div class="table-container">
@@ -111,7 +109,7 @@
                     <th>Loong Version</th>
                     <th>Loong Testing Version</th>
                     <th>Loong Staging Version</th>
-                    <th>Comparison Result</th> <!-- 新增一列 --> <!-- Add an extra column -->
+                    <th>Comparison Result</th>
                 </tr>
             </thead>
             <tbody>
@@ -142,12 +140,12 @@
             }
             // 如果 loongVersion 和 x86Version 一致，显示 ✅
             // if loongVersion and x86Version matches, display ✅
-            else if (loongVersion === x86Version) {
+            else if (compareVersions(loongVersion, x86Version)) {
                 comparisonResult = '✅';
             }
             // 如果 loongTestingVersion 或 loongStagingVersion 和 x86Version 一致，显示 ☯
             // if loongTestingVersion or loongStagingVersion matches x86Version, display ☯
-            else if (loongTestingVersion === x86Version || loongStagingVersion === x86Version) {
+            else if (compareVersions(loongTestingVersion, x86Version) || compareVersions(loongStagingVersion, x86Version)) {
                 comparisonResult = '☯';
             }
             // 如果三者都不一致，但有值，显示 ⭕
@@ -164,7 +162,7 @@
                 <td>${loongVersion || 'N/A'}</td>
                 <td>${loongTestingVersion || 'N/A'}</td>
                 <td>${loongStagingVersion || 'N/A'}</td>
-                <td>${comparisonResult}</td> <!-- 新增比较结果的列 --> <!-- extra column for result comparison -->
+                <td>${comparisonResult}</td>
             `;
 
             return { row, comparisonResult };
@@ -279,9 +277,9 @@
                 const decoder = new TextDecoder('utf-8');
                 let tableBody = document.querySelector('#packageTable tbody');
                 let partialData = ''; // Used to store partial JSON data
-                
+
                 let allData = []; // Store all data for stats
-                
+
                 // Keep reading data stream until it's done
                 while (true) {
                     const { done, value } = await reader.read();
@@ -289,14 +287,14 @@
 
                     // Decode the chunk and concatenate with previous partial data
                     partialData += decoder.decode(value, { stream: true });
-                    
+
                     // Attempt to parse JSON array
                     try {
                         const data = JSON.parse(partialData);
                         // Clear table first, in case of previous data
                         tableBody.innerHTML = '';
                         allData = data; // Store data for statistics
-                        
+
                         // Insert each package row by row
                         data.forEach(pkg => {
                             const { row, comparisonResult } = createRow(pkg);
