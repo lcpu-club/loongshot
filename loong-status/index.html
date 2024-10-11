@@ -240,9 +240,10 @@
         // Helper function to compare versions
         function compareVersions(loongVersion, x86Version) {
             if (!loongVersion || !x86Version) return false;
-            const [loongMajor, loongMinor] = loongVersion.split('-')[0].split('.');
-            const [x86Major, x86Minor] = x86Version.split('-')[0].split('.');
-            return loongMajor === x86Major;
+            const [loong_pkgver, loong_rel] = loongVersion.split('-')
+            const loong_relver = loong_rel.split('.')[0]
+            const [x86_pkgver, x86_relver] = x86Version.split('-')
+            return (loong_pkgver === x86_pkgver) && (loong_relver === x86_relver);
         }
 
         // Function to fetch data from API and display incrementally
