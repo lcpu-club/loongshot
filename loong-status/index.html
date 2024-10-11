@@ -119,6 +119,30 @@
     </div>
 
     <script>
+        function compareAll(x86, loong, testing, staging) {
+            let comparisonResult;
+            // if x86 is 'N/A', but loong, testing or staging is not 'N/A', display 🗑
+            if (!x86  && (loong || testing || staging )) {
+                comparisonResult = '🗑';
+            }
+            // if loong, testing and staging are all 'N/A', display ❌
+            else if ((!loong) && (!testing) && (!staging)) {
+                comparisonResult = '❌';
+            }
+            // if loong and x86 matches, display ✅
+            else if (compareVersions(loong, x86)) {
+                comparisonResult = '✅';
+            }
+            // if loongTestingVersion or loongStagingVersion matches x86Version, display ☯
+            else if (compareVersions(testing , x86) || compareVersions(staging, x86)) {
+                comparisonResult = '☯';
+            }
+            // if none of the versions are a match, but not 'N/A' either, display ⭕
+            else {
+                comparisonResult = '⭕';
+            }
+            return comparisonResult;
+        }
         // Function to create a new row and append to table
         function createRow(package) {
             const row = document.createElement('tr');
@@ -129,30 +153,7 @@
             const loongTestingVersion = package.loong_testing_version;
             const loongStagingVersion = package.loong_staging_version;
 
-            let comparisonResult;
-
-            // 如果 loongVersion、loongTestingVersion 和 loongStagingVersion 都是 'N/A'，显示 ❌
-            // if loongVersion,loongTestingVersion and loongStagingVersion are all 'N/A', display ❌
-            if ((!loongVersion || loongVersion === 'N/A') &&
-                (!loongTestingVersion || loongTestingVersion === 'N/A') &&
-                (!loongStagingVersion || loongStagingVersion === 'N/A')) {
-                comparisonResult = '❌';
-            }
-            // 如果 loongVersion 和 x86Version 一致，显示 ✅
-            // if loongVersion and x86Version matches, display ✅
-            else if (compareVersions(loongVersion, x86Version)) {
-                comparisonResult = '✅';
-            }
-            // 如果 loongTestingVersion 或 loongStagingVersion 和 x86Version 一致，显示 ☯
-            // if loongTestingVersion or loongStagingVersion matches x86Version, display ☯
-            else if (compareVersions(loongTestingVersion, x86Version) || compareVersions(loongStagingVersion, x86Version)) {
-                comparisonResult = '☯';
-            }
-            // 如果三者都不一致，但有值，显示 ⭕
-            // if none of the versions are a match, but not 'N/A' either, display ⭕
-            else {
-                comparisonResult = '⭕';
-            }
+            let comparisonResult = compareAll(x86Version, loongVersion, loongTestingVersion, loongStagingVersion);
 
             row.innerHTML = `
                 <td>${package.name || 'N/A'}</td>
@@ -178,34 +179,9 @@
                 const loongVersion = package.loong_version;
                 const loongTestingVersion = package.loong_testing_version;
                 const loongStagingVersion = package.loong_staging_version;
-                let comparisonResult;
-                // 如果 x86Version 是 'N/A'，而 loongVersion、loongTestingVersion 或 loongStagingVersion 任意一个有值，显示 🗑
-                // if x86Version is 'N/A', but loongVersion, loongTestingVersion or loongStagingVersion is not 'N/A', display 🗑
-                if (x86Version === 'N/A' && (loongVersion || loongTestingVersion || loongStagingVersion)) {
-                    comparisonResult = '🗑';
-                }
-                // 如果 loongVersion、loongTestingVersion 和 loongStagingVersion 都是 'N/A'，显示 ❌
-                // if loongVersion,loongTestingVersion and loongStagingVersion are all 'N/A', display ❌
-                else if ((!loongVersion || loongVersion === 'N/A') &&
-                    (!loongTestingVersion || loongTestingVersion === 'N/A') &&
-                    (!loongStagingVersion || loongStagingVersion === 'N/A')) {
-                    comparisonResult = '❌';
-                }
-                // 如果 loongVersion 和 x86Version 一致，显示 ✅
-                // if loongVersion and x86Version matches, display ✅
-                else if (compareVersions(loongVersion, x86Version)) {
-                    comparisonResult = '✅';
-                }
-                // 如果 loongTestingVersion 或 loongStagingVersion 和 x86Version 一致，显示 ☯
-                // if loongTestingVersion or loongStagingVersion matches x86Version, display ☯
-                else if (compareVersions(loongTestingVersion, x86Version) || compareVersions(loongStagingVersion, x86Version)) {
-                    comparisonResult = '☯';
-                }
-                // 如果三者都不一致，但有值，显示 ⭕
-                // if none of the versions are a match, but not 'N/A' either, display ⭕
-                else {
-                    comparisonResult = '⭕';
-                }
+
+                let comparisonResult = compareAll(x86Version, loongVersion, loongTestingVersion, loongStagingVersion);
+
                 if (package.repo === 'core') {
                     coreTotal++;
                     if (comparisonResult === '✅') {
@@ -234,9 +210,9 @@
                     }
                 }
             });
-            const coreStats = `${coreMatch + corePartialMatch}/${coreTotal} 
+            const coreStats = `${coreMatch + corePartialMatch}/${coreTotal - coreDeprecated}
                 (✅: ${coreMatch}, ☯: ${corePartialMatch}, ⭕: ${coreDiff}, 🗑: ${coreDeprecated}, ❌: ${coreNoMatch})`;
-            const extraStats = `${extraMatch + extraPartialMatch}/${extraTotal} 
+            const extraStats = `${extraMatch + extraPartialMatch}/${extraTotal - extraDeprecated}
                 (✅: ${extraMatch}, ☯: ${extraPartialMatch}, ⭕: ${extraDiff}, 🗑: ${extraDeprecated}, ❌: ${extraNoMatch})`;
             const statsDiv = document.getElementById('stats');
             fetch('/api/lastupdate')
