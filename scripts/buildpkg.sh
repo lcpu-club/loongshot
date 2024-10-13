@@ -148,8 +148,7 @@ fi
 #    _PKGVER=$(ssh -t $T0SERVER "findpkg.py $T0REPOPATH $repo_value $PKGNAME")
 #fi
 _PKGVER=$(findpkg.py $T0REPOPATH $repo_value $PKGNAME)
-
-if [[ ! -z "$_PKGVER" ]] && [[ "$PKGVERREL" == "$_PKGVER"* ]]; then
+if [[ ! -z "$_PKGVER" ]] && [[ "$_PKGVER" == "$PKGVERREL"* ]]; then
     # Same package found in server. Incrementing point pkgrel...
     PKGREL=${_PKGVER#*-}
     PKGREL=$(echo $PKGREL + .1 | bc)
@@ -166,6 +165,9 @@ sed -i '/cargo fetch/s/\x86_64/`uname -m`/' PKGBUILD
 sed -i 's/\$CARCH-cpython-/`uname -m`-cpython-/g' PKGBUILD
 sed -i 's/\${CARCH}-cpython-/`uname -m`-cpython-/g' PKGBUILD
 sed -i 's/lib.linux-x86_64-cpython/lib.linux-$(uname -m)-cpython/' PKGBUILD
+
+# More lua packages are building with luarocks, so..
+sed -i 's/linux-\$CARCH.rock/linux-`uname -m`.rock/g' PKGBUILD
 
 # insert two lines of code after cd to the source.
 update_config() {
