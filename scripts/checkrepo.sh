@@ -39,6 +39,8 @@ check() {
 }
 
 check core-staging
+check extra-staging
 check core-testing
 check extra-testing
-check extra-staging
+check core
+check extra
