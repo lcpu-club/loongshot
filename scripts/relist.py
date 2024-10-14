@@ -43,6 +43,9 @@ def read_and_convert_file(file_path, kvp):
         istream = open(file_path, 'r')
     for line in istream:
         line = line.strip()  # Remove leading/trailing spaces
+        if line.startswith("--"):
+            data.append(line)
+            continue
         if line:  # Skip empty lines
             if line.endswith(":nocheck"):
                 pkg = line.split(":")[0]
