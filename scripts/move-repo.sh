@@ -48,6 +48,11 @@ do_move(){
     if [ -f $FROM.db.tar.gz ]; then
         flock /tmp/loong-repo-$FROM.lck repo-remove $FROM.db.tar.gz "${ALLPKG[@]}"
     fi
+    for i in "${ALLZST[@]}"; do
+        echo "Copying file: $i ..."
+        cp $i $NEWPATH
+        cp $i.sig $NEWPATH
+    done
     flock /tmp/loong-repo-$TO.lck repo-add -R $NEWPATH/$TO.db.tar.gz "${ALLZST[@]}" | tee add.log
     exit_code=${PIPESTATUS[0]}
     if [[ ! $exit_code -eq 0 ]]; then
@@ -70,9 +75,8 @@ do_move(){
     fi
     rm -f add.log
     for i in "${ALLZST[@]}"; do
-        echo "Moving file: $i ..."
-        mv $i $NEWPATH
-        mv $i.sig $NEWPATH
+        echo "Deleting file: $i ..."
+        rm -f $i{,.sig}
     done
     fcount=1
     ALLZST=()
