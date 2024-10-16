@@ -10,7 +10,7 @@ check() {
     cd $WORKDIR
     all_files=()
     about_to_delete=()
-    for i in $(ls $REPODIR/$REPO/os/loong64/*.zst); do
+    for i in $(ls $REPODIR/$REPO/os/loong64/*.zst 2>/dev/null); do
         all_files+=($(basename $i))
     done
     tar xfz $REPODIR/$REPO/os/loong64/$REPO.db.tar.gz
@@ -35,6 +35,12 @@ check() {
             done
         fi
     fi
+    for i in $(ls 2>/dev/null); do
+        if [ -d $i ]; then
+            ls $REPODIR/$REPO/os/loong64/$i-*.zst > /dev/null 2>&1 || echo -e "\e[1;31mError:\e[0m Missing $i."
+            ls $REPODIR/$REPO/os/loong64/$i-*.zst.sig > /dev/null 2>&1 || echo -e "\e[1;31mError:\e[0m Missing $i's sig file."
+        fi
+    done
     rm $WORKDIR -rf
 }
 
