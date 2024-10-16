@@ -4,7 +4,7 @@
 SIGN=
 ALLLOGS=all.log
 
-max_retries=2
+max_retries=3
 total_pkgs=$(wc -l < pkg)
 current_pkg=0
 umask 022
@@ -33,7 +33,8 @@ for i in $(cat pkg); do
         # restart to download the corrupted packages
         grep "pkg.tar.zst is corrupted" $ALLLOGS >/dev/null 2>&1 && continue
         grep -q "unable to guess system type" $ALLLOGS && echo $i >> ~/loongarch-packages/update_config && continue
-        if [[ `grep -q "error: target not found:" $ALLLOGS` ]]; then
+        grep -q "error: target not found:" $ALLLOGS
+        if [[ $? -eq 0 ]]; then
             exit_code=6
             echo "$(date '+%Y-%m-%d %H:%M:%S') - $i" >> missing.log
             break
