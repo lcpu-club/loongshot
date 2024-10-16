@@ -6,6 +6,8 @@
 #   eg: your zst file should located in /some/path/extra-staging/os/loong64/
 #
 
+umask 022
+
 if [[ $# -lt 1 ]]; then
     echo "Usage: ${0##*/} <repo-name> [optional filelist]"
     exit 1
@@ -21,6 +23,11 @@ if [[ "$TO" == *"/"* ]]; then
     TO=$(basename $TO)
 else
     NEWPATH=/srv/http/loongarch/archlinux/$TO/os/loong64
+fi
+
+if [ "$(realpath $NEWPATH)" = "$(realpath `pwd`)" ]; then
+    echo "The paths refer to the same directory."
+    exit 1
 fi
 
 if [[ ! -d $NEWPATH ]]; then
