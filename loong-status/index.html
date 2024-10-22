@@ -73,6 +73,16 @@
             visibility: visible;
             opacity: 0.8;
         }
+        .no-change {
+            color: gold;
+            text-decoration: none; /* Removes underline */
+        }
+
+        .no-change:hover,
+        .no-change:visited,
+        .no-change:active {
+            color: gold; /* Keep the color the same in all states */
+        }
     </style>
 </head>
 <body>
@@ -174,7 +184,8 @@
                 if (flags & 1) status += '<span style="color: lime;">🅿</span>'; // has patch
                 if (flags & 2) status += '<span style="color: blue;">🅲</span>'; // nocheck
                 if (flags & 4) status += '<span style="color: orange;">🅾</span>'; // old config
-                if (flags > 255) status += '<span style="color: red;">🅵</span>'; // build fail
+                if (flags & 16) status += `<span><a href="log.html?url=/buildlogs/${package.base}/all.log" class="no-change">🅻</a></span>`; // has logs
+                if (flags & 128) status += '<span style="color: red;">🅵</span>'; // build fail
             }
 
             row.innerHTML = `
