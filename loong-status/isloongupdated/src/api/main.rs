@@ -8,6 +8,7 @@ struct Package {
     name: String,
     base: String,
     repo: String,
+    flags: Option<i32>,
     x86_version: Option<String>,
     loong_version: Option<String>,
     loong_testing_version: Option<String>,
@@ -22,7 +23,7 @@ struct LastUpdate {
 #[get("/api/packages/status")]
 async fn get_packages(pool: web::Data<sqlx::Pool<sqlx::Postgres>>) -> impl Responder {
     let packages: Vec<Package> = sqlx::query_as(
-        "SELECT name, base, repo, x86_version, loong_version, loong_testing_version, loong_staging_version FROM packages ORDER by repo, name"
+        "SELECT name, base, repo, flags, x86_version, loong_version, loong_testing_version, loong_staging_version FROM packages ORDER by repo, name"
     )
     .fetch_all(pool.get_ref())
     .await

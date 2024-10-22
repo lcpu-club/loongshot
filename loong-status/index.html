@@ -35,6 +35,7 @@
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;  /* 超出内容用省略号表示 */ /* Overflow content omitted */
+            line-height: 1.5;
         }
         .stats {
             margin-bottom: 20px;
@@ -108,6 +109,7 @@
                     <th>x86 Version</th>
                     <th>Loong Version</th>
                     <th>Comparison Result</th>
+                    <th>Status</th>
                 </tr>
             </thead>
             <tbody>
@@ -150,6 +152,7 @@
             const loongVersion = package.loong_version;
             const loongTestingVersion = package.loong_testing_version;
             const loongStagingVersion = package.loong_staging_version;
+            const flags = package.flags;
 
             // Prepare the merged loongVersion
             let mergedLoongVersion = loongVersion ? loongVersion : 'N/A';
@@ -166,6 +169,13 @@
 
             // Compare versions and determine the symbol to display
             let comparisonResult = compareAll(x86Version, loongVersion, loongTestingVersion, loongStagingVersion);
+            let status = '';
+            if (flags) {
+                if (flags & 1) status += '<span style="color: lime;">🅿</span>'; // has patch
+                if (flags & 2) status += '<span style="color: blue;">🅲</span>'; // nocheck
+                if (flags & 4) status += '<span style="color: orange;">🅾</span>'; // old config
+                if (flags > 255) status += '<span style="color: red;">🅵</span>'; // build fail
+            }
 
             row.innerHTML = `
                 <td>${package.name || 'N/A'}</td>
@@ -174,7 +184,8 @@
                 <td>${x86Version || 'N/A'}</td>
                 <td style="white-space: pre-line;">${mergedLoongVersion}</td>
                 <td>${comparisonResult}</td>
-            `;
+                <td>${status}</td>
+                `;
 
             return { row, comparisonResult };
         }
