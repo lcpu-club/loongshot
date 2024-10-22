@@ -107,8 +107,6 @@
                     <th>Repo</th>
                     <th>x86 Version</th>
                     <th>Loong Version</th>
-                    <th>Loong Testing Version</th>
-                    <th>Loong Staging Version</th>
                     <th>Comparison Result</th>
                 </tr>
             </thead>
@@ -147,12 +145,26 @@
         function createRow(package) {
             const row = document.createElement('tr');
 
-            // Compare versions and determine the symbol to display
+            // Extract version values
             const x86Version = package.x86_version;
             const loongVersion = package.loong_version;
             const loongTestingVersion = package.loong_testing_version;
             const loongStagingVersion = package.loong_staging_version;
 
+            // Prepare the merged loongVersion
+            let mergedLoongVersion = loongVersion ? loongVersion : 'N/A';
+
+            // Add (T) for loongTestingVersion if it exists
+            if (loongTestingVersion) {
+                mergedLoongVersion += `\n${loongTestingVersion}🄣`;
+            }
+
+            // Add (S) for loongStagingVersion if it exists
+            if (loongStagingVersion) {
+                mergedLoongVersion += `\n${loongStagingVersion}🄢`;
+            }
+
+            // Compare versions and determine the symbol to display
             let comparisonResult = compareAll(x86Version, loongVersion, loongTestingVersion, loongStagingVersion);
 
             row.innerHTML = `
@@ -160,9 +172,7 @@
                 <td>${package.base || 'N/A'}</td>
                 <td>${package.repo || 'N/A'}</td>
                 <td>${x86Version || 'N/A'}</td>
-                <td>${loongVersion || 'N/A'}</td>
-                <td>${loongTestingVersion || 'N/A'}</td>
-                <td>${loongStagingVersion || 'N/A'}</td>
+                <td style="white-space: pre-line;">${mergedLoongVersion}</td>
                 <td>${comparisonResult}</td>
             `;
 
