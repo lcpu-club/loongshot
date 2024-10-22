@@ -216,14 +216,28 @@ async fn flag_unused_packages(
         packages_set.remove(&package.name);
     }
 
-    for package in packages_set.iter() {
-        println!("Set {} from {} to NULL", package, version_column);
-        sqlx::query(&format!(
-            "UPDATE packages SET {} = NULL WHERE name = $1", version_column
-        ))
-        .bind(package)
-        .execute(pool)
-        .await?;
+    if !packages_set.is_empty() {
+        let query = format!(
+            "UPDATE packages SET {} = NULL WHERE name IN (", version_column
+        );
+
+        // Create placeholders for the number of package names
+        let placeholders = (1..=packages_set.len())
+            .map(|i| format!("${}", i))
+            .collect::<Vec<_>>()
+            .join(", ");
+
+        let final_query = format!("{}{})", query, placeholders);
+
+        let mut sql_query = sqlx::query(&final_query);
+
+        // Bind each package name to the query
+        for package in packages_set.iter() {
+            sql_query = sql_query.bind(package);
+        }
+
+        // Execute the batch update
+        sql_query.execute(pool).await?;
     }
 
     Ok(())
@@ -233,32 +247,46 @@ async fn flag_unused_packages(
 async fn insert_or_update_packages(
     pool: &sqlx::PgPool, version_column: &str, real_repo: &str, packages: &[Package]
 ) -> Result<(), sqlx::Error> {
-    for package in packages {
-        let exists = sqlx::query("SELECT COUNT(*) FROM packages WHERE name = $1")
-            .bind(&package.name)
-            .fetch_one(pool)
-            .await?
-            .get::<i64, _>(0) > 0;
+    let batch_size = 1000; // Adjust this depending on your performance needs
 
-        if exists {
-            sqlx::query(&format!(
-                "UPDATE packages SET {} = $1 WHERE name = $2", version_column
-            ))
-            .bind(&package.version)
-            .bind(&package.name)
-            .execute(pool)
-            .await?;
-        } else {
-            sqlx::query(&format!(
-                "INSERT INTO packages (name, base, repo, {}) VALUES ($1, $2, $3, $4)", version_column
-            ))
-            .bind(&package.name)
-            .bind(&package.base)
-            .bind(real_repo)
-            .bind(&package.version)
-            .execute(pool)
-            .await?;
+    for chunk in packages.chunks(batch_size) {
+        let mut query = format!(
+            "MERGE INTO packages AS target
+             USING (VALUES ",
+        );
+
+        // Add each package in the batch to the VALUES clause
+        for (i, _) in chunk.iter().enumerate() {
+            if i > 0 {
+                query.push_str(", ");
+            }
+            query.push_str(&format!("(${}, ${}, ${}, ${})",
+                i * 4 + 1, i * 4 + 2, i * 4 + 3, i * 4 + 4));
         }
+
+        query.push_str(&format!(
+            ") AS source (name, base, repo, version)
+             ON target.name = source.name
+             WHEN MATCHED THEN
+                UPDATE SET {0} = source.version
+             WHEN NOT MATCHED THEN
+                INSERT (name, base, repo, {0})
+                VALUES (source.name, source.base, source.repo, source.version)",
+            version_column
+        ));
+
+        let mut sql_query = sqlx::query(&query);
+
+        // Bind all parameters
+        for package in chunk {
+            sql_query = sql_query
+                .bind(&package.name)
+                .bind(&package.base)
+                .bind(real_repo)
+                .bind(&package.version);
+        }
+
+        sql_query.execute(pool).await?;
     }
 
     Ok(())
