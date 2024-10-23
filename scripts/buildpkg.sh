@@ -39,6 +39,10 @@ CORE="extra"
 REPOTAG=""
 NOCHECK=""
 
+# don't let these two be empty
+ADDFLAGS=","
+RMFLAGS=","
+
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --keepsrc)
@@ -83,7 +87,7 @@ done
 # clone arch package repo
 if [[ -d $WORKDIR/$PKGBASE ]]; then
     cd $WORKDIR/$PKGBASE
-    pkgctl repo switch main -f 2>/dev/null
+    pkgctl repo switch main -f
     git pull || exit $E_CLONE
 else
     cd $WORKDIR || exit 1
@@ -108,7 +112,7 @@ fi
 
 # switch to the current release tag
 if [[ ! -z "$PKGVER" ]]; then
-    pkgctl repo switch ${PKGVER//:/-} 2>/dev/null || exit $E_CLONE
+    pkgctl repo switch ${PKGVER//:/-} || exit $E_CLONE
 fi
 
 # no same pkg found in x86 repos
@@ -126,8 +130,11 @@ fi
 
 # apply patch
 if [[ -d "$LOONGREPO/$PKGBASE" ]]; then
+    ADDFLAGS+="patch,"
     cat $LOONGREPO/$PKGBASE/loong.patch | patch -p1 || exit $E_PATCH
     find $LOONGREPO/$PKGBASE -type f -name "*" ! -name "loong.patch" -exec cp {} . \;
+else
+    RMFLAGS+="patch,"
 fi
 
 # package may not in arch's repo
@@ -175,7 +182,12 @@ update_config() {
     sed -i '/^build()/,/configure/ {/^[[:space:]]*cd[[:space:]]\+/ { s/$/\n  for c_s in $(find -type f -name config.sub -o -name configure.sub); do cp -f \/usr\/share\/automake-1.1?\/config.sub "$c_s"; done\n  for c_g in $(find -type f -name config.guess -o -name configure.guess); do cp -f \/usr\/share\/automake-1.1?\/config.guess "$c_g"; done/; t;};}' PKGBUILD
 }
 
-[[ $(grep "^$PKGBASE$" $LOONGREPO/update_config) ]] && update_config
+if grep -q "^$PKGBASE$" "$LOONGREPO/update_config"; then
+    update_config
+    ADDFLAGS+="oldconfig,"
+else
+    RMFLAGS+="oldconfig,"
+fi
 
 [[ $(grep "^$PKGBASE$" $LOONGREPO/ruby_mapping) ]] && echo "checkdepends+=(ruby-mapping)" >> PKGBUILD
 
@@ -183,6 +195,9 @@ update_config() {
 rsync -avzP $WORKDIR/$PKGBASE/ $BUILDER:/home/arch/repos/$PKGBASE/ $NOKEEP --exclude=.*
 
 check_build() {
+    # log the fail result to database
+    ADDFLAGS+="haslog,fail"
+    dbcmd.py bit --add $ADDFLAGS --remove $RMFLAGS $PKGBASE
     ssh $BUILDER "cd /home/arch/repos/$PKGBASE; ls *.log >/dev/null 2>&1"
     if [[ "$?" -eq 2 ]]; then
         exit $E_NET # probably network issue
@@ -192,7 +207,6 @@ check_build() {
         if [ ! -z "$DEBUG" ]; then
             exit 1 # Don't update log
         fi
-        curl -s -X POST $WEBSRV/op/update/$PKGBASE -d "build_status=fail" || (echo "Failed to POST faillog"; exit 1)
         exit $E_BUILD
     fi
 }
@@ -206,8 +220,10 @@ fi
 cd $WORKDIR/build/$PKGBASE
 if [[ -z $NOCHECK ]]; then
     rm -f .nocheck
+    RMFLAGS+="nocheck,"
 else
     touch .nocheck
+    ADDFLAGS+="nocheck,"
 fi
 
 add_to_repo() {
@@ -230,7 +246,9 @@ add_to_repo() {
         scp "./$1-$PKGVERREL-$ARCH.pkg.tar.zst" $T0SERVER:$REPOS/os/loong64/
         ssh -tt $T0SERVER "cd $REPOS/os/loong64/; repo-add -R local-repo.db.tar.gz $1-$PKGVERREL-$ARCH.pkg.tar.zst"
     fi
-    curl -s -X POST $WEBSRV/op/edit/$1 --data-urlencode "loong_ver=$PKGVERREL" --data-urlencode "x86_ver=$PKGVER" -d "repo=${repo_value%%$TESTING}&build_status=testing" || (echo "Failed to POST result"; exit 1)
 }
 
+ADDFLAGS+="haslog"
+RMFLAGS+="fail"
+dbcmd.py bit --add $ADDFLAGS --remove $RMFLAGS $PKGBASE
 (source PKGBUILD; for pkg in ${pkgname[@]}; do add_to_repo $pkg; done)
