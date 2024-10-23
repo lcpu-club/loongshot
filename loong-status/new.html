@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Package Status</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+        table, th, td {
+            border: 1px solid #ddd;
+        }
+        th, td {
+            padding: 8px;
+            text-align: left;
+        }
+        th {
+            background-color: #f2f2f2;
+        }
+        /* 设置最大宽度并允许水平滚动 */
+        /* Set maximum width and allow horizontal scrolling */
+        .table-container {
+            max-width: 100%;
+            overflow-x: auto;
+        }
+        td {
+            max-width: 150px;  /* 设置单元格最大宽度 */ /* Set maixumum width of a cell */
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;  /* 超出内容用省略号表示 */ /* Overflow content omitted */
+            line-height: 1.5;
+        }
+        .stats {
+            margin-bottom: 20px;
+            font-size: 16px;
+        }
+        .status-heading {
+            display: inline-block;
+            vertical-align: middle;
+        }
+        .tooltip {
+            position: relative;
+            vertical-align: middle;
+            display: inline-block;
+            cursor: pointer;
+        }
+        .tooltip .tooltip-text {
+            visibility: hidden;
+            width: 550px;
+            background-color: black;
+            color: #fff;
+            text-align: left;
+            border-radius: 5px;
+            padding: 5px;
+            position: absolute;
+            z-index: 1;
+            bottom: 125%;
+            left: 50%;
+            margin-left: 20px;
+            margin-bottom: 20px;
+            font-size: 16px;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+        .tooltip:hover .tooltip-text {
+            visibility: visible;
+            opacity: 0.8;
+        }
+        .no-change {
+            color: gold;
+            text-decoration: none; /* Removes underline */
+        }
+
+        .no-change:hover,
+        .no-change:visited,
+        .no-change:active {
+            color: gold; /* Keep the color the same in all states */
+        }
+    </style>
+</head>
+<body>
+    <h1 class="status-heading">Package Status</h1>
+    <div class="tooltip">❓
+        <div id="comments_zh-CN" class="tooltip-text">
+            <p>✅: loongVersion 和 x86Version 一致 </p>
+            <p>❌: loongVersion、loongTestingVersion 和 loongStagingVersion 都是 'N/A' </p>
+            <p>☯: loongTestingVersion 或 loongStagingVersion 和 x86Version 一致 </p>
+            <p>⭕: 三者都不一致，但有值 </p>
+            <p>🗑: x86Version 是 'N/A'，而 loongVersion、loongTestingVersion 或 loongStagingVersion 任意一个有值 </p>
+        </div>
+
+        <div id="comments_en-US" class="tooltip-text">
+            <p>✅: loongVersion and x86Version matches </p>
+            <p>❌: loongVersion, loongTestingVersion and loongStagingVersion are all 'N/A' </p>
+            <p>☯: loongTestingVersion or loongStagingVersion matches x86Version  </p>
+            <p>⭕: none of the versions are a match, but not 'N/A' either </p>
+            <p>🗑: x86Version is 'N/A', but loongVersion, loongTestingVersion or loongStagingVersion is not 'N/A' </p>
+        </div>
+    </div>
+
+    <!-- Stats display region -->
+    <div id="stats" class="stats">
+         <!-- Stats are inserted via Javascript dynamically -->
+    </div>
+    <div class="table-container">
+        <table id="packageTable">
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Base</th>
+                    <th>Repo</th>
+                    <th>x86 Version</th>
+                    <th>Loong Version</th>
+                    <th>Comparison Result</th>
+                    <th>Status</th>
+                </tr>
+            </thead>
+            <tbody>
+                <!-- Data will be inserted here dynamically -->
+            </tbody>
+        </table>
+    </div>
+
+    <script>
+        function compareAll(x86, loong, testing, staging) {
+            let comparisonResult;
+            // if x86 is 'N/A', but loong, testing or staging is not 'N/A', display 🗑
+            if (!x86  && (loong || testing || staging )) {
+                comparisonResult = '🗑';
+            }
+            // if loong, testing and staging are all 'N/A', display ❌
+            else if ((!loong) && (!testing) && (!staging)) {
+                comparisonResult = '❌';
+            }
+            // if loong and x86 matches, display ✅
+            else if (compareVersions(loong, x86)) {
+                comparisonResult = '✅';
+            }
+            // if loongTestingVersion or loongStagingVersion matches x86Version, display ☯
+            else if (compareVersions(testing , x86) || compareVersions(staging, x86)) {
+                comparisonResult = '☯';
+            }
+            // if none of the versions are a match, but not 'N/A' either, display ⭕
+            else {
+                comparisonResult = '⭕';
+            }
+            return comparisonResult;
+        }
+        // Function to create a new row and append to table
+        function createRow(package) {
+            const row = document.createElement('tr');
+
+            // Extract version values
+            const x86Version = package.x86_version;
+            const loongVersion = package.loong_version;
+            const loongTestingVersion = package.loong_testing_version;
+            const loongStagingVersion = package.loong_staging_version;
+            const flags = package.flags;
+
+            // Prepare the merged loongVersion
+            let mergedLoongVersion = loongVersion ? loongVersion : 'N/A';
+
+            // Add (T) for loongTestingVersion if it exists
+            if (loongTestingVersion) {
+                mergedLoongVersion += `\n${loongTestingVersion}🄣`;
+            }
+
+            // Add (S) for loongStagingVersion if it exists
+            if (loongStagingVersion) {
+                mergedLoongVersion += `\n${loongStagingVersion}🄢`;
+            }
+
+            // Compare versions and determine the symbol to display
+            let comparisonResult = compareAll(x86Version, loongVersion, loongTestingVersion, loongStagingVersion);
+            let status = '';
+            if (flags) {
+                if (flags & 1) status += '<span style="color: lime;">🅿</span>'; // has patch
+                if (flags & 2) status += '<span style="color: blue;">🅲</span>'; // nocheck
+                if (flags & 4) status += '<span style="color: orange;">🅾</span>'; // old config
+                if (flags & 16) status += `<span><a href="log.html?url=/buildlogs/${package.base}/all.log" class="no-change">🅻</a></span>`; // has logs
+                if (flags & 128) status += '<span style="color: red;">🅵</span>'; // build fail
+            }
+
+            row.innerHTML = `
+                <td>${package.name || 'N/A'}</td>
+                <td>${package.base || 'N/A'}</td>
+                <td>${package.repo || 'N/A'}</td>
+                <td>${x86Version || 'N/A'}</td>
+                <td style="white-space: pre-line;">${mergedLoongVersion}</td>
+                <td>${comparisonResult}</td>
+                <td>${status}</td>
+                `;
+
+            return { row, comparisonResult };
+        }
+
+        // Function to calculate statistics and update the stats section
+        function updateStats(data) {
+            let coreTotal = 0, extraTotal = 0;
+            let coreMatch = 0, corePartialMatch = 0, coreNoMatch = 0, coreDiff = 0, coreDeprecated = 0;
+            let extraMatch = 0, extraPartialMatch = 0, extraNoMatch = 0, extraDiff = 0, extraDeprecated = 0;
+            data.forEach(package => {
+                const x86Version = package.x86_version;
+                const loongVersion = package.loong_version;
+                const loongTestingVersion = package.loong_testing_version;
+                const loongStagingVersion = package.loong_staging_version;
+
+                let comparisonResult = compareAll(x86Version, loongVersion, loongTestingVersion, loongStagingVersion);
+
+                if (package.repo === 'core') {
+                    coreTotal++;
+                    if (comparisonResult === '✅') {
+                        coreMatch++;
+                    } else if (comparisonResult === '☯') {
+                        corePartialMatch++;
+                    } else if (comparisonResult === '⭕') {
+                        coreDiff++;
+                    } else if (comparisonResult === '🗑') {
+                        coreDeprecated++;
+                    } else {
+                        coreNoMatch++;
+                    }
+                } else if (package.repo === 'extra') {
+                    extraTotal++;
+                    if (comparisonResult === '✅') {
+                        extraMatch++;
+                    } else if (comparisonResult === '☯') {
+                        extraPartialMatch++;
+                    } else if (comparisonResult === '⭕') {
+                        extraDiff++;
+                    } else if (comparisonResult === '🗑') {
+                        extraDeprecated++;
+                    } else {
+                        extraNoMatch++;
+                    }
+                }
+            });
+            const coreStats = `${coreMatch + corePartialMatch}/${coreTotal - coreDeprecated}
+                (✅: ${coreMatch}, ☯: ${corePartialMatch}, ⭕: ${coreDiff}, 🗑: ${coreDeprecated}, ❌: ${coreNoMatch})`;
+            const extraStats = `${extraMatch + extraPartialMatch}/${extraTotal - extraDeprecated}
+                (✅: ${extraMatch}, ☯: ${extraPartialMatch}, ⭕: ${extraDiff}, 🗑: ${extraDeprecated}, ❌: ${extraNoMatch})`;
+            const statsDiv = document.getElementById('stats');
+            fetch('/api/lastupdate')
+                .then(response => response.json())
+                .then(data => {
+                    const lastUpdateUTC = data.last_update;
+                    const lastUpdateDate = new Date(lastUpdateUTC);
+                    const lastUpdateLocal = lastUpdateDate.toLocaleString();
+                    statsDiv.innerHTML = `
+                        <p><strong>Core Repo:</strong> ${coreStats}</p>
+                        <p><strong>Extra Repo:</strong> ${extraStats}</p>
+                        <p><strong>Last Update:</strong> ${lastUpdateLocal}</p>
+                    `;
+                })
+                .catch(error => {
+                    console.error('Error fetching last update time:', error);
+                    statsDiv.innerHTML = `
+                        <p><strong>Core Repo:</strong> ${coreStats}</p>
+                        <p><strong>Extra Repo:</strong> ${extraStats}</p>
+                        <p><strong>Last Update:</strong> N/A</p>
+                    `;
+                });
+        }
+
+        // Helper function to compare versions
+        function compareVersions(loongVersion, x86Version) {
+            if (!loongVersion || !x86Version) return false;
+            const [loong_pkgver, loong_rel] = loongVersion.split('-')
+            const loong_relver = loong_rel.split('.')[0]
+            const [x86_pkgver, x86_relver] = x86Version.split('-')
+            return (loong_pkgver === x86_pkgver) && (loong_relver === x86_relver);
+        }
+
+        // Function to fetch data from API and display incrementally
+        async function fetchData() {
+            try {
+                const url = new URL(window.location.href);
+                const params = new URLSearchParams(url.search);
+                const limit = params.get('limit');
+                const response = await fetch('/api/packages/status');
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder('utf-8');
+                let tableBody = document.querySelector('#packageTable tbody');
+                let partialData = ''; // Used to store partial JSON data
+
+                let allData = []; // Store all data for stats
+
+                // Keep reading data stream until it's done
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break; // Exit when stream is done
+
+                    // Decode the chunk and concatenate with previous partial data
+                    partialData += decoder.decode(value, { stream: true });
+
+                    // Attempt to parse JSON array
+                    try {
+                        const data = JSON.parse(partialData);
+                        // Clear table first, in case of previous data
+                        tableBody.innerHTML = '';
+                        allData = data; // Store data for statistics
+
+                        // Insert each package row by row
+                        data.forEach(pkg => {
+                            if (limit === 'fails') {
+                                if (!pkg.flags) return;
+                                if ((pkg.flags & 128) == 0) return;
+                            }
+                            const { row, comparisonResult } = createRow(pkg);
+                            tableBody.appendChild(row);
+                        });
+
+                        // Update statistics after all data is processed
+                        updateStats(data);
+                    } catch (e) {
+                        // If the partial data is not a complete JSON yet, continue fetching more
+                    }
+                }
+            } catch (error) {
+                console.error('Error fetching data:', error);
+            }
+        }
+
+        // Fetch data when the page loads
+        window.onload = fetchData;
+
+        const userLang = navigator.language || navigator.userLanguage;
+
+        const chineseTooltip = document.getElementById('comments_zh-CN');
+        const englishTooltip = document.getElementById('comments_en-US');
+
+        if (userLang.startsWith('zh')) {
+            chineseTooltip.style.display = 'block';
+            englishTooltip.style.display = 'none';
+        } else {
+            chineseTooltip.style.display = 'none';
+            englishTooltip.style.display = 'block';
+        }
+
+        const tooltip = document.querySelector('.tooltip');
+        tooltip.addEventListener('mouseenter', () => {
+            const activeTooltip = userLang.startsWith('zh') ? chineseTooltip : englishTooltip;
+            const tooltipBox = activeTooltip.getBoundingClientRect();
+            const windowHeight = window.innerHeight;
+
+            activeTooltip.style.bottom = 'auto';
+            activeTooltip.style.top = '125%';
+        });
+    </script>
+</body>
+</html>
