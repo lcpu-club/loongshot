@@ -1,49 +1,31 @@
 #!/bin/bash
 
 if [[ $# -lt 2 ]]; then
-    echo "Usage: ${0##*/} <repo-name> <pkg-file> [option]"
-    echo "Option:"
-    echo "  --sign Sign the database file."
+    echo "Usage: ${0##*/} <repo-name> <pkg-files>"
     exit 1
 fi
 
-REPO=$1
-PKG=$2
-shift
-shift
-
-# get pkgname and version infor from $PKG
-TEMP=${PKG%-*}
-REL=${TEMP##*-}
-TEMP2=${TEMP%-*}
-VER=${TEMP2##*-}
-NAME=${TEMP2%-*}
-
-while [[ $# -gt 0 ]]; do
-    case "$1" in
-        --sign)
-            SIGN=-s
-            shift
-            ;;
-        *)
-            shift
-            ;;
-    esac
-done
-
 TIER0SERVER=arch2
 _remote_path=/srv/http/loongarch/archlinux/
+REPO=$1
+shift
+ALLFILES="$@"
+
+ALLSIG=()
+for pkg in ${ALLFILES[@]}; do
+    if [ ! -f $pkg.sig ]; then
+        echo "Signing $pkg ..."
+        gpg --detach-sign $pkg || exit 1
+    fi
+    ALLSIG+=($pkg.sig)
+done
 
 WORKDIR=$(mktemp -d)
+cp ${ALLFILES[@]} $WORKDIR
+echo ${ALLSIG[@]}
+cp ${ALLSIG[@]} $WORKDIR
 
-cp $PKG $WORKDIR/
-[[ -e $PKG.sig ]] && cp $PKG.sig $WORKDIR/
-cd $WORKDIR
-if [[ ! -e $PKG.sig ]]; then
-    gpg --detach-sign $PKG
-fi
-
-rsync -e ssh -p '--chmod=ug=rw,o=r' -c -h -L --progress --partial -y ./$PKG{,.sig} $TIER0SERVER:$_remote_path/$REPO/os/loong64/
-ssh -tt $TIER0SERVER "cd $_remote_path/$REPO/os/loong64/; flock /tmp/loong-repo-$REPO.lck repo-add $SIGN -R $REPO.db.tar.gz $PKG; curl -X POST http://127.0.0.1/op/edit/$NAME --data-urlencode 'loong_ver=$VER-$REL' --data-urlencode 'x86_ver=$VER=$REL' -d 'repo=${REPO%-*}&build_status=testing'"
+rsync -e ssh -p '--chmod=ug=rw,o=r' -c -h -L --progress --partial -y $WORKDIR/* $TIER0SERVER:$_remote_path/$REPO/os/loong64/ || exit 2
+ssh -tt $TIER0SERVER "cd $_remote_path/$REPO/os/loong64/; flock /tmp/loong-repo-$REPO.lck repo-add -R $REPO.db.tar.gz ${ALLFILES[@]};"
 
 rm -rf $WORKDIR
