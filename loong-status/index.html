@@ -281,6 +281,9 @@
         // Function to fetch data from API and display incrementally
         async function fetchData() {
             try {
+                const url = new URL(window.location.href);
+                const params = new URLSearchParams(url.search);
+                const limit = params.get('limit');
                 const response = await fetch('/api/packages/status');
                 const reader = response.body.getReader();
                 const decoder = new TextDecoder('utf-8');
@@ -306,6 +309,10 @@
 
                         // Insert each package row by row
                         data.forEach(pkg => {
+                            if (limit === 'fails') {
+                                if (!pkg.flags) return;
+                                if ((pkg.flags & 128) == 0) return;
+                            }
                             const { row, comparisonResult } = createRow(pkg);
                             tableBody.appendChild(row);
                         });
