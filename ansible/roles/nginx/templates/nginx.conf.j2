@@ -20,10 +20,6 @@ http {
         listen [::]:80;
         server_name {{ nginx_server_name }};
 
-        location /static/ {
-            alias /srv/http/status/static/;
-        }
-
         location /loongarch/ {
             alias /srv/http/loongarch/;
             autoindex on;
@@ -32,7 +28,7 @@ http {
         }
 
         location /buildlogs/ {
-            alias /home/arch/workdir/build/;
+            alias /home/arch/loong-status/build_logs/;
             autoindex on;
             autoindex_exact_size on;
             autoindex_localtime on;
@@ -40,22 +36,6 @@ http {
 
         location / {
             alias /srv/http/status/html/;
-        }
-
-        location /status {
-            proxy_pass http://unix:/srv/http/status/build-status.sock;
-        }
-
-        location /fails {
-            proxy_pass http://unix:/srv/http/status/build-status.sock;
-        }
-
-        location /op {
-            allow 100.87.1.0/24;
-            allow 127.0.0.1/8;
-            deny all;
-
-            proxy_pass http://unix:/srv/http/status/build-status.sock;
         }
 
         location /api {

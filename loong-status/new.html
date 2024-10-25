@@ -184,7 +184,7 @@
                 if (flags & 2) status += '<span style="color: blue;">🅲</span>'; // nocheck
                 if (flags & 4) status += '<span style="color: orange;">🅾</span>'; // old config
                 if (flags & 16) status += `<span><a href="log.html?url=/buildlogs/${package.base}/all.log" class="no-change" style="color: gold">🅻</a></span>`; // has logs
-                if (flags & 128) status += '<span style="color: red;">🅵</span>'; // build fail
+                if (flags & (1 << 15)) status += '<span style="color: red;">🅵</span>'; // build fail
             }
 
             row.innerHTML = `
@@ -310,7 +310,7 @@
                         data.forEach(pkg => {
                             if (limit === 'fails') {
                                 if (!pkg.flags) return;
-                                if ((pkg.flags & 128) == 0) return;
+                                if ((pkg.flags & (1 << 15)) == 0) return;
                             }
                             const { row, comparisonResult } = createRow(pkg);
                             tableBody.appendChild(row);
