@@ -12,7 +12,9 @@ BIT_MAP = {
     'oldconfig': 1 << 2,
     'qemu': 1 << 3,
     'haslog': 1 << 4,
-    'fail': 1 << 7,
+    'skippgp': 1 << 5,
+    'skiphash': 1 << 6,
+    'fail': 1 << 15,
 }
 
 class DatabaseManager:
