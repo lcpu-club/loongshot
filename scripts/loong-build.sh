@@ -75,7 +75,10 @@ while [[ $# -gt 0 ]]; do
         --builder)
             shift
             BUILDER=${1%:*}
-            BUILDPATH=${1#*:}
+            BP=${1#*:}
+            if [[ ! -z "$BP" ]]; then
+                BUILDPATH="$BP"
+            fi
             shift
             ;;
         --delsrc)
