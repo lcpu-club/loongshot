@@ -5,6 +5,7 @@ LOONGREPO=${LOONGREPO:=/home/arch/loongarch-packages}
 WORKDIR=${WORKDIR:=/home/arch/repos}
 PACKAGER=${PACKAGER:="John Doe <john@doe.com>"}
 SCRIPTSPATH=${SCRIPTSPATH:=/home/arch/loongshot/scripts}
+LOCALREPO=${LOCALREPO:=/home/arch/local-repo/} # always copy zst to local-repo
 TIER0=tier0
 
 if [[ $# -lt 1 ]]; then
@@ -190,7 +191,6 @@ build_package() {
     if [[ "$BUILDER" == "localhost" ]]; then
         PACKAGER="$PACKAGER" extra$TESTING-loong64-build $CLEAN -- -- -A -L $EXTRAARG
         EXITCODE=$?
-        BUILDER=$(hostname)
     else
         rsync -avzP $WORKDIR/$PKGBASE/ $BUILDER:$BUILDPATH/$PKGBASE/ $NOKEEP --exclude=.*
         if [[ ! $? -eq 0 ]]; then
@@ -206,6 +206,27 @@ build_package() {
     ENDTIME=$SECONDS
     TIMECOST=$((ENDTIME - STARTTIME))
 
+    # add the zst file to the local-repo
+    if [[ -z "$DEBUG"  ]]; then
+        (source PKGBUILD;
+        if [[ "$arch" == "any" ]]; then
+            ARCH="any"
+        else
+            ARCH="loong64"
+        fi
+        for pkg in ${pkgname[@]}; do
+            if [[ "$BUILDER" == "localhost" ]]; then
+                cp $pkg-$PKGVERREL-$ARCH.pkg.tar.zst $LOCALREPO/os/loong64/
+                repo-add -R $LOCALREPO/os/loong64/local-repo.db.tar.gz $pkg-$PKGVERREL-$ARCH.pkg.tar.zst
+            else
+                scp "./$pkg-$PKGVERREL-$ARCH.pkg.tar.zst" $BUILDER:$LOCALREPO/os/loong64/
+                ssh -t $BUILDER "cd $LOCALREPO/os/loong64; repo-add -R local-repo.db.tar.gz $pkg-$PKGVERREL-$ARCH.pkg.tar.zst"
+            fi
+        done)
+    fi
+    if [[ "$BUILDER" == "localhost" ]]; then
+        BUILDER=$(hostname) # save the hostname in log
+    fi
     if [[ $EXITCODE -eq 0 ]]; then
         msg "$PKGBASE-$PKGVERREL built on $BUILDER, time cost: $TIMECOST"
     else
