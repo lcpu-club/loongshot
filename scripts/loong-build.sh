@@ -96,6 +96,9 @@ EXTRAARG="$@"
 build_package() {
     # packages beloong only to loong
     if [[ -f $LOONGREPO/$PKGBASE/PKGBUILD ]]; then
+        if [[ ! -z $NOKEEP ]]; then
+            rm $WORKDIR/$PKGBASE -rf
+        fi
         cp $LOONGREPO/$PKGBASE $WORKDIR/ -a
     else
         # clone arch package repo
@@ -103,6 +106,10 @@ build_package() {
             cd $WORKDIR/$PKGBASE
             pkgctl repo switch main -f
             git pull || exit 1
+            if [[ ! -z $NOKEEP ]]; then
+                # delete all untracked files
+                git clean -fdx
+            fi
         else
             cd $WORKDIR || exit 1
             pkgctl repo clone --protocol=https $PKGBASE || exit 1
@@ -181,10 +188,6 @@ build_package() {
 
     STARTTIME=$SECONDS
     if [[ "$BUILDER" == "localhost" ]]; then
-        if [[ ! -z $NOKEEP ]]; then
-            # delete untracked files and directories
-            git clean -fd
-        fi
         PACKAGER="$PACKAGER" extra$TESTING-loong64-build $CLEAN -- -- -A -L $EXTRAARG
         EXITCODE=$?
         BUILDER=$(hostname)
