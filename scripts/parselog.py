@@ -93,7 +93,6 @@ class DatabaseManager:
             bid = 1 # unknown builder
             if result:
                 bid = result[0]
-            print(bid)
             cursor.execute("insert into logs(pkgbase,builder,build_result)values(%s,%s,%s)",
                 (base, bid, build_result))
             self.conn.commit()  # Commit the changes
@@ -114,6 +113,8 @@ def parse_build_log(log_path):
 
     flags={'nocheck': 0, 'patch': 0, 'oldconfig': 0, 'haslog': 1, 'skippgp': 0, 'skiphash': 0, 'fail': 1}
     fail_stage = 0
+    global builder
+    global timecost
     log_entry = [
         ("nocheck", "==>\x1b[m\x0f\x1b[1m Build with --nocheck"),
         ("patch", "==>\x1b[m\x0f\x1b[1m Loong's patch applied."),
