@@ -154,7 +154,7 @@ fi
 #else
 #    _PKGVER=$(ssh -t $T0SERVER "findpkg.py $T0REPOPATH $repo_value $PKGNAME")
 #fi
-_PKGVER=$(findpkg.py $T0REPOPATH $repo_value $PKGNAME)
+_PKGVER=$(findpkg.py $PKGNAME)
 if [[ ! -z "$_PKGVER" ]] && [[ "$_PKGVER" == "$PKGVERREL"* ]]; then
     # Same package found in server. Incrementing point pkgrel...
     PKGREL=${_PKGVER#*-}

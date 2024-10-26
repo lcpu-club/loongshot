@@ -17,12 +17,14 @@ def find_pkg(db, repo, package):
         return pkg
 
 
-repo_path, repo, package = sys.argv[1:4]
-
-ver = find_pkg(repo_path, repo, package)
-if ver is None and '-' in repo:
-    ver = find_pkg(repo_path, repo.split('-')[0], package)
-if ver is None:
+package = sys.argv[1]
+repo_path = '/srv/http/loongarch/archlinux'
+found = False
+for r in ['core-staging', 'extra-staging', 'core-testing', 'extra-testing', 'core', 'extra']:
+    ver = find_pkg(repo_path, r, package)
+    if ver:
+        print(ver.version)
+        found = True
+        break
+if not found:
     print("")
-else:
-    print(ver.version)
