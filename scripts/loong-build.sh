@@ -76,7 +76,7 @@ while [[ $# -gt 0 ]]; do
             shift
             BUILDER=${1%:*}
             BP=${1#*:}
-            if [[ ! -z "$BP" ]]; then
+            if [[ "$BP" != "$BUILDER" ]]; then
                 BUILDPATH="$BP"
             fi
             shift
@@ -210,7 +210,7 @@ build_package() {
     TIMECOST=$((ENDTIME - STARTTIME))
 
     # add the zst file to the local-repo
-    if [[ -z "$DEBUG"  ]]; then
+    if [[ -z "$DEBUG"  ]] && [[ "$EXITCODE" -eq 0 ]]; then
         (source PKGBUILD;
         if [[ "$arch" == "any" ]]; then
             ARCH="any"
