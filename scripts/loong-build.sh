@@ -233,7 +233,7 @@ build_package() {
     if [[ $EXITCODE -eq 0 ]]; then
         msg "$PKGBASE-$PKGVERREL built on $BUILDER, time cost: $TIMECOST"
     else
-        msg2 "$PKGBASE-$PKGVERREL failed on $BUILDER, time cost: $TIMECOST"
+        msg "$PKGBASE-$PKGVERREL failed on $BUILDER, time cost: $TIMECOST"
     fi
 }
 
