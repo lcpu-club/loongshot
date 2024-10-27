@@ -32,6 +32,7 @@ for i in $(cat pkg); do
         grep "pkg.tar.zst is corrupted" $ALLLOGS >/dev/null 2>&1 && continue
         # update config.{sub,guess} and retry
         grep -q "unable to guess system type" $ALLLOGS && echo $i >> ~/loongarch-packages/update_config && continue
+        break
     done
 
     # tracking the soname changes
