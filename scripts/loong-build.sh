@@ -204,7 +204,9 @@ build_package() {
         EXITCODE=$?
 
         # sync back generated zst files
-        rsync -avzP $BUILDER:$BUILDPATH/$PKGBASE/*.zst $WORKDIR/$PKGBASE/
+        if [[ "$EXITCODE" -eq 0 ]]; then
+            rsync -avzP $BUILDER:$BUILDPATH/$PKGBASE/*.zst $WORKDIR/$PKGBASE/
+        fi
     fi
     ENDTIME=$SECONDS
     TIMECOST=$((ENDTIME - STARTTIME))
