@@ -25,7 +25,7 @@ for i in $(cat pkg); do
     while [[ $retries -lt $max_retries ]]; do
         ./loong-build.sh "$i" --test $NOCHECK "$@"
         ((retries++))
-        PKGVER=${source $WORKDIR/$i/PKGBUILD; echo $epoch${epoch:+:}$pkgver-$pkgrel)
+        PKGVER=$(source $WORKDIR/$i/PKGBUILD; echo $epoch${epoch:+:}$pkgver-$pkgrel)
         ALLLOGS=$WORKDIR/$i/$i-$PKGVER.log
 
         # restart to download the corrupted packages
