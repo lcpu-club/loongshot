@@ -23,7 +23,7 @@ for i in $(cat pkg); do
     fi
 
     while [[ $retries -lt $max_retries ]]; do
-        ./loong-build.sh "$i" --test $NOCHECK "$@"
+        ./loong-build.sh "$i" --test "$@" $NOCHECK
         ((retries++))
         PKGVER=$(source $WORKDIR/$i/PKGBUILD; echo $epoch${epoch:+:}$pkgver-$pkgrel)
         ALLLOGS=$WORKDIR/$i/$i-$PKGVER.log
