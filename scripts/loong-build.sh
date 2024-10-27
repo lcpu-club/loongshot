@@ -109,14 +109,14 @@ build_package() {
         if [[ -d $WORKDIR/$PKGBASE ]]; then
             cd $WORKDIR/$PKGBASE
             pkgctl repo switch main -f
-            git pull || exit 1
+            git pull 2>&1 || return
             if [[ ! -z $NOKEEP ]]; then
                 # delete all untracked files
                 git clean -fdx
             fi
         else
-            cd $WORKDIR || exit 1
-            pkgctl repo clone --protocol=https $PKGBASE || exit 1
+            cd $WORKDIR 2>&1 || return
+            pkgctl repo clone --protocol=https $PKGBASE 2>&1 || return
             cd $PKGBASE
         fi
 
@@ -128,15 +128,15 @@ build_package() {
         # switch to the current release tag
         if [[ ! -z "$PKGVER" ]]; then
             if ! pkgctl repo switch ${PKGVER//:/-}; then
-                error "Release tag could not be found."
-                exit 1
+                msg "Release tag could not be found."
+                return
             fi
         fi
         # apply patch
         if [[ -d "$LOONGREPO/$PKGBASE" ]]; then
             if ! patch -Np1 -i $LOONGREPO/$PKGBASE/loong.patch; then
-                error "Fail to apply loong's patch."
-                exit 1
+                msg "Fail to apply loong's patch."
+                return
             fi
             # copy additional files
             find $LOONGREPO/$PKGBASE -type f -name "*" ! -name "loong.patch" -exec cp {} . \;
@@ -197,8 +197,8 @@ build_package() {
     else
         rsync -avzP $WORKDIR/$PKGBASE/ $BUILDER:$BUILDPATH/$PKGBASE/ $NOKEEP --exclude=.*
         if [[ ! $? -eq 0 ]]; then
-            error "Can't copy PKGBUILD to builder."
-            exit 1
+            msg "Can't copy PKGBUILD to builder."
+            return
         fi
         ssh -t $BUILDER "cd /home/arch/repos/$PKGBASE; PACKAGER=\"$PACKAGER\" extra$TESTING-loong64-build -- -- -A -L $EXTRAARG" 2>/dev/null
         EXITCODE=$?
