@@ -111,41 +111,44 @@ class DatabaseManager:
 
 def parse_build_log(log_path):
 
-    flags={'nocheck': 0, 'patch': 0, 'oldconfig': 0, 'haslog': 1, 'skippgp': 0, 'skiphash': 0, 'fail': 1}
+    flags={'nocheck': 0, 'patch': 0, 'oldconfig': 0, 'haslog': 1, 'skippgp': 0, 'skiphash': 0, 'fail': 1, 'startbuild': 0}
     fail_stage = 0
     global builder
     global timecost
     log_entry = [
-        ("nocheck", "==>\x1b[m\x0f\x1b[1m Build with --nocheck"),
-        ("patch", "==>\x1b[m\x0f\x1b[1m Loong's patch applied."),
-        ("oldconfig", "==>\x1b[m\x0f\x1b[1m Updating config."),
-        ("fail", "==>\x1b[m\x0f\x1b[1m Finished making:"),
-        ("skippgp", "==>\x1b[m\x0f\x1b[1m Build with --skippgpcheck"),
-        ("skiphash", "==>\x1b[m\x0f\x1b[1m Build with --skipchecksum"),
+        ("nocheck",  r"\x1b.*==>.*\[1m Build with --nocheck"),
+        ("patch",    r"\x1b.*==>.*\[1m Loong's patch applied."),
+        ("oldconfig",r"\x1b.*==>.*\[1m Updating config."),
+        ("fail",     r"\x1b.*==>.*\[1m Finished making:"),
+        ("skippgp",  r"\x1b.*==>.*\[1m Build with --skippgpcheck"),
+        ("skiphash", r"\x1b.*==>.*\[1m Build with --skipchecksum"),
+        ("startbuild", r"\x1b.*==>.*\[1m Building in chroot for"),
     ]
     error_entry = [
-        "==> ERROR:\x1b[m\x0f\x1b[1m Failure while downloading",
-        "==> ERROR:\x1b[m\x0f\x1b[1m One or more files did not pass the validity check",
-        "==> ERROR:\x1b[m\x0f\x1b[1m One or more PGP signatures",
-        "==> ERROR:\x1b[m\x0f\x1b[1m Could not resolve all dependencies",
-        "==> ERROR:\x1b[m\x0f\x1b[1m A failure occurred in prepare().",
-        "==> ERROR:\x1b[m\x0f\x1b[1m A failure occurred in build().",
-        "==> ERROR:\x1b[m\x0f\x1b[1m A failure occurred in check().",
-        "==> ERROR:\x1b[m\x0f\x1b[1m A failure occurred in package",
-        "configure: error: cannot guess build type; ",
+        (1, r"\x1b.*==>.*\[1m Fail to apply loong's patch"),
+        # No. 2 is reserved for "not start to build" for errors happen before building.
+        (3, r"\x1b.*==> ERROR:.*\[1m Failure while downloading"),
+        (4, r"\x1b.*==> ERROR:.*\[1m One or more files did not pass the validity check"),
+        (5, r"\x1b.*==> ERROR:.*\[1m One or more PGP signatures"),
+        (6, r"\x1b.*==> ERROR:.*\[1m Could not resolve all dependencies"),
+        (7, r"\x1b.*==> ERROR:.*\[1m A failure occurred in prepare"),
+        (8, r"\x1b.*==> ERROR:.*\[1m A failure occurred in build"),
+        (9, r"\x1b.*==> ERROR:.*\[1m A failure occurred in check"),
+        (10, r"\x1b.*==> ERROR:.*\[1m A failure occurred in package"),
+        (11, "configure: error: cannot guess build type;"),
     ]
 
     try:
         with open(log_path, 'r') as log_file:
             for line in log_file:
                 for stage, prefix in log_entry:
-                    if prefix in line:
+                    if re.search(prefix, line):
                         if stage == 'fail':
                             flags[stage] = 0
                         else:
                             flags[stage] = 1
-                for idx in range(len(error_entry)):
-                    if error_entry[idx] in line:
+                for idx, err in error_entry:
+                    if re.search(err, line):
                         fail_stage = idx;
         # parse the last line
         match = re.search(r'built on (\w+), time cost: (\d+)', line)
@@ -174,11 +177,15 @@ if __name__ == "__main__":
     if flags is None:
         quit()
     for bit in flags.keys():
+        if not bit in BIT_MAP:
+            continue
         if flags[bit] == 0:
             rm_bit |= BIT_MAP[bit]
         else:
             add_bit |= BIT_MAP[bit]
     rm_bit |= (0xff << 16)
+    if (flags['startbuild'] == 0) and (stage == 0):
+        stage = 2;
     add_bit |= (stage << 16) # Error stage number
     db_manager = DatabaseManager()
     db_manager.update_bits(pkgbase, add_bit, rm_bit)
