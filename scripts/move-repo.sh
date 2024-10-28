@@ -95,8 +95,8 @@ for pkg in ${ALLFILES[@]}; do
     if [ ! -f $pkg.sig ]; then
         echo "Signing $pkg ..."
         gpg --detach-sign $pkg || exit 1
-        chmod 664 $pkg{,.sig}
     fi
+    chmod 664 $pkg{,.sig}
     ALLZST+=($pkg)
     j=${pkg%-*}
     k=${j%-*}
