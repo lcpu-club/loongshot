@@ -251,11 +251,10 @@ else
 
     # 1. mkdir for log. 2. upload. 3. parse the log
     ssh -t $TIER0 "mkdir -p $LOGPATH/$PKGBASE" && scp all.log $TIER0:$LOGPATH/$PKGBASE/ && ssh -t $TIER0 "parselog.py $PKGBASE"
+
     # rename the log and move to the working directory
-    if tail -1 all.log | grep -q "time cost"; then
-        LOGNAME=$(tail -1 all.log | awk '{print $2}')
-    else
-        LOGNAME="all"
+    if [[ -f $WORKDIR/$PKGBASE/PKGBUILD ]]; then
+        PKGVERREL=$(source $WORKDIR/$PKGBASE/PKGBUILD; echo $epoch${epoch:+:}$pkgver-$pkgrel)
+        mv all.log $WORKDIR/$PKGBASE/$PKGBASE-$PKGVERREL.log
     fi
-    mv all.log $WORKDIR/$PKGBASE/"$LOGNAME.log"
 fi
