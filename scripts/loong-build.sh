@@ -6,7 +6,7 @@ WORKDIR=${WORKDIR:=/home/arch/repos}
 PACKAGER=${PACKAGER:="John Doe <john@doe.com>"}
 SCRIPTSPATH=${SCRIPTSPATH:=/home/arch/loongshot/scripts}
 LOCALREPO=${LOCALREPO:=/home/arch/local-repo/} # always copy zst to local-repo
-TIER0=""
+TIER0=${TIER0:=""}
 
 if [[ $# -lt 1 ]]; then
     echo "Usage: ${0##*/} <pkgbase> [option]"
