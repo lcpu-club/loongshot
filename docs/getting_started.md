@@ -4,20 +4,20 @@
 
 0. 必须具有一个安装 Arch Linux 发行版的主机（可以是云主机）
 1. 安装龙平台的[开发者工具](https://github.com/lcpu-club/devtools-loong)
-2. 安装相关脚本的依赖程序
+2. 安装相关脚本的依赖程序（`loong-build.sh` 依赖 bc）
 
 ## 基本工作流程(TLDR)
 
 1. 克隆本代码仓库和[补丁仓库](https://github.com/lcpu-club/loongarch-packages)
-1. 设置如下几个环境变量（如取值与 loong-build.sh 脚本相同则可以省略）：
+1. 设置如下几个环境变量（如取值与 `loong-build.sh` 脚本相同则可以省略）：
   - LOONGREPO，指向补丁仓库的本地路径
   - WORKDIR，指向本地或者远程的工作路径
   - PACKAGER，设置为打包者的姓名和邮箱
   - SCRIPTSPATH，指向本仓库的脚本路径
   - LOCALREPO，本地包仓库地址
   - TIER0，TIER0 服务器的主机名或地址（不设置表示无 TIER0 的访问权限）
-1. 使用 loong-build.sh <pkgbase> 进行打包
-1. 使用 localup.sh 将本地仓库的包全部传递到 TIER0 服务器
+1. 使用 `loong-build.sh <pkgbase>` 进行打包
+1. 使用 `localup.sh` 将本地仓库的包全部传递到 TIER0 服务器
 
 ## loong-build.sh 脚本介绍
 
@@ -29,7 +29,7 @@ loong-build.sh 对本项目的主要工作流程进行了封装，目标是简�
 1. 应用龙平台对应补丁
 1. 检查 TIER0 服务器上的版本信息（如存在同版本包，应该增加 pkgrel 的小数值）
 1. 自动对 PKGBUILD 的已知移植问题进行修改
-1. 调用 extra$TESTING-loong64-build 进行打包，缺省是调用 extra-local-loong64-build，参考星外之神的博客[文章](https://wszqkzqk.github.io/2024/09/19/build-order-local-repo/)
+1. 调用 `extra$TESTING-loong64-build` 进行打包，缺省是调用 `extra-local-loong64-build`，参考星外之神的博客[文章](https://wszqkzqk.github.io/2024/09/19/build-order-local-repo/)
 1. 将打包好的文件加入到本地仓库
 1. 将打包日志上传到 TIER0 服务器
 
