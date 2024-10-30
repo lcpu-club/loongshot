@@ -6,7 +6,7 @@ WORKDIR=${WORKDIR:=/home/arch/repos}
 PACKAGER=${PACKAGER:="John Doe <john@doe.com>"}
 SCRIPTSPATH=${SCRIPTSPATH:=/home/arch/loongshot/scripts}
 LOCALREPO=${LOCALREPO:=/home/arch/local-repo/} # always copy zst to local-repo
-TIER0=tier0
+TIER0=""
 
 if [[ $# -lt 1 ]]; then
     echo "Usage: ${0##*/} <pkgbase> [option]"
@@ -151,15 +151,17 @@ build_package() {
         PKGVERREL=$PKGVER
     fi
 
-    # Try to find the pkgver from tier0 server
-    PKGNAME=$(. PKGBUILD; echo $pkgname)
-    _PKGVER=$(ssh $TIER0 -t "findpkg.py $PKGNAME" 2>/dev/null | tr -d '\r')
-    if [[ ! -z "$_PKGVER" ]] && [[ "$_PKGVER" == "$PKGVERREL"* ]]; then
-        # Same package found in server. Incrementing point pkgrel...
-        PKGREL=${_PKGVER#*-}
-        PKGREL=$(echo $PKGREL + .1 | bc)
-        sed -i "s/^pkgrel=.*/pkgrel=$PKGREL/" PKGBUILD
-        PKGVERREL=${PKGVERREL%-*}-$PKGREL
+    if [[ ! -z "$TIER0" ]]; then
+        # Try to find the pkgver from tier0 server
+        PKGNAME=$(. PKGBUILD; echo $pkgname)
+        _PKGVER=$(ssh $TIER0 -t "findpkg.py $PKGNAME" 2>/dev/null | tr -d '\r')
+        if [[ ! -z "$_PKGVER" ]] && [[ "$_PKGVER" == "$PKGVERREL"* ]]; then
+            # Same package found in server. Incrementing point pkgrel...
+            PKGREL=${_PKGVER#*-}
+            PKGREL=$(echo $PKGREL + .1 | bc)
+            sed -i "s/^pkgrel=.*/pkgrel=$PKGREL/" PKGBUILD
+            PKGVERREL=${PKGVERREL%-*}-$PKGREL
+        fi
     fi
 
     # for rust packages, $CARCH need to change to `uname -m`=loongarch64
@@ -247,10 +249,11 @@ fi
 if [[ "$DEBUG" == "yes" ]]; then
     exit 1
 else
-    LOGPATH=/home/arch/loong-status/build_logs
-
-    # 1. mkdir for log. 2. upload. 3. parse the log
-    ssh -t $TIER0 "mkdir -p $LOGPATH/$PKGBASE" && scp all.log $TIER0:$LOGPATH/$PKGBASE/ && ssh -t $TIER0 "parselog.py $PKGBASE"
+    if [[ ! -z "$TIER0" ]]; then
+        LOGPATH=/home/arch/loong-status/build_logs
+        # 1. mkdir for log. 2. upload. 3. parse the log
+        ssh -t $TIER0 "mkdir -p $LOGPATH/$PKGBASE" && scp all.log $TIER0:$LOGPATH/$PKGBASE/ && ssh -t $TIER0 "parselog.py $PKGBASE"
+    fi
 
     # rename the log and move to the working directory
     if [[ -f $WORKDIR/$PKGBASE/PKGBUILD ]]; then
