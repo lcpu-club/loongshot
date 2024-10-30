@@ -25,8 +25,12 @@ for i in $(cat pkg); do
     while [[ $retries -lt $max_retries ]]; do
         ./loong-build.sh "$i" --test "$@" $NOCHECK
         ((retries++))
-        PKGVER=$(source $WORKDIR/$i/PKGBUILD; echo $epoch${epoch:+:}$pkgver-$pkgrel)
-        ALLLOGS=$WORKDIR/$i/$i-$PKGVER.log
+        if [[ -f all.log ]]; then
+            ALLLOGS=all.log
+        else
+            PKGVER=$(source $WORKDIR/$i/PKGBUILD; echo $epoch${epoch:+:}$pkgver-$pkgrel)
+            ALLLOGS=$WORKDIR/$i/$i-$PKGVER.log
+        fi
 
         # restart to download the corrupted packages
         grep "pkg.tar.zst is corrupted" $ALLLOGS >/dev/null 2>&1 && continue
