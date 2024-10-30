@@ -240,7 +240,7 @@ build_package() {
 }
 
 # after debuging, maybe you just want to upload the log without rebuilding.
-if [[ ! -z "UPLOG" ]]; then
+if [[ -z "$UPLOG" ]]; then
     build_package | tee all.log
 fi
 
