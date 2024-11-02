@@ -26,3 +26,21 @@
     name: systemd-timesyncd
     enabled: yes
     state: started
+
+- name: Add configure for gpg agent
+  lineinfile:
+    path: /etc/ssh/sshd_config
+    line: "StreamLocalBindUnlink yes"
+    state: present
+
+- name: Ensure SSH password authentication is disabled
+  lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: '^#?PasswordAuthentication'
+    line: 'PasswordAuthentication no'
+    state: present
+
+- name: Restart SSH
+  service:
+    name: sshd
+    state: restarted
