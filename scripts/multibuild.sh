@@ -4,6 +4,15 @@ max_retries=2
 total_pkgs=$(wc -l < pkg)
 current_pkg=0
 
+DOUBLEDASH="--"
+
+for para in "$@"; do
+    if [[ $para == "--" ]]; then
+        DOUBLEDASH=""
+        break
+    fi
+done
+
 umask 022
 rm -f multistop
 for i in $(cat pkg); do
@@ -22,8 +31,16 @@ for i in $(cat pkg); do
         NOCHECK=""
     fi
 
+    # the pkg can have version info in it
+    if [[ "$i" == *:* ]]; then
+        VER="--ver ${i#*:}"  # Extracts the version part after the first ":"
+        i=${i%%:*};  # Extracts the pkgbase part before the first ":"
+    else
+        VER=""
+    fi
+
     while [[ $retries -lt $max_retries ]]; do
-        ./loong-build.sh "$i" --test "$@" $NOCHECK
+        ./loong-build.sh "$i $VER" --test "$@" $DOUBLEDASH $NOCHECK
         ((retries++))
         if [[ -f all.log ]]; then
             ALLLOGS=all.log
