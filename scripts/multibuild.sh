@@ -1,5 +1,7 @@
 #!/bin/bash
 
+WORKDIR=${WORKDIR:=/home/arch/repos}
+
 max_retries=2
 total_pkgs=$(wc -l < pkg)
 current_pkg=0
