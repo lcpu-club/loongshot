@@ -68,7 +68,8 @@ class DatabaseManager:
             if result:
                 current_flags = result[0]
                 # Update the flags
-                new_flags = (current_flags | add_bits) & ~remove_bits
+                new_flags = current_flags & ~remove_bits
+                new_flags |= add_bits
                 # Update the database with the new flags
                 cursor.execute("UPDATE packages SET flags=%s,timecost=%s WHERE base=%s", (new_flags, timecost, base))
                 self.conn.commit()  # Commit the changes
