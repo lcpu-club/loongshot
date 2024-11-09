@@ -3,6 +3,7 @@
 # ===== Variables you should check ======
 LOONGREPO=${LOONGREPO:=/home/arch/loongarch-packages}
 WORKDIR=${WORKDIR:=/home/arch/repos}
+ZSTLOGDIR=${ZSTLOGDIR:=/home/arch/build}
 PACKAGER=${PACKAGER:="John Doe <john@doe.com>"}
 SCRIPTSPATH=${SCRIPTSPATH:=/home/arch/loongshot/scripts}
 LOCALREPO=${LOCALREPO:=/home/arch/local-repo/} # always copy zst to local-repo
@@ -33,6 +34,7 @@ TESTING="-local" # use extra-local-loong64-build by default
 PKGVER=""
 CLEAN=""
 BUILDER="localhost"
+# workdir for the builder
 BUILDPATH="/home/arch/repos"
 DEBUG=""
 UPLOG=""
@@ -100,9 +102,6 @@ EXTRAARG="$@"
 build_package() {
     # packages beloong only to loong
     if [[ -f $LOONGREPO/$PKGBASE/PKGBUILD ]]; then
-        if [[ ! -z $NOKEEP ]]; then
-            rm $WORKDIR/$PKGBASE -rf
-        fi
         cp $LOONGREPO/$PKGBASE $WORKDIR/ -a
     else
         # clone arch package repo
@@ -110,10 +109,6 @@ build_package() {
             cd $WORKDIR/$PKGBASE
             pkgctl repo switch main -f
             git pull 2>&1 || return
-            if [[ ! -z $NOKEEP ]]; then
-                # delete all untracked files
-                git clean -fdx
-            fi
         else
             cd $WORKDIR 2>&1 || return
             pkgctl repo clone --protocol=https $PKGBASE 2>&1 || return
@@ -194,6 +189,11 @@ build_package() {
 
     STARTTIME=$SECONDS
     if [[ "$BUILDER" == "localhost" ]]; then
+        if [[ ! -z $NOKEEP ]]; then
+            rm -rf $ZSTLOGDIR/$PKGBASE
+        fi
+        cp -a $WORKDIR/$PKGBASE $ZSTLOGDIR/
+        cd $ZSTLOGDIR/$PKGBASE
         PACKAGER="$PACKAGER" extra$TESTING-loong64-build $CLEAN -- -- -A -L $EXTRAARG
         EXITCODE=$?
     else
@@ -207,7 +207,7 @@ build_package() {
 
         # sync back generated zst files
         if [[ "$EXITCODE" -eq 0 ]]; then
-            rsync -avzP $BUILDER:$BUILDPATH/$PKGBASE/*.zst $WORKDIR/$PKGBASE/
+            rsync -avzP $BUILDER:$BUILDPATH/$PKGBASE/*.zst $ZSTLOGDIR/$PKGBASE/
         fi
     fi
     ENDTIME=$SECONDS
@@ -226,7 +226,7 @@ build_package() {
                 cp $pkg-$PKGVERREL-$ARCH.pkg.tar.zst $LOCALREPO/os/loong64/
                 repo-add -R $LOCALREPO/os/loong64/local-repo.db.tar.gz $pkg-$PKGVERREL-$ARCH.pkg.tar.zst
             else
-                scp "./$pkg-$PKGVERREL-$ARCH.pkg.tar.zst" $BUILDER:$LOCALREPO/os/loong64/
+                scp "$ZSTLOGDIR/$PKGBASE/$pkg-$PKGVERREL-$ARCH.pkg.tar.zst" $BUILDER:$LOCALREPO/os/loong64/
                 ssh -t $BUILDER "cd $LOCALREPO/os/loong64; repo-add -R local-repo.db.tar.gz $pkg-$PKGVERREL-$ARCH.pkg.tar.zst"
             fi
         done)
@@ -258,6 +258,6 @@ else
     # rename the log and move to the working directory
     if [[ -f $WORKDIR/$PKGBASE/PKGBUILD ]]; then
         PKGVERREL=$(source $WORKDIR/$PKGBASE/PKGBUILD; echo $epoch${epoch:+:}$pkgver-$pkgrel)
-        mv all.log $WORKDIR/$PKGBASE/$PKGBASE-$PKGVERREL.log
+        mv all.log $ZSTLOGDIR/$PKGBASE/$PKGBASE-$PKGVERREL.log
     fi
 fi

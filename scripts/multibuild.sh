@@ -1,6 +1,7 @@
 #!/bin/bash
 
 WORKDIR=${WORKDIR:=/home/arch/repos}
+ZSTLOGDIR=${ZSTLOGDIR:=/home/arch/build}
 
 max_retries=2
 total_pkgs=$(wc -l < pkg)
@@ -48,7 +49,7 @@ for i in $(cat pkg); do
             ALLLOGS=all.log
         else
             PKGVER=$(source $WORKDIR/$i/PKGBUILD; echo $epoch${epoch:+:}$pkgver-$pkgrel)
-            ALLLOGS=$WORKDIR/$i/$i-$PKGVER.log
+            ALLLOGS=$ZSTLOGDIR/$i/$i-$PKGVER.log
         fi
 
         # restart to download the corrupted packages
