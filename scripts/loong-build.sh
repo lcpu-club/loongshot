@@ -258,6 +258,8 @@ else
     # rename the log and move to the working directory
     if [[ -f $WORKDIR/$PKGBASE/PKGBUILD ]]; then
         PKGVERREL=$(source $WORKDIR/$PKGBASE/PKGBUILD; echo $epoch${epoch:+:}$pkgver-$pkgrel)
+        # when build fails, destination dir will missing
+        mkdir -p $ZSTLOGDIR/$PKGBASE
         mv all.log $ZSTLOGDIR/$PKGBASE/$PKGBASE-$PKGVERREL.log
     fi
 fi
