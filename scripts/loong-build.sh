@@ -103,6 +103,7 @@ build_package() {
     # packages beloong only to loong
     if [[ -f $LOONGREPO/$PKGBASE/PKGBUILD ]]; then
         cp $LOONGREPO/$PKGBASE $WORKDIR/ -a
+        cd $WORKDIR/$PKGBASE
     else
         # clone arch package repo
         if [[ -d $WORKDIR/$PKGBASE ]]; then
