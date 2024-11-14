@@ -2,7 +2,8 @@
 Description=Borg backup
 
 [Timer]
-OnCalendar=daily
+# Run the service daily at 3:00 AM
+OnCalendar=*-*-* 03:00:00
 Persistent=true
 RandomizedDelaySec=1h
 
