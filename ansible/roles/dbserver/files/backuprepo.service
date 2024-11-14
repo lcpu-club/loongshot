@@ -1,0 +1,7 @@
+[Unit]
+Description=Borg backup
+After=network.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/backuprepo

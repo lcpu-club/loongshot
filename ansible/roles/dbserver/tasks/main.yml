@@ -1,13 +1,26 @@
+- name: Ensure borg are installed
+  pacman:
+    name: borg
+    state: present
+
 - name: Install createlinks script
   copy: src=createlinks dest=/usr/local/bin/createlinks owner=root group=root mode=0755
+
+- name: Install backuprepo script
+  template:
+    src: backuprepo.j2
+    dest: /usr/local/bin/backuprepo
 
 - name: Install systemd timers
   copy: src={{ item }} dest=/etc/systemd/system/{{ item }} owner=root group=root mode=0644
   with_items:
     - createlinks.timer
     - createlinks.service
+    - backuprepo.timer
+    - backuprepo.service
 
 - name: Activate systemd timers
   service: name={{ item }} enabled=yes state=started
   with_items:
     - createlinks.timer
+    - backuprepo.timer
