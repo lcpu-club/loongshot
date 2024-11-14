@@ -24,6 +24,10 @@
         th {
             background-color: #f2f2f2;
         }
+        .text-field {
+            display: none;
+            margin-top: 5px;
+        }
         /* 设置最大宽度并允许水平滚动 */
         /* Set maximum width and allow horizontal scrolling */
         .table-container {
@@ -162,6 +166,17 @@
             const loongTestingVersion = package.loong_testing_version;
             const loongStagingVersion = package.loong_staging_version;
             const flags = package.flags;
+            const fail_reason = ['Fail to apply patch',
+                'Fail before build',
+                'Fail to download source',
+                'Fail to pass the validity check',
+                'Fail to pass PGP check',
+                'Could not resolv all dependencies',
+                'Fail in prepare',
+                'Fail in build',
+                'Fail in check',
+                'Fail in package',
+                'Old config.guess'];
 
             // Prepare the merged loongVersion
             let mergedLoongVersion = loongVersion ? loongVersion : 'N/A';
@@ -184,7 +199,8 @@
                 if (flags & 2) status += '<span style="color: blue;">🅲</span>'; // nocheck
                 if (flags & 4) status += '<span style="color: orange;">🅾</span>'; // old config
                 if (flags & 16) status += `<span><a href="log.html?url=/buildlogs/${package.base}/all.log" class="no-change" style="color: gold">🅻</a></span>`; // has logs
-                if (flags & (1 << 15)) status += '<span style="color: red;">🅵</span>'; // build fail
+                if (flags & (1 << 15)) status += `<span style="color: red;" data-info-id="${package.name}">🅵</span>
+                    <div id="${package.name}" class="text-field">${fail_reason[flags >> 16]}</div>`;
             }
 
             row.innerHTML = `
@@ -351,6 +367,19 @@
 
             activeTooltip.style.bottom = 'auto';
             activeTooltip.style.top = '125%';
+        });
+        document.addEventListener("click", function(event) {
+          // Check if the clicked element has a data-info-id attribute
+          const infoId = event.target.getAttribute("data-info-id");
+          if (infoId) {
+            // Find the text field using the ID in the data-info-id attribute
+            const textField = document.getElementById(infoId);
+
+            // Toggle the visibility of the corresponding text field
+            if (textField) {
+              textField.style.display = (textField.style.display === "none" || textField.style.display == "") ? "block" : "none";
+            }
+          }
         });
     </script>
 </body>
