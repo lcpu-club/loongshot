@@ -1,0 +1,15 @@
+- name: Install develop tools
+  pacman:
+    name:
+      - base-devel
+      - devtools
+      - zsh
+      - git
+      - subversion
+      - mercurial
+      - bzr
+      - ruby
+      - tig
+      - colordiff
+      - pkgdiff
+    state: present
