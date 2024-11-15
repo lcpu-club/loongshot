@@ -1,8 +1,0 @@
-- name: Copy scripts to the control server
-  hosts: arch2
-
-  vars:
-    src_dir: "../../scripts/"
-    dest_dir: "/home/arch/scripts"
-  roles:
-    - cpscripts
