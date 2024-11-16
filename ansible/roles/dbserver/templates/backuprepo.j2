@@ -6,13 +6,8 @@ BORG_REPO_DIR="/home/backups"
 BORG_PASSPHRASE="{{ BORG_PASSPHRASE }}"
 RETENTION_DAYS=30  # Retention period in days
 
-export BORG_PASSPHRASE
-
 # Create Borg backup with the current timestamp
-borg create -C zstd "$BORG_REPO_DIR"::repos-{now} "$BACKUP_SOURCE_DIR"
+su - arch -c "BORG_PASSPHRASE=\"$BORG_PASSPHRASE\" borg create -C zstd $BORG_REPO_DIR::repos-{now} $BACKUP_SOURCE_DIR"
 
 # Prune old backups, keeping the last 30 daily backups
-borg prune --keep-daily="$RETENTION_DAYS" "$BORG_REPO_DIR"
-
-# Unset the Borg passphrase
-unset BORG_PASSPHRASE
+su - arch -c "BORG_PASSPHRASE=\"$BORG_PASSPHRASE\" borg prune --keep-daily=$RETENTION_DAYS $BORG_REPO_DIR"
