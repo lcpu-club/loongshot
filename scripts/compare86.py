@@ -160,6 +160,9 @@ def show_package(pkg, repo):
     return None
 
 def main():
+    global x86_repos
+    global loong64_repos
+
     parser = argparse.ArgumentParser(description="Compare packages between x86 and loong.")
     parser.add_argument("-S", "--sync", action="store_true", help="Sync the database.")
     parser.add_argument("-H", "--header", action="store_true", help="Output header.")
@@ -169,6 +172,7 @@ def main():
     parser.add_argument("-B", "--build", action="store_true", help="Find package to build.")
     parser.add_argument("-t", "--time", action="store_true", help="Show package freshness.")
     parser.add_argument("-p", "--package", type=str, help="The name of the package to compare.")
+    parser.add_argument("-s", "--stag", action="store_true", help="Show staging version info")
     parser.add_argument("-n", "--newer", action="store_true", help="Also show the packages that are newer than x86's.")
 
     args = parser.parse_args()
@@ -178,6 +182,10 @@ def main():
 
     if not os.path.exists(f"{cache_dir}/{x86_repo_path}"):
         args.sync = True
+
+    if args.stag:
+        x86_repos += ["core-staging", "extra-staging"]
+        loong64_repos += ["core-staging", "extra-staging"]
 
     if args.sync:
         update_repo()
@@ -205,12 +213,12 @@ def main():
         compare_repos(x86_db, loong64_db, loong64_db2, args.time, args.newer)
 
     if args.package:
-        for r in ['core', 'extra']:
+        for r in x86_repos:
             x86_db = load_repo(os.path.join(cache_dir, x86_repo_path), r)
             ver = show_package(args.package, x86_db)
             if ver:
                 print(f"{args.package} found in repo {r} of x86_64 with ver={ver}")
-        for r in ['core', 'extra', 'core-testing', 'extra-testing', 'core-staging', 'extra-staging']:
+        for r in loong64_repos:
             loong_db = load_repo(os.path.join(cache_dir, loong64_repo_path), r)
             ver = show_package(args.package, loong_db)
             if ver:
