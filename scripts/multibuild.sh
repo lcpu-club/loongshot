@@ -43,7 +43,7 @@ for i in $(cat pkg); do
     fi
 
     while [[ $retries -lt $max_retries ]]; do
-        ./loong-build.sh $i $VER --test "$@" $DOUBLEDASH $NOCHECK
+        ./loong-build.sh $i $VER "$@" $DOUBLEDASH $NOCHECK
         ((retries++))
         if [[ -f all.log ]]; then
             ALLLOGS=all.log
