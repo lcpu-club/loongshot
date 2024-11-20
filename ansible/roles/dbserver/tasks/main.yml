@@ -3,14 +3,33 @@
     name: borg
     state: present
 
-- name: Install createlinks script
-  copy: src=createlinks dest=/usr/local/bin/createlinks owner=root group=root mode=0755
+- name: Check if /home/backups exists
+  ansible.builtin.stat:
+    path: /home/backups
+  register: backups_dir
 
-- name: Install backuprepo script
-  template:
-    src: backuprepo.j2
-    dest: /usr/local/bin/backuprepo
-    mode: 0755
+- name: Create /home/backups if it does not exist
+  ansible.builtin.file:
+    path: /home/backups
+    state: directory
+    owner: arch
+    group: arch
+    mode: '0755'
+  when: not backups_dir.stat.exists
+
+- name: Initialize Borg repository if not already initialized
+  command: borg init -e keyfile /home/backups
+  environment:
+    BORG_PASSPHRASE: ""
+  become: yes
+  become_user: arch
+  when: not backups_dir.stat.exists
+
+- name: Install createlinks script
+  copy: src={{ item }} dest=/usr/local/bin/{{ item }} owner=root group=root mode=0755
+  with_items:
+    - backuprepo
+    - createlinks
 
 - name: Install systemd timers
   copy: src={{ item }} dest=/etc/systemd/system/{{ item }} owner=root group=root mode=0644
