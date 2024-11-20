@@ -44,3 +44,7 @@
   service:
     name: sshd
     state: restarted
+
+- name: Set system timezone
+  ansible.builtin.timezone:
+    name: Asia/Shanghai
