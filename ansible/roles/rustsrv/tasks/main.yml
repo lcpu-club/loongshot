@@ -16,7 +16,7 @@
 
 - name: Install index.html
   copy:
-    src: ../../loong-status/index.html
+    src: ../../loong-status/new.html
     dest: /srv/http/status/html/new.html
     owner: http
     group: http

@@ -1,3 +1,19 @@
+- name: Check if directories exist
+  ansible.builtin.stat:
+    path: "{{ item.path }}"
+  with_items: "{{ directories }}"
+  register: directory_stats
+
+- name: Create directories if they do not exist
+  ansible.builtin.file:
+    path: "{{ item.item.path }}"
+    state: directory
+    owner: arch
+    group: arch
+    mode: 0755
+  with_items: "{{ directory_stats.results }}"
+  when: not item.stat.exists
+
 - name: Ensure nginx are installed
   pacman:
     name: nginx
@@ -7,6 +23,14 @@
   template:
     src: nginx.conf.j2
     dest: /etc/nginx/nginx.conf
+
+- name: Install index.html
+  copy:
+    src: ../../loong-status/index.html
+    dest: /srv/http/status/html/index.html
+    owner: http
+    group: http
+    mode: '0644'
 
 - name: Restart Nginx
   systemd:

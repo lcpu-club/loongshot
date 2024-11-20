@@ -9,3 +9,5 @@
     - common
     - nginx
     - rustsrv
+    - postgres
+    - dbserver
