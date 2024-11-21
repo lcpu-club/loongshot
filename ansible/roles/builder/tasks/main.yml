@@ -1,4 +1,5 @@
 - name: Install develop tools
+  become: true
   pacman:
     name:
       - base-devel
@@ -12,4 +13,69 @@
       - tig
       - colordiff
       - pkgdiff
+      - pyalpm
+      - fzf
+      - inetutils
     state: present
+
+- name: Clone the devtools-loong repository
+  git:
+    repo: "{{ repo_url }}/devtools-loong.git"
+    dest: "{{ clone_dir }}/devtools-loong"
+    force: yes
+  become: false  # Clone as the regular user
+  environment:
+    HTTPS_PROXY: "{{ https_proxy }}"
+
+- name: Build and install devtools-loong
+  command: makepkg -si --noconfirm
+  args:
+    chdir: "{{ clone_dir }}/devtools-loong"
+  become: false  # Run as the regular user
+
+- name: Clone the loongshot repository
+  git:
+    repo: "{{ repo_url }}/loongshot.git"
+    dest: "{{ clone_dir }}/loongshot"
+    force: yes
+  environment:
+    HTTPS_PROXY: "{{ https_proxy }}"
+
+- name: Clone the loongarch-packages repository
+  git:
+    repo: "{{ repo_url }}/loongarch-packages.git"
+    dest: "{{ clone_dir }}/loongarch-packages"
+    force: yes
+  environment:
+    HTTPS_PROXY: "{{ https_proxy }}"
+
+- name: Copy .vimrc to the user's home directory
+  copy:
+    src: vimrc
+    dest: "{{ clone_dir }}/.vimrc"
+    mode: '0644'
+
+- name: Copy .zshrc to the user's home directory
+  template:
+    src: zshrc.j2
+    dest: "{{ clone_dir }}/.zshrc"
+    mode: '0644'
+
+- name: Get the current username
+  command: whoami
+  register: whoami_result
+
+- name: Change default shell to zsh
+  become: true
+  user:
+    name: "{{ whoami_result.stdout }}"
+    shell: /usr/bin/zsh
+
+- name: Ensure directories exist
+  file:
+    path: "{{ item }}"
+    state: directory
+    mode: '0755'
+  with_items:
+    - "{{ clone_dir }}/repos"
+    - "{{ clone_dir }}/build"

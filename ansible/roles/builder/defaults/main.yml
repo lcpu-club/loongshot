@@ -1,0 +1,2 @@
+repo_url: https://github.com/lcpu-club
+clone_dir: "{{ ansible_user_dir }}"

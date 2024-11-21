@@ -1,6 +1,8 @@
 - name: Deploy A builder
   hosts: builder
-  become: true
   roles:
-    - common
-    - builder
+    - role: common
+      become: true
+
+    - role: builder
+      become: false
