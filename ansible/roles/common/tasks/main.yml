@@ -1,6 +1,14 @@
-- name: Full system upgrade (equivalent to `pacman -Syu`)
+- name: Update pacman cache
   pacman:
     update_cache: yes
+
+- name: Ensure archlinux-keyring is up-to-date
+  pacman:
+    name: archlinux-keyring
+    state: latest
+
+- name: Upgrade all packages
+  pacman:
     upgrade: yes
     extra_args: --noconfirm
 
