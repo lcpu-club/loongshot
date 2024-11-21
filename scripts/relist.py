@@ -14,6 +14,8 @@ x86_repos = ['core', 'extra']
 pkgbase = {}
 pkgname = {}
 
+whitelist={"mupdf":"libmupdf"}
+
 # cache all package buildtime
 def get_pkgbase():
     for repo in x86_repos:
@@ -21,6 +23,8 @@ def get_pkgbase():
         for pkg in x86_db.pkgcache:
             pkgbase[pkg.name] = pkg.base
             pkgname[pkg.base] = pkg.name
+    for key in whitelist:
+        pkgname[key] = whitelist[key]
 
 
 # Load the repository database
