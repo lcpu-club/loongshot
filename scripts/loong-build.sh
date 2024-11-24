@@ -119,7 +119,7 @@ build_package() {
         if [[ -z "$PKGVER" ]]; then
             # get the release tag from x86_64's repo
             if [[ $TESTING == "-staging" ]]; then
-                PKGVER=`$SCRIPTSPATH/compare86.py -sp $PKGBASE |grep x86_64|grep staging|awk -F= '{print $2}'`
+                PKGVER=`$SCRIPTSPATH/compare86.py -sp $PKGBASE |grep x86_64|awk -F= '{print $2}'`
             else
                 PKGVER=`$SCRIPTSPATH/compare86.py -Sp $PKGBASE |grep x86_64|awk -F= '{print $2}'`
             fi
