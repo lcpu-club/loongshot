@@ -14,7 +14,8 @@ x86_repos = ['core', 'extra']
 pkgbase = {}
 pkgname = {}
 
-whitelist={"mupdf":"libmupdf"}
+whitelist={"mupdf": "libmupdf",
+           "libspelling": "libspelling"}
 
 # cache all package buildtime
 def get_pkgbase():
