@@ -152,7 +152,7 @@ def parse_build_log(log_path):
                     if re.search(err, line):
                         fail_stage = idx;
         # parse the last line
-        match = re.search(r'built on (\w+), time cost: (\d+)', line)
+        match = re.search(r'[built|failed] on (\w+), time cost: (\d+)', line)
         if match:
             builder = match.group(1)
             timecost = match.group(2)
