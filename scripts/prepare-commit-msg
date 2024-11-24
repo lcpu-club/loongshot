@@ -1,0 +1,54 @@
+#!/bin/bash
+
+# Get the git diff
+changes=$(git diff --cached --numstat)
+
+# Initialize counters
+additions=0
+deletions=0
+modifications=0
+
+# Parse the diff stats
+while read -r added deleted file; do
+    if [ "$added" != "-" ] && [ "$deleted" != "-" ]; then
+        if [[ "$file" == */* ]]; then
+            if [ "$deleted" -eq 0 ]; then
+                # Pure addition
+                ((additions++))
+            elif [ "$added" -eq 0 ]; then
+                # Pure deletion
+                ((deletions++))
+            else
+                # Modification (both added and deleted lines)
+                ((modifications++))
+            fi
+        fi
+    fi
+    dir=$(dirname "$file")
+done <<< "$changes"
+
+# Determine the predominant change type
+if [[ "$modifications" -gt 0 ]]; then
+    prefix="updpatch:"
+elif [[ "$additions" -gt 0 ]]; then
+    prefix="addpatch:"
+elif [[ "$deletions" -gt 0 ]]; then
+    prefix="rmvpatch:"
+else
+    prefix="updconfig:"
+fi
+
+if [[ ! -z $dir ]]; then
+    if [[ -f $WORKDIR/$dir/PKGBUILD ]]; then
+        PKGVERREL=$(source $WORKDIR/$dir/PKGBUILD; echo $epoch${epoch:+:}$pkgver-$pkgrel)
+    fi
+fi
+
+# Get the existing commit message
+commit_msg=$(cat "$1")
+
+if [[ $prefix == "updconfig:" ]]; then
+    echo "$prefix$commit_msg" > "$1"
+else
+    echo "$prefix $dir, ver=$PKGVERREL$commit_msg" > "$1"
+fi
