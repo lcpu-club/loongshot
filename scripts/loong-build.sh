@@ -207,7 +207,7 @@ build_package() {
             msg "Can't copy PKGBUILD to builder."
             return
         fi
-        ssh -t $BUILDER "cd /home/arch/repos/$PKGBASE; PACKAGER=\"$PACKAGER\" extra$TESTING-loong64-build $CLEAN -- -- -A -L $EXTRAARG" 2>/dev/null
+        ssh -t $BUILDER "cd $BUILDPATH/$PKGBASE; PACKAGER=\"$PACKAGER\" extra$TESTING-loong64-build $CLEAN -- -- -A -L $EXTRAARG" 2>/dev/null
         EXITCODE=$?
 
         # sync back generated zst files
