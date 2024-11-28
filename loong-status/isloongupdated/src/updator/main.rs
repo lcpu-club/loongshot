@@ -118,15 +118,20 @@ async fn main() -> Result<(), sqlx::Error> {
     let x86_url = env::var("X86_URL").unwrap_or_else(|_| "https://mirrors.pku.edu.cn/archlinux".to_string());
     let loong_url = env::var("LOONG_URL").unwrap_or_else(|_| "https://mirrors.pku.edu.cn/loongarch-lcpu/archlinux".to_string());
 
-    let x86_repos = vec!["core", "extra"];
-    let loong_repos = vec!["core", "extra", "core-testing", "extra-testing", "core-staging", "extra-staging"];
+    let all_repos = vec!["core", "extra", "core-testing", "extra-testing", "core-staging", "extra-staging"];
 
-    for repo in &x86_repos {
-        handle_repo_update(&pool, &x86_url, "x86_64", repo, "x86_version").await?;
+    for repo in all_repos.iter() {
+        let column = match *repo {
+            "core" | "extra" => "x86_version",
+            "core-testing" | "extra-testing" => "x86_testing_version",
+            "core-staging" | "extra-staging" => "x86_staging_version",
+            _ => panic!("Unknown repo"),
+        };
+        handle_repo_update(&pool, &x86_url, "x86_64", repo, column).await?;
     }
 
-    for repo in loong_repos {
-        let column = match repo {
+    for repo in all_repos.iter() {
+        let column = match *repo {
             "core" | "extra" => "loong_version",
             "core-testing" | "extra-testing" => "loong_testing_version",
             "core-staging" | "extra-staging" => "loong_staging_version",
@@ -138,6 +143,8 @@ async fn main() -> Result<(), sqlx::Error> {
     sqlx::query(
         "DELETE FROM packages
         WHERE x86_version IS NULL
+        AND x86_testing_version IS NULL
+        AND x86_staging_version IS NULL
         AND loong_version IS NULL
         AND loong_testing_version IS NULL
         AND loong_staging_version IS NULL"
@@ -164,6 +171,8 @@ async fn create_tables(pool: &sqlx::PgPool) -> Result<(), sqlx::Error> {
             base TEXT,
             repo TEXT,
             x86_version TEXT,
+            x86_testing_version TEXT,
+            x86_staging_version TEXT,
             loong_version TEXT,
             loong_testing_version TEXT,
             loong_staging_version TEXT

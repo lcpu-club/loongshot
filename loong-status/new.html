@@ -162,6 +162,8 @@
 
             // Extract version values
             const x86Version = package.x86_version;
+            const x86TestingVersion = package.x86_testing_version;
+            const x86StagingVersion = package.x86_staging_version;
             const loongVersion = package.loong_version;
             const loongTestingVersion = package.loong_testing_version;
             const loongStagingVersion = package.loong_staging_version;
@@ -180,6 +182,7 @@
 
             // Prepare the merged loongVersion
             let mergedLoongVersion = loongVersion ? loongVersion : 'N/A';
+            let mergedX86Version = x86Version ? x86Version: 'N/A';
 
             // Add (T) for loongTestingVersion if it exists
             if (loongTestingVersion) {
@@ -189,6 +192,16 @@
             // Add (S) for loongStagingVersion if it exists
             if (loongStagingVersion) {
                 mergedLoongVersion += `\n${loongStagingVersion}🄢`;
+            }
+
+            // Add (T) for x86TestingVersion if it exists
+            if (x86TestingVersion) {
+                mergedX86Version += `\n${x86TestingVersion}🄣`;
+            }
+
+            // Add (S) for x86StagingVersion if it exists
+            if (x86StagingVersion) {
+                mergedX86Version += `\n${x86StagingVersion}🄢`;
             }
 
             // Compare versions and determine the symbol to display
@@ -207,8 +220,8 @@
                 <td>${package.name || 'N/A'}</td>
                 <td>${package.base || 'N/A'}</td>
                 <td>${package.repo || 'N/A'}</td>
-                <td>${x86Version || 'N/A'}</td>
-                <td style="white-space: pre-line;">${mergedLoongVersion}</td>
+                <td style="white-space: pre-line;">${mergedX86Version || 'N/A'}</td>
+                <td style="white-space: pre-line;">${mergedLoongVersion || 'N/A'}</td>
                 <td>${comparisonResult}</td>
                 <td>${status}</td>
                 `;
