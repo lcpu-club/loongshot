@@ -213,7 +213,7 @@
                 if (flags & 4) status += '<span style="color: orange;">🅾</span>'; // old config
                 if (flags & 16) status += `<span><a href="log.html?url=/buildlogs/${package.base}/all.log" class="no-change" style="color: gold">🅻</a></span>`; // has logs
                 if (flags & (1 << 15)) status += `<span style="color: red;" data-info-id="${package.name}">🅵</span>
-                    <div id="${package.name}" class="text-field">${fail_reason[flags >> 16]}</div>`;
+                    <div id="${package.name}" class="text-field">${fail_reason[(flags >> 16) - 1]}</div>`;
             }
 
             row.innerHTML = `
