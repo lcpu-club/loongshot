@@ -17,6 +17,21 @@ BIT_MAP = {
     'fail': 1 << 15,
 }
 
+error_type = [
+    "",
+    "Fail to apply loong's patch",
+    "Unknown error before build",
+    "Failure while downloading",
+    "One or more files did not pass the validity check",
+    "One or more PGP signatures",
+    "Could not resolve all dependencies",
+    "A failure occurred in prepare",
+    "A failure occurred in build",
+    "A failure occurred in check",
+    "A failure occurred in package",
+    "configure: error: cannot guess build type;",
+]
+
 class DatabaseManager:
     def __init__(self, config_file=None):
         # Set the config file to $HOME/.dbconfig.json if not provided
@@ -63,13 +78,12 @@ class DatabaseManager:
             result = cursor.fetchone()
 
             if result:
-                flags = result[0]
-                print(flags)  # Print the integer value of the bitmask
+                return result[0]
             else:
-                print(f"No entry found for pkgbase '{base}'")
+                return -1
 
         except Exception as e:
-            print(f"Error retrieving bits: {e}")
+            return -2
 
         finally:
             cursor.close()  # Close the cursor but keep the connection open
@@ -132,6 +146,7 @@ def parse_args():
     bit_parser.add_argument("--remove", type=str, help="Bits to remove (comma-separated)")
     bit_parser.add_argument("--list", action="store_true", help="List all available bit names")
     bit_parser.add_argument("--get", action="store_true", help="Get the current bitmask for the pkgbase")
+    bit_parser.add_argument("--show", action="store_true", help="Show the meanings of current bitmask for the pkgbase")
     bit_parser.add_argument("pkgbase", type=str, nargs='?', help="The pkgbase to update")
 
     # Sub-command: task
@@ -153,12 +168,22 @@ def main():
         return
 
     db_manager = DatabaseManager()
-    if args.command == "bit" and args.get:
+    if args.command == "bit" and (args.get or args.show):
         if args.pkgbase:
-            db_manager.get_bits(args.pkgbase)
+            bits = db_manager.get_bits(args.pkgbase)
         else:
             print("Error: 'pkgbase' argument is required for --get.")
+        if args.get:
+            print(bits)
+        if args.show:
+            for bit_name in BIT_MAP.keys():
+                if (bits & BIT_MAP[bit_name]):
+                    print(bit_name)
+            err_no = bits >> 16;
+            if (err_no > 0) and (err_no < 12):
+                print(error_type[err_no])
         return
+
 
     if args.command == "bit":
         add_bits = remove_bits = 0
