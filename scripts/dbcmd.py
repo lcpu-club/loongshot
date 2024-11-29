@@ -115,6 +115,50 @@ class DatabaseManager:
         finally:
             cursor.close()  # Close the cursor but keep the connection open
 
+    def insert_task(self, pkgs, tasklist):
+        """Insert packages by list of pkgbase."""
+
+        cursor = self.conn.cursor()
+        pkgbase_list = pkgs.split(',')
+        # Prepare data to insert
+        rows = [(i+1, pkgbase, tasklist) for i, pkgbase in enumerate(pkgbase_list)]
+
+        try:
+            # Insert data
+            insert_query = "INSERT INTO tasks (taskno, pkgbase, tasklist) VALUES (%s, %s, %s)"
+            cursor.executemany(insert_query, rows)
+
+            # Commit changes and close connection
+            self.conn.commit()
+        finally:
+            cursor.close()
+
+    def pop_task(self, tasklist):
+        """Pop the row with the minimal taskno and return the pkgbase."""
+        cursor = self.conn.cursor()
+
+        try:
+            # Step 1: Find the row with the minimal taskno
+            select_query = "SELECT taskno, pkgbase FROM tasks where tasklist=%s ORDER BY taskno ASC LIMIT 1"
+            cursor.execute(select_query, (tasklist,))
+            result = cursor.fetchone()
+
+            if result:
+                taskno, pkgbase = result
+                # Step 2: Delete the row with the minimal taskno
+                delete_query = "DELETE FROM tasks WHERE taskno = %s and tasklist=%s"
+                cursor.execute(delete_query, (taskno, tasklist))
+                self.conn.commit()
+
+                return pkgbase
+            else:
+                return None
+        except Exception as e:
+            #print(f"Error: {e}")
+            return None
+        finally:
+            cursor.close()
+
     def __del__(self):
         """Destructor to close the database connection."""
         if self.conn:
@@ -150,8 +194,9 @@ def parse_args():
     bit_parser.add_argument("pkgbase", type=str, nargs='?', help="The pkgbase to update")
 
     # Sub-command: task
-    bit_parser = subparsers.add_parser("task", help="Manage building task")
-
+    task_parser = subparsers.add_parser("task", help="Manage building task")
+    task_parser.add_argument("--add", type=str, help="Packages to add (comma-separated)")
+    task_parser.add_argument("--pop", action="store_true", help="remove one package from top")
     return parser, parser.parse_args()
 
 def main():
@@ -201,6 +246,12 @@ def main():
             db_manager.update_bits(args.pkgbase, add_bits=add_bits, remove_bits=remove_bits)
         else:
             print("Error: 'pkgbase' argument is required for --add or --remove.")
+
+    if args.command == "task":
+        if args.add:
+            db_manager.insert_task(args.add, 1)
+        if args.pop:
+            print(db_manager.pop_task(1))
 
 if __name__ == "__main__":
     main()
