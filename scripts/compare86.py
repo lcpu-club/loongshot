@@ -67,12 +67,16 @@ def load_repo(repo_path, repo):
 # Find packages with all depends satisfied
 def safe_tobuild():
     x86 = {}
+    x86_repo = {}
     for repo in source_repos:
         x86_db = load_repo(os.path.join(cache_dir, x86_repo_path), repo)
         for pkg in x86_db.pkgcache:
             alldep = pkg.makedepends + pkg.checkdepends + pkg.depends
             alldep = {dep.split("=")[0].split(">")[0].split("<")[0] for dep in alldep}
-            x86[pkg.base] = alldep
+            if (not pkg.base in x86):
+                x86[pkg.base] = set()
+            x86[pkg.base] |= alldep
+            x86_repo[pkg.base] = repo
     loong = {}
     for repo in source_repos:
         loong_db = load_repo(os.path.join(cache_dir, loong64_repo_path), repo)
@@ -80,7 +84,7 @@ def safe_tobuild():
         loong = {**loong, **loong_pkg}
     for pkg_name in x86:
         if (not pkg_name in loong) and (all(pkg in loong for pkg in x86[pkg_name])):
-            print(f"{pkg_name:24}")
+            print(f"{pkg_name:34} {x86_repo[pkg_name]}")
 
 
 # Compare all packages in both repos
