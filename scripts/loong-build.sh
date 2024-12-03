@@ -14,6 +14,7 @@ if [[ $# -lt 1 ]]; then
     echo "Option:"
     echo "  --stag     Use staging repo."
     echo "  --test     Use testing repo."
+    echo "  --local    Use local repo."
     echo "  --ver      Build a specific version."
     echo "  --clean    Clean the chroot directory."
     echo "  --builder  Build machine to use, default is 'localhost'."
@@ -30,7 +31,7 @@ export LC_ALL=en_US.UTF-8
 PKGBASE=$1
 shift
 
-TESTING="-local" # use extra-local-loong64-build by default
+TESTING="" # use extra-loong64-build by default
 PKGVER=""
 CLEAN=""
 BUILDER="localhost"
@@ -55,6 +56,10 @@ while [[ $# -gt 0 ]]; do
             ;;
         --test)
             TESTING="-testing"
+            shift
+            ;;
+        --local)
+            TESTING="-local"
             shift
             ;;
         --ver)
