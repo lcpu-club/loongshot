@@ -1,5 +1,6 @@
 directories:
   - path: /srv/http/status/html
   - path: /srv/http/loongarch
+  - path: /srv/http/build-repo
   - path: /home/arch/loong-status
   - path: /home/arch/loong-status/build_logs

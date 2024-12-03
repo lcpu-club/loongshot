@@ -27,6 +27,13 @@ http {
             autoindex_localtime on;
         }
 
+        location /build-repo/ {
+            alias /srv/http/build-repo/;
+            autoindex on;
+            autoindex_exact_size on;
+            autoindex_localtime on;
+        }
+
         location /buildlogs/ {
             alias /home/arch/loong-status/build_logs/;
             autoindex on;
