@@ -67,18 +67,13 @@ do_move(){
     fi
     about_to_delete=()
     for pkg in $(grep -oP "Removing old package file '\K[^']*(?=')" add.log); do
-        echo "About to delete $pkg ..."
         about_to_delete+=($pkg)
     done
     if [ ! "${#about_to_delete[@]}" -eq 0 ]; then
-        echo "Are you sure you want to delete all the files in the array? (y/n)"
-        read -r answer
-        if [ "$answer" == "y" ]; then
-            for file in "${about_to_delete[@]}"; do
-                echo "Deleting $file ..."
-                rm -f $NEWPATH/$file{,.sig}
-            done
-        fi
+        for file in "${about_to_delete[@]}"; do
+            echo "Deleting $file ..."
+            rm -f $NEWPATH/$file{,.sig}
+        done
     fi
     rm -f add.log
     for i in "${ALLZST[@]}"; do
