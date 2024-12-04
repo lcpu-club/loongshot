@@ -76,7 +76,7 @@ def safe_tobuild():
             if (not pkg.base in x86):
                 x86[pkg.base] = set()
             x86[pkg.base] |= alldep
-            x86_repo[pkg.base] = repo
+            x86_repo[pkg.base] = f"{pkg.version:24} {repo}"
     loong = {}
     for repo in source_repos:
         loong_db = load_repo(os.path.join(cache_dir, loong64_repo_path), repo)
@@ -111,7 +111,7 @@ def compare_all():
             loong64_version = loong[pkg_name]
         else:
             loong64_version = 'missing'
-        print(f"{pkg_name:24} {x86_version:24} {loong64_version:24}")
+        print(f"{pkg_name:34} {x86_version:24} {loong64_version:24}")
 
 
 # Compare the packages in one repos
@@ -139,9 +139,9 @@ def compare_repos(x86_db, loong64_db, showtime, show_newer=False):
         if showtime:
             time_then = datetime.fromtimestamp(pkgtime[pkg_name])
             delta = (time_now - time_then).days
-            print(f"{pkg_name:24} {x86_version:24} {loong64_version:24} {delta} days old")
+            print(f"{pkg_name:34} {x86_version:24} {loong64_version:24} {delta} days old")
         else:
-            print(f"{pkg_name:24} {x86_version:24} {loong64_version:24}")
+            print(f"{pkg_name:34} {x86_version:24} {loong64_version:24}")
 
 
 # compare one package
@@ -194,8 +194,14 @@ def main():
     if args.all:
         compare_all()
 
-    if args.core or args.extra:
-        repo = source_repos[0] if args.core else source_repos[1]
+    if args.core:
+        repo = source_repos[0]
+        x86_db = load_repo(os.path.join(cache_dir, x86_repo_path), repo)
+        loong64_db = load_repo(os.path.join(cache_dir, loong64_repo_path), repo)
+        compare_repos(x86_db, loong64_db, args.time, args.newer)
+
+    if args.extra:
+        repo = source_repos[1]
         x86_db = load_repo(os.path.join(cache_dir, x86_repo_path), repo)
         loong64_db = load_repo(os.path.join(cache_dir, loong64_repo_path), repo)
         compare_repos(x86_db, loong64_db, args.time, args.newer)
