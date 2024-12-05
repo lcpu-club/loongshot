@@ -14,7 +14,7 @@
 
 - name: Install essential tools
   pacman:
-    name: vim,nano,tmux,htop,ncdu,rsync,vnstat
+    name: vim,nano,tmux,htop,ncdu,rsync,vnstat,bc
     state: present
 
 - name: Start and enable vnstatd
