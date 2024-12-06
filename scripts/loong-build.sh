@@ -121,12 +121,13 @@ build_package() {
             cd $PKGBASE
         fi
 
+        PKGNAME=$(. PKGBUILD; echo $pkgname)
         if [[ -z "$PKGVER" ]]; then
             # get the release tag from x86_64's repo
             if [[ $TESTING == "-staging" ]]; then
-                PKGVER=`$SCRIPTSPATH/compare86.py -sp $PKGBASE |grep x86_64|awk -F= '{print $2}'`
+                PKGVER=`$SCRIPTSPATH/compare86.py -sp $PKGNAME |grep x86_64|awk -F= '{print $2}'`
             else
-                PKGVER=`$SCRIPTSPATH/compare86.py -Sp $PKGBASE |grep x86_64|awk -F= '{print $2}'`
+                PKGVER=`$SCRIPTSPATH/compare86.py -Sp $PKGNAME |grep x86_64|awk -F= '{print $2}'`
             fi
         fi
 
@@ -156,17 +157,15 @@ build_package() {
         PKGVERREL=$PKGVER
     fi
 
-    if [[ ! -z "$TIER0" ]]; then
-        # Try to find the pkgver from tier0 server
-        PKGNAME=$(. PKGBUILD; echo $pkgname)
-        _PKGVER=$(ssh $TIER0 -t "findpkg.py $PKGNAME" 2>/dev/null | tr -d '\r')
-        if [[ ! -z "$_PKGVER" ]] && [[ "$_PKGVER" == "$PKGVERREL"* ]]; then
-            # Same package found in server. Incrementing point pkgrel...
-            PKGREL=${_PKGVER#*-}
-            PKGREL=$(echo $PKGREL + .1 | bc)
-            sed -i "s/^pkgrel=.*/pkgrel=$PKGREL/" PKGBUILD
-            PKGVERREL=${PKGVERREL%-*}-$PKGREL
-        fi
+    # Try to find the pkgver from tier0 server
+    PKGNAME=$(. PKGBUILD; echo $pkgname)
+    _PKGVER=$($SCRIPTSPATH/compare86.py -sTp $PKGNAME | grep "loong64 with ver=$PKGVERREL" | awk -F= '{print $2}')
+    if [[ ! -z "$_PKGVER" ]] && [[ "$_PKGVER" == "$PKGVERREL"* ]]; then
+        # Same package found in server. Incrementing point pkgrel...
+        PKGREL=${_PKGVER#*-}
+        PKGREL=$(echo $PKGREL + .1 | bc)
+        sed -i "s/^pkgrel=.*/pkgrel=$PKGREL/" PKGBUILD
+        PKGVERREL=${PKGVERREL%-*}-$PKGREL
     fi
 
     # for rust packages, $CARCH need to change to `uname -m`=loongarch64
