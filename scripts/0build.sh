@@ -171,7 +171,7 @@ build_package() {
     fi
 
     # Try to find the pkgver from tier0 server
-    _PKGVER=$($SCRIPTSPATH/compare86.py -sTp $PKGBASE | grep "loong64 with ver=$PKGVERREL" | awk -F= '{print $2}')
+    _PKGVER=$($SCRIPTSPATH/compare86.py -sTp $PKGNAME | grep "loong64 with ver=$PKGVERREL" | awk -F= '{print $2}')
     if [[ ! -z "$_PKGVER" ]]; then
         # Same package found in server. Incrementing point pkgrel...
         PKGREL=${_PKGVER#*-}
