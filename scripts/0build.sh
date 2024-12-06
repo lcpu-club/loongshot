@@ -15,6 +15,7 @@ if [[ $# -lt 1 ]]; then
     echo "  --stag     Use staging repo."
     echo "  --test     Use testing repo."
     echo "  --ver      Build a specific version."
+    echo "  --repo     core or extra."
     echo "  --clean    Clean the chroot directory."
     echo "  --builder  Build machine to use, default is 'localhost'."
     echo "             Remote builder syntax is <host>:<workdir>"
@@ -36,7 +37,6 @@ BUILDER="localhost"
 # workdir for the builder
 BUILDPATH="/home/arch/repos"
 DEBUG=""
-BUILDREPO=$($SCRIPTSPATH/compare86.py -p $PKGBASE | awk '{print $5}' | tail -1)
 
 source /usr/share/makepkg/util/message.sh
 colorize
@@ -59,6 +59,11 @@ while [[ $# -gt 0 ]]; do
         --ver)
             shift
             PKGVER=$1
+            shift
+            ;;
+        --repo)
+            shift
+            BUILDREPO=$1
             shift
             ;;
         --clean)
@@ -99,6 +104,7 @@ build_package() {
     if [[ -f $LOONGREPO/$PKGBASE/PKGBUILD ]]; then
         cp $LOONGREPO/$PKGBASE $WORKDIR/ -a
         cd $WORKDIR/$PKGBASE
+        PKGNAME=$(. PKGBUILD; echo $pkgname)
     else
         # clone arch package repo
         if [[ -d $WORKDIR/$PKGBASE ]]; then
@@ -111,12 +117,13 @@ build_package() {
             cd $PKGBASE
         fi
 
+        PKGNAME=$(. PKGBUILD; echo $pkgname)
         if [[ -z "$PKGVER" ]]; then
             # get the release tag from x86_64's repo
             if [[ ! -z "$TESTING" ]]; then
                 REPOSWITCH=-${TESTING%ing}
             fi
-            PKGVER=`$SCRIPTSPATH/compare86.py $REPOSWITCH -p $PKGBASE |grep x86_64|awk -F= '{print $2}'`
+            PKGVER=`$SCRIPTSPATH/compare86.py $REPOSWITCH -p $PKGNAME |grep x86_64|awk -F= '{print $2}'`
         fi
 
         # switch to the current release tag
@@ -145,15 +152,9 @@ build_package() {
         PKGVERREL=$PKGVER
     fi
 
-    # Try to find the pkgver from tier0 server
-    PKGNAME=$(. PKGBUILD; echo $pkgname)
-    _PKGVER=$($SCRIPTSPATH/compare86.py -sTp $PKGBASE | grep "loong64 with ver=$PKGVERREL" | awk -F= '{print $2}')
-    if [[ ! -z "$_PKGVER" ]]; then
-        # Same package found in server. Incrementing point pkgrel...
-        PKGREL=${_PKGVER#*-}
-        PKGREL=$(echo $PKGREL + .1 | bc)
-        sed -i "s/^pkgrel=.*/pkgrel=$PKGREL/" PKGBUILD
-        PKGVERREL=${PKGVERREL%-*}-$PKGREL
+    if [[ -z "$BUILDREPO" ]]; then
+        BUILDREPO=$($SCRIPTSPATH/compare86.py $REPOSWITCH -p $PKGNAME | awk '{print $5}' | tail -1)
+        BUILDREPO=${BUILDREPO%-staging}
     fi
 
     if grep -qFx "$PKGBASE" $SCRIPTSPATH/trueany.lst; then
@@ -166,8 +167,17 @@ build_package() {
             wget $MIRRORSITE/$BUILDREPO$TESTING/os/x86_64/$FILENAME.sig
             repo-add -R temp-$BUILDREPO$TESTING.db.tar.gz $FILENAME
         done)
-        DEBUG="yes" # don't upload logs for true-any packages
-        return
+        return 2
+    fi
+
+    # Try to find the pkgver from tier0 server
+    _PKGVER=$($SCRIPTSPATH/compare86.py -sTp $PKGBASE | grep "loong64 with ver=$PKGVERREL" | awk -F= '{print $2}')
+    if [[ ! -z "$_PKGVER" ]]; then
+        # Same package found in server. Incrementing point pkgrel...
+        PKGREL=${_PKGVER#*-}
+        PKGREL=$(echo $PKGREL + .1 | bc)
+        sed -i "s/^pkgrel=.*/pkgrel=$PKGREL/" PKGBUILD
+        PKGVERREL=${PKGVERREL%-*}-$PKGREL
     fi
 
     # for rust packages, $CARCH need to change to `uname -m`=loongarch64
@@ -233,7 +243,7 @@ build_package() {
 
 build_package | tee all.log
 
-if [[ "$DEBUG" == "yes" ]]; then
+if [[ ${PIPESTATUS[0]} -eq 2 ]] || [[ "$DEBUG" == "yes" ]]; then
     exit 1
 else
     # 1. mkdir for log. 2. upload. 3. parse the log
