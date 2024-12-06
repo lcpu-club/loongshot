@@ -101,6 +101,8 @@ class DatabaseManager:
                 current_flags = result[0]
                 # Update the flags
                 new_flags = (current_flags | add_bits) & ~remove_bits
+                if (new_flags & (1 << 15)) == 0:
+                    new_flags &= 0xffff
                 # Update the database with the new flags
                 cursor.execute("UPDATE packages SET flags = %s WHERE base = %s", (new_flags, base))
                 self.conn.commit()  # Commit the changes
