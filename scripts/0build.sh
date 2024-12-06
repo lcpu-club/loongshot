@@ -166,6 +166,7 @@ build_package() {
             wget $MIRRORSITE/$BUILDREPO$TESTING/os/x86_64/$FILENAME.sig
             repo-add -R temp-$BUILDREPO$TESTING.db.tar.gz $FILENAME
         done)
+        DEBUG="yes" # don't upload logs for true-any packages
         return
     fi
 
