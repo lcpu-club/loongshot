@@ -38,12 +38,15 @@ class DatabaseManager:
         if config_file is None:
             config_file = os.path.join(os.path.expanduser('~'), '.dbconfig.json')
 
-        self.config = self.load_config(config_file)
-        self.db_name = self.config['database']['name']
-        self.db_user = self.config['database']['user']
-        self.db_pass = self.config['database']['password']
-        self.db_host = self.config['database']['host']
-        self.conn = self.get_db_connection()
+        try:
+            self.config = self.load_config(config_file)
+            self.db_name = self.config['database']['name']
+            self.db_user = self.config['database']['user']
+            self.db_pass = self.config['database']['password']
+            self.db_host = self.config['database']['host']
+            self.conn = self.get_db_connection()
+        except:
+            self.conn = None
 
     def load_config(self, config_file):
         """Loads the configuration from a JSON file."""
@@ -135,8 +138,32 @@ class DatabaseManager:
         finally:
             cursor.close()
 
-    def pop_task(self, tasklist):
-        """Pop the row with the minimal taskno and return the pkgbase."""
+    def remove_task(self, pkgbase, tasklist):
+        """Remove one task from the task list."""
+        cursor = self.conn.cursor()
+        try:
+            delete_query = "DELETE FROM tasks WHERE pkgbase = %s and tasklist=%s"
+            cursor.execute(delete_query, (pkgbase, tasklist))
+            self.conn.commit()
+        finally:
+            cursor.close()
+
+    def show_task(self, tasklist):
+        """Show the task list."""
+        cursor = self.conn.cursor()
+        try:
+            select_query = "SELECT pkgbase FROM tasks where tasklist=%s ORDER BY taskno ASC";
+            cursor.execute(select_query, (tasklist,))
+            results = cursor.fetchall()
+            for row in results:
+                print(f"{row[0]}")
+        except Exception as e:
+            print(f"An error occurred: {e}")
+        finally:
+            cursor.close()
+
+    def get_task(self, tasklist, remove=False):
+        """get the row with the minimal taskno and return the pkgbase."""
         cursor = self.conn.cursor()
 
         try:
@@ -146,13 +173,7 @@ class DatabaseManager:
             result = cursor.fetchone()
 
             if result:
-                taskno, pkgbase = result
-                # Step 2: Delete the row with the minimal taskno
-                delete_query = "DELETE FROM tasks WHERE taskno = %s and tasklist=%s"
-                cursor.execute(delete_query, (taskno, tasklist))
-                self.conn.commit()
-
-                return pkgbase
+                return result[1]
             else:
                 return None
         except Exception as e:
@@ -198,7 +219,10 @@ def parse_args():
     # Sub-command: task
     task_parser = subparsers.add_parser("task", help="Manage building task")
     task_parser.add_argument("--add", type=str, help="Packages to add (comma-separated)")
-    task_parser.add_argument("--pop", action="store_true", help="remove one package from top")
+    task_parser.add_argument("--show", action="store_true", help="Show the packages in queue.")
+    task_parser.add_argument("--remove", type=str, help="Remove on package from list")
+    task_parser.add_argument("--get", action="store_true", help="Get one package from top")
+    task_parser.add_argument("--list", type=int, help="The list number to operate on", default=1)
     return parser, parser.parse_args()
 
 def main():
@@ -251,9 +275,13 @@ def main():
 
     if args.command == "task":
         if args.add:
-            db_manager.insert_task(args.add, 1)
-        if args.pop:
-            print(db_manager.pop_task(1))
+            db_manager.insert_task(args.add, args.list)
+        if args.get:
+            print(db_manager.get_task(args.list))
+        if args.remove:
+            db_manager.remove_task(args.remove, args.list)
+        if args.show:
+            db_manager.show_task(args.list)
 
 if __name__ == "__main__":
     main()
