@@ -1,12 +1,12 @@
 #!/bin/bash
 
 # ===== Variables you should check ======
-LOONGREPO=${LOONGREPO:=/home/arch/loongarch-packages}
-WORKDIR=${WORKDIR:=/home/arch/workdir}
-ZSTLOGDIR=${ZSTLOGDIR:=/home/arch/workdir/build}
+LOONGREPO=${LOONGREPO:=$HOME/loongarch-packages}
+WORKDIR=${WORKDIR:=$HOME/repos}
+ZSTLOGDIR=${ZSTLOGDIR:=$HOME/logs}
 PACKAGER=${PACKAGER:="LCPU <lcpu@pku.edu.cn>"}
-SCRIPTSPATH=${SCRIPTSPATH:=/home/arch/loongshot/scripts}
-LOGPATH=/home/arch/loong-status/build_logs
+SCRIPTSPATH=${SCRIPTSPATH:=$HOME/loongshot/scripts}
+LOGPATH=/home/arch/loong-status/build_logs # This is for webserver
 LOCALREPO=/srv/http/build-repo
 
 if [[ $# -lt 1 ]]; then
@@ -233,6 +233,7 @@ build_package() {
             FILENAME=$pkg-$PKGVERREL-$ARCH.pkg.tar.zst
             ssh -t $BUILDER "cd $BUILDPATH/$PKGBASE; [[ -f $FILENAME.sig ]] && rm $FILENAME.sig; gpg --detach-sign $FILENAME"
             scp $BUILDER:$BUILDPATH/$PKGBASE/$FILENAME{,.sig} .
+            chmod g+w $FILENAME{,.sig}
             repo-add -R temp-$BUILDREPO$TESTING.db.tar.gz $FILENAME
         done)
         msg "$PKGBASE-$PKGVERREL built on $BUILDER, time cost: $TIMECOST"
