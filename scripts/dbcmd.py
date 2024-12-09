@@ -126,9 +126,22 @@ class DatabaseManager:
         cursor = self.conn.cursor()
         pkgbase_list = pkgs.split(',')
         # Prepare data to insert
-        rows = [(i+1, pkgbase, tasklist) for i, pkgbase in enumerate(pkgbase_list)]
 
         try:
+            query = "SELECT pkgbase FROM tasks WHERE pkgbase = ANY(%s);"
+            cursor.execute(query, (pkgbase_list,))
+            result = cursor.fetchone()
+            if result:
+                print(f"Fail: {result[0]} had been added to the tasklist.")
+                return
+
+            cursor.execute("SELECT max(taskno) FROM tasks WHERE tasklist = %s", (tasklist,))
+            result = cursor.fetchone()
+            if result:
+                first = result[0]
+            if first is None:
+                first = 0
+            rows = [(i+1+first, pkgbase, tasklist) for i, pkgbase in enumerate(pkgbase_list)]
             # Insert data
             insert_query = "INSERT INTO tasks (taskno, pkgbase, tasklist) VALUES (%s, %s, %s)"
             cursor.executemany(insert_query, rows)
@@ -239,6 +252,8 @@ def main():
         return
 
     db_manager = DatabaseManager()
+    if not db_manager.conn:
+        return
     if args.command == "bit" and (args.get or args.show):
         if args.pkgbase:
             bits = db_manager.get_bits(args.pkgbase)
