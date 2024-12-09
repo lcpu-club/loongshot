@@ -6,7 +6,7 @@
 #   eg: your zst file should located in /some/path/extra-staging/os/loong64/
 #
 
-umask 022
+umask 002
 
 if [[ $# -lt 1 ]]; then
     echo "Usage: ${0##*/} <repo-name> [optional filelist]"
@@ -53,14 +53,14 @@ do_move(){
     fi
 
     if [ -f $FROM.db.tar.gz ]; then
-        flock /tmp/loong-repo-$FROM.lck repo-remove $FROM.db.tar.gz "${ALLPKG[@]}"
+        repo-remove $FROM.db.tar.gz "${ALLPKG[@]}"
     fi
     for i in "${ALLZST[@]}"; do
         echo "Copying file: $i ..."
         cp $i $NEWPATH
         cp $i.sig $NEWPATH
     done
-    flock /tmp/loong-repo-$TO.lck repo-add -R $NEWPATH/$TO.db.tar.gz "${ALLZST[@]}" | tee add.log
+    repo-add -R $NEWPATH/$TO.db.tar.gz "${ALLZST[@]}" | tee add.log
     exit_code=${PIPESTATUS[0]}
     if [[ ! $exit_code -eq 0 ]]; then
         exit 2
