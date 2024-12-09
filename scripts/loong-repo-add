@@ -5,7 +5,8 @@ if [[ $# -lt 2 ]]; then
     exit 1
 fi
 
-TIER0SERVER=arch2
+TIER0=${TIER0:-""}
+
 _remote_path=/srv/http/loongarch/archlinux/
 REPO=$1
 shift
@@ -25,7 +26,7 @@ cp ${ALLFILES[@]} $WORKDIR
 echo ${ALLSIG[@]}
 cp ${ALLSIG[@]} $WORKDIR
 
-rsync -e ssh -p '--chmod=ug=rw,o=r' -c -h -L --progress --partial -y $WORKDIR/* $TIER0SERVER:$_remote_path/$REPO/os/loong64/ || exit 2
-ssh -tt $TIER0SERVER "cd $_remote_path/$REPO/os/loong64/; flock /tmp/loong-repo-$REPO.lck repo-add -R $REPO.db.tar.gz ${ALLFILES[@]};"
+rsync -e ssh -p '--chmod=ug=rw,o=r' -c -h -L --progress --partial -y $WORKDIR/* $TIER0:$_remote_path/$REPO/os/loong64/ || exit 2
+ssh -tt $TIER0"cd $_remote_path/$REPO/os/loong64/; repo-add -R $REPO.db.tar.gz ${ALLFILES[@]};"
 
 rm -rf $WORKDIR
