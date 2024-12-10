@@ -120,7 +120,7 @@ class DatabaseManager:
         finally:
             cursor.close()  # Close the cursor but keep the connection open
 
-    def insert_task(self, pkgs, tasklist):
+    def insert_task(self, pkgs, tasklist, insert=False):
         """Insert packages by list of pkgbase."""
 
         cursor = self.conn.cursor()
@@ -128,20 +128,27 @@ class DatabaseManager:
         # Prepare data to insert
 
         try:
-            query = "SELECT pkgbase FROM tasks WHERE pkgbase = ANY(%s);"
-            cursor.execute(query, (pkgbase_list,))
-            result = cursor.fetchone()
-            if result:
-                print(f"Fail: {result[0]} had been added to the tasklist.")
-                return
+            if not pkgs.startswith('%'): # commands
+                query = "SELECT pkgbase FROM tasks WHERE pkgbase = ANY(%s);"
+                cursor.execute(query, (pkgbase_list,))
+                result = cursor.fetchone()
+                if result:
+                    print(f"Fail: {result[0]} had been added to the tasklist.")
+                    return
 
-            cursor.execute("SELECT max(taskno) FROM tasks WHERE tasklist = %s", (tasklist,))
+            cursor.execute("SELECT max(taskno),min(taskno) FROM tasks WHERE tasklist = %s", (tasklist,))
             result = cursor.fetchone()
             if result:
-                first = result[0]
+                first = result[1]
+                last = result[0]
             if first is None:
                 first = 0
-            rows = [(i+1+first, pkgbase, tasklist) for i, pkgbase in enumerate(pkgbase_list)]
+                last = 0
+            if insert:
+                cursor.execute("UPDATE tasks SET taskno=taskno+%s where tasklist = %s",
+                               (len(pkgbase_list) - first + 1, tasklist))
+                last = 0
+            rows = [(i+1+last, pkgbase, tasklist) for i, pkgbase in enumerate(pkgbase_list)]
             # Insert data
             insert_query = "INSERT INTO tasks (taskno, pkgbase, tasklist) VALUES (%s, %s, %s)"
             cursor.executemany(insert_query, rows)
@@ -175,7 +182,7 @@ class DatabaseManager:
         finally:
             cursor.close()
 
-    def get_task(self, tasklist, remove=False):
+    def get_task(self, tasklist):
         """get the row with the minimal taskno and return the pkgbase."""
         cursor = self.conn.cursor()
 
@@ -231,7 +238,8 @@ def parse_args():
 
     # Sub-command: task
     task_parser = subparsers.add_parser("task", help="Manage building task")
-    task_parser.add_argument("--add", type=str, help="Packages to add (comma-separated)")
+    task_parser.add_argument("--add", type=str, help="Packages to append (comma-separated)")
+    task_parser.add_argument("--insert", type=str, help="Packages to insert from top(comma-separated)")
     task_parser.add_argument("--show", action="store_true", help="Show the packages in queue.")
     task_parser.add_argument("--remove", type=str, help="Remove on package from list")
     task_parser.add_argument("--get", action="store_true", help="Get one package from top")
@@ -291,6 +299,8 @@ def main():
     if args.command == "task":
         if args.add:
             db_manager.insert_task(args.add, args.list)
+        if args.insert:
+            db_manager.insert_task(args.insert, args.list, True)
         if args.get:
             print(db_manager.get_task(args.list))
         if args.remove:
