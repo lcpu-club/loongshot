@@ -1,6 +1,6 @@
 #!/bin/bash
 
-SCRIPTSPATH=${SCRIPTSPATH:-/home/arch/loongshot/scripts}
+SCRIPTSPATH=${SCRIPTSPATH:-$HOME/loongshot/scripts}
 TIER0=${TIER0:-""}
 
 if [[ ! -z "$TIER0" ]]; then

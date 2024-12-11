@@ -2,7 +2,7 @@
 #
 # Create patch based on current edition
 
-LOONGREPO=${LOONGREPO:=/home/arch/loongarch-packages}
+LOONGREPO=${LOONGREPO:=$HOME/loongarch-packages}
 PKG=$(basename $PWD)
 
 mkdir -p $LOONGREPO/$PKG
