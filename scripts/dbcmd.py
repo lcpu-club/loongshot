@@ -136,7 +136,7 @@ class DatabaseManager:
                     print(f"Fail: {result[0]} had been added to the tasklist.")
                     return
 
-            cursor.execute("SELECT max(taskno),min(taskno) FROM tasks WHERE tasklist = %s", (tasklist,))
+            cursor.execute("SELECT max(taskno),min(taskno) FROM tasks WHERE tasklist=%s and info is NULL", (tasklist,))
             result = cursor.fetchone()
             if result:
                 first = result[1]
@@ -145,7 +145,7 @@ class DatabaseManager:
                 first = 0
                 last = 0
             if insert:
-                cursor.execute("UPDATE tasks SET taskno=taskno+%s where tasklist = %s",
+                cursor.execute("UPDATE tasks SET taskno=taskno+%s WHERE tasklist = %s",
                                (len(pkgbase_list) - first + 1, tasklist))
                 last = 0
             rows = [(i+1+last, pkgbase, tasklist) for i, pkgbase in enumerate(pkgbase_list)]
@@ -162,8 +162,12 @@ class DatabaseManager:
         """Remove one task from the task list."""
         cursor = self.conn.cursor()
         try:
-            delete_query = "DELETE FROM tasks WHERE pkgbase = %s and tasklist=%s"
-            cursor.execute(delete_query, (pkgbase, tasklist))
+            if pkgbase.startswith('%'): # commands just delete
+                cursor.execute("DELETE FROM tasks WHERE pkgbase=%s and tasklist=%s",
+                               (pkgbase, tasklist))
+            else:
+                cursor.execute("UPDATE tasks SET info=%s WHERE pkgbase=%s and tasklist=%s",
+                    ("done", pkgbase, tasklist))
             self.conn.commit()
         finally:
             cursor.close()
@@ -172,32 +176,45 @@ class DatabaseManager:
         """Show the task list."""
         cursor = self.conn.cursor()
         try:
-            select_query = "SELECT pkgbase FROM tasks where tasklist=%s ORDER BY taskno ASC";
+            select_query = "SELECT pkgbase,info FROM tasks where tasklist=%s ORDER BY taskno ASC";
             cursor.execute(select_query, (tasklist,))
             results = cursor.fetchall()
             for row in results:
-                print(f"{row[0]}")
+                info = "waiting" if row[1] is None else row[1]
+                if row[0].startswith('%'):
+                    info = "command"
+                print(f"{row[0]:34} {info}")
         except Exception as e:
             print(f"An error occurred: {e}")
         finally:
             cursor.close()
 
-    def get_task(self, tasklist):
+    def get_task(self, tasklist, building=False):
         """get the row with the minimal taskno and return the pkgbase."""
         cursor = self.conn.cursor()
 
         try:
             # Step 1: Find the row with the minimal taskno
-            select_query = "SELECT taskno, pkgbase FROM tasks where tasklist=%s ORDER BY taskno ASC LIMIT 1"
+            select_query = "SELECT taskno, pkgbase FROM tasks WHERE tasklist=%s and info is NULL ORDER BY taskno ASC LIMIT 1"
             cursor.execute(select_query, (tasklist,))
             result = cursor.fetchone()
 
             if result:
-                return result[1]
+                taskno = result[0]
+                pkgbase = result[1]
+                if building:
+                    cursor.execute("UPDATE tasks SET info=%s WHERE tasklist=%s and taskno=%s",
+                                   ("building", tasklist, taskno))
+                    self.conn.commit()
+                return pkgbase
             else:
+                if building:
+                    cursor.execute("DELETE FROM tasks WHERE tasklist=%s and info is not NULL",
+                                   (tasklist,))
+                    self.conn.commit()
                 return None
         except Exception as e:
-            #print(f"Error: {e}")
+            # print(f"Error: {e}")
             return None
         finally:
             cursor.close()
@@ -243,6 +260,7 @@ def parse_args():
     task_parser.add_argument("--show", action="store_true", help="Show the packages in queue.")
     task_parser.add_argument("--remove", type=str, help="Remove on package from list")
     task_parser.add_argument("--get", action="store_true", help="Get one package from top")
+    task_parser.add_argument("--build", action="store_true", help="Get packages for build")
     task_parser.add_argument("--list", type=int, help="The list number to operate on", default=1)
     return parser, parser.parse_args()
 
@@ -302,7 +320,7 @@ def main():
         if args.insert:
             db_manager.insert_task(args.insert, args.list, True)
         if args.get:
-            print(db_manager.get_task(args.list))
+            print(db_manager.get_task(args.list, args.build))
         if args.remove:
             db_manager.remove_task(args.remove, args.list)
         if args.show:

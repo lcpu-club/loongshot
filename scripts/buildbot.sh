@@ -19,10 +19,14 @@ umask 002
 while [ 1 ]; do
     retries=0
 
-    pkg=`$SCRIPTSPATH/dbcmd.py task --get`
+    pkg=`$SCRIPTSPATH/dbcmd.py task --get --build`
     orig=$pkg
 
-    if [[ "$pkg" == None ]] || [[ "$pkg" == %stop ]]; then
+    if [[ "$pkg" == None ]]; then
+        exit 0
+    fi
+
+    if [[ "$pkg" == %stop ]]; then
         exit 1
     fi
 
