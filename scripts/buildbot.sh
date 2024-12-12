@@ -62,7 +62,7 @@ while [ 1 ]; do
         break
     done
 
-    $SCRIPTSPATH/dbcmd.py task --remove $orig
+    $SCRIPTSPATH/dbcmd.py task --done $orig
 
     # tracking the soname changes
     grep -A4 "WARNING.*Sonames differ" $ALLLOGS >> sonames.log

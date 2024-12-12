@@ -158,16 +158,22 @@ class DatabaseManager:
         finally:
             cursor.close()
 
-    def remove_task(self, pkgbase, tasklist):
-        """Remove one task from the task list."""
+    def remove_task(self, pkgbase, tasklist, remove=False):
+        """Removes or done one task from the task list."""
         cursor = self.conn.cursor()
         try:
-            if pkgbase.startswith('%'): # commands just delete
+            if remove or pkgbase.startswith('%'): # commands just delete
                 cursor.execute("DELETE FROM tasks WHERE pkgbase=%s and tasklist=%s",
                                (pkgbase, tasklist))
             else:
+                cursor.execute("SELECT flags FROM packages WHERE base = %s", (pkgbase,))
+                results = cursor.fetchone()
+                if results and results[0] > 32767:
+                    done = "failed"
+                else:
+                    done = "done"
                 cursor.execute("UPDATE tasks SET info=%s WHERE pkgbase=%s and tasklist=%s",
-                    ("done", pkgbase, tasklist))
+                    (done, pkgbase, tasklist))
             self.conn.commit()
         finally:
             cursor.close()
@@ -194,7 +200,7 @@ class DatabaseManager:
         cursor = self.conn.cursor()
 
         try:
-            # Step 1: Find the row with the minimal taskno
+            # Find the row with the minimal taskno
             select_query = "SELECT taskno, pkgbase FROM tasks WHERE tasklist=%s and info is NULL ORDER BY taskno ASC LIMIT 1"
             cursor.execute(select_query, (tasklist,))
             result = cursor.fetchone()
@@ -207,7 +213,7 @@ class DatabaseManager:
                                    ("building", tasklist, taskno))
                     self.conn.commit()
                 return pkgbase
-            else:
+            else: # Delete the tasks when all done.
                 if building:
                     cursor.execute("DELETE FROM tasks WHERE tasklist=%s and info is not NULL",
                                    (tasklist,))
@@ -260,6 +266,7 @@ def parse_args():
     task_parser.add_argument("--show", action="store_true", help="Show the packages in queue.")
     task_parser.add_argument("--remove", type=str, help="Remove on package from list")
     task_parser.add_argument("--get", action="store_true", help="Get one package from top")
+    task_parser.add_argument("--done", type=str, help="Finished building package from list")
     task_parser.add_argument("--build", action="store_true", help="Get packages for build")
     task_parser.add_argument("--list", type=int, help="The list number to operate on", default=1)
     return parser, parser.parse_args()
@@ -322,7 +329,9 @@ def main():
         if args.get:
             print(db_manager.get_task(args.list, args.build))
         if args.remove:
-            db_manager.remove_task(args.remove, args.list)
+            db_manager.remove_task(args.remove, args.list, True)
+        if args.done:
+            db_manager.remove_task(args.done, args.list)
         if args.show:
             db_manager.show_task(args.list)
 
