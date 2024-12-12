@@ -171,7 +171,8 @@ build_package() {
     fi
 
     # Try to find the pkgver from tier0 server
-    _PKGVER=$($SCRIPTSPATH/compare86.py -sTp $PKGNAME | grep "loong64 with ver=$PKGVERREL" | awk -F= '{print $2}')
+    _PKGVER=$($SCRIPTSPATH/compare86.py -sTp $PKGNAME | grep "$BUILDREPO$TESTING of loong64 with ver=$PKGVERREL" | awk -F= '{print $2}')
+    echo $_PKGVER
     if [[ ! -z "$_PKGVER" ]]; then
         # Same package found in server. Incrementing point pkgrel...
         PKGREL=${_PKGVER#*-}
@@ -233,7 +234,7 @@ build_package() {
             FILENAME=$pkg-$PKGVERREL-$ARCH.pkg.tar.zst
             ssh -t $BUILDER "cd $BUILDPATH/$PKGBASE; [[ -f $FILENAME.sig ]] && rm $FILENAME.sig; gpg --detach-sign $FILENAME"
             scp $BUILDER:$BUILDPATH/$PKGBASE/$FILENAME{,.sig} .
-            chmod g+w $FILENAME{,.sig}
+            chmod 664 $FILENAME{,.sig}
             repo-add -R temp-$BUILDREPO$TESTING.db.tar.gz $FILENAME
         done)
         msg "$PKGBASE-$PKGVERREL built on $BUILDER, time cost: $TIMECOST"
