@@ -114,6 +114,33 @@ def compare_all():
         print(f"{pkg_name:34} {x86_version:24} {loong64_version:24}")
 
 
+def move_repos(ignore_version=False):
+    x86 = {}
+    for repo in source_repos:
+        x86_db = load_repo(os.path.join(cache_dir, x86_repo_path), repo)
+        for pkg in x86_db.pkgcache:
+            if pkg.name not in x86: # Use pkgname this time
+                x86[pkg.name] = {}
+            x86[pkg.name][repo] = pkg.version  # Add the repo and version to the pkg.base entry
+
+    loong = {}
+    for repo in source_repos:
+        loong_db = load_repo(os.path.join(cache_dir, loong64_repo_path), repo)
+        for pkg in loong_db.pkgcache:
+            if pkg.name not in loong:
+                loong[pkg.name] = {}
+            loong[pkg.name][repo] = pkg.version
+
+    for pkg_name in loong:
+        if pkg_name in x86:
+            for lrepo in loong[pkg_name]:
+                for xrepo in x86[pkg_name]:
+                    if (lrepo == xrepo):
+                        continue
+                    if loong[pkg_name][lrepo].startswith(x86[pkg_name][xrepo]) or ignore_version:
+                        print(f"{pkg_name}-{loong[pkg_name][lrepo]} {lrepo}->{xrepo}")
+
+
 # Compare the packages in one repos
 def compare_repos(x86_db, loong64_db, showtime, show_newer=False):
     get_builddate()
@@ -166,6 +193,8 @@ def main():
     parser.add_argument("-s", "--stag", action="store_true", help="Consider staging db.")
     parser.add_argument("-T", "--test", action="store_true", help="Consider testing db.")
     parser.add_argument("-n", "--newer", action="store_true", help="Also show the packages that are newer than x86's.")
+    parser.add_argument("-m", "--move", action="store_true", help="Show packages in wrong repos.")
+    parser.add_argument("-M", "--movehard", action="store_true", help="Show packages in wrong repos(ignore version difference.")
 
     args = parser.parse_args()
 
@@ -193,6 +222,10 @@ def main():
 
     if args.all:
         compare_all()
+
+    if args.move or args.movehard:
+        source_repos = ["core", "extra", "core-staging", "extra-staging", "core-testing", "extra-testing"]
+        move_repos(args.movehard)
 
     if args.core:
         repo = source_repos[0]
