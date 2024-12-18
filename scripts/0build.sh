@@ -155,6 +155,7 @@ build_package() {
     if [[ -z "$BUILDREPO" ]]; then
         BUILDREPO=$($SCRIPTSPATH/compare86.py $REPOSWITCH -p $PKGNAME | awk '{print $5}' | tail -1)
         BUILDREPO=${BUILDREPO%-staging}
+        BUILDREPO=${BUILDREPO%-testing}
     fi
 
     if grep -qFx "$PKGBASE" $SCRIPTSPATH/trueany.lst; then
