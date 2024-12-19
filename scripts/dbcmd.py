@@ -146,13 +146,20 @@ class DatabaseManager:
             if first is None:
                 first = 0
                 last = 0
+            cursor.execute("SELECT max(taskid) FROM tasks")
+            result = cursor.fetchone()
+            if result:
+                maxid = result[0]
+            if maxid is None:
+                maxid = 0
+
             if insert:
                 cursor.execute("UPDATE tasks SET taskno=taskno+%s WHERE tasklist = %s",
                                (len(pkgbase_list) - first + 1, tasklist))
                 last = 0
-            rows = [(i+1+last, pkgbase, tasklist) for i, pkgbase in enumerate(pkgbase_list)]
+            rows = [(i+1+last, pkgbase, maxid + 1, tasklist) for i, pkgbase in enumerate(pkgbase_list)]
             # Insert data
-            insert_query = "INSERT INTO tasks (taskno, pkgbase, tasklist) VALUES (%s, %s, %s)"
+            insert_query = "INSERT INTO tasks (taskno, pkgbase, taskid, tasklist) VALUES (%s, %s, %s, %s)"
             cursor.executemany(insert_query, rows)
 
             # Commit changes and close connection
@@ -168,14 +175,24 @@ class DatabaseManager:
                 cursor.execute("DELETE FROM tasks WHERE pkgbase=%s and tasklist=%s",
                                (pkgbase, tasklist))
             else:
+                # get build result from packages database
                 cursor.execute("SELECT flags FROM packages WHERE base = %s", (pkgbase,))
                 results = cursor.fetchone()
-                if results and results[0] > 32767:
-                    done = "failed"
+                if results:
+                    flags = results[0]
                 else:
-                    done = "done"
-                cursor.execute("UPDATE tasks SET info=%s WHERE pkgbase=%s and tasklist=%s",
-                    (done, pkgbase, tasklist))
+                    flags = 0
+                done = "failed" if flags > 32767 else "done"
+                repo = 1 if flags & BIT_MAP['testing'] else 2 if flags & BIT_MAP['staging'] else 0
+                # get build log it from logs database
+                cursor.execute("SELECT id FROM logs WHERE pkgbase=%s ORDER BY build_time DESC limit 1", (pkgbase,))
+                results = cursor.fetchone()
+                if results:
+                    logid = results[0]
+                else:
+                    logid = 0
+                cursor.execute("UPDATE tasks SET info=%s,logid=%s,repo=%s WHERE pkgbase=%s and tasklist=%s",
+                    (done, logid, repo, pkgbase, tasklist))
             self.conn.commit()
         finally:
             cursor.close()
@@ -184,7 +201,7 @@ class DatabaseManager:
         """Show the task list."""
         cursor = self.conn.cursor()
         try:
-            select_query = "SELECT pkgbase,info FROM tasks where tasklist=%s ORDER BY taskno ASC";
+            select_query = "SELECT pkgbase,info FROM tasks WHERE tasklist=%s ORDER BY taskno ASC";
             cursor.execute(select_query, (tasklist,))
             results = cursor.fetchall()
             for row in results:
@@ -192,6 +209,29 @@ class DatabaseManager:
                 if row[0].startswith('%'):
                     info = "command"
                 print(f"{row[0]:34} {info}")
+        except Exception as e:
+            print(f"An error occurred: {e}")
+        finally:
+            cursor.close()
+
+    def show_hist(self, hist_no):
+        """Show old task list result."""
+        cursor = self.conn.cursor()
+        try:
+            if hist_no == 0:
+                cursor.execute("SELECT max(taskid) from tasks")
+                results = cursor.fetchone()
+                if results:
+                    print(f"The max number of taskid will be: {results[0]}")
+                    return
+            select_query = "SELECT pkgbase,info,repo FROM tasks WHERE taskid=%s ORDER BY taskno ASC";
+            cursor.execute(select_query, (hist_no,))
+            results = cursor.fetchall()
+            print("pkgbase                           result      repo")
+            print("--------------------------------------------------")
+            for row in results:
+                repo = "main" if row[2] == 0 else "testing" if row[2] == 1 else "staging"
+                print(f"{row[0]:34} {row[1]:10} {repo}")
         except Exception as e:
             print(f"An error occurred: {e}")
         finally:
@@ -217,7 +257,7 @@ class DatabaseManager:
                 return pkgbase
             else: # Delete the tasks when all done.
                 if building:
-                    cursor.execute("DELETE FROM tasks WHERE tasklist=%s and info is not NULL",
+                    cursor.execute("UPDATE tasks SET tasklist=0 WHERE tasklist=%s and info is not NULL",
                                    (tasklist,))
                     self.conn.commit()
                 return None
@@ -271,6 +311,7 @@ def parse_args():
     task_parser.add_argument("--done", type=str, help="Finished building package from list")
     task_parser.add_argument("--build", action="store_true", help="Get packages for build")
     task_parser.add_argument("--list", type=int, help="The list number to operate on", default=1)
+    task_parser.add_argument("--hist", type=int, help="Show list history", default=-1)
     return parser, parser.parse_args()
 
 def main():
@@ -336,6 +377,8 @@ def main():
             db_manager.remove_task(args.done, args.list)
         if args.show:
             db_manager.show_task(args.list)
+        if args.hist >= 0:
+            db_manager.show_hist(args.hist)
 
 if __name__ == "__main__":
     main()
