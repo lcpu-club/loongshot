@@ -14,6 +14,8 @@ BIT_MAP = {
     'haslog': 1 << 4,
     'skippgp': 1 << 5,
     'skiphash': 1 << 6,
+    'testing': 1 << 7,
+    'staging': 1 << 8,
     'fail': 1 << 15,
 }
 

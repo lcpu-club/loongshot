@@ -14,6 +14,8 @@ BIT_MAP = {
     'haslog': 1 << 4,
     'skippgp': 1 << 5,
     'skiphash': 1 << 6,
+    'testing': 1 << 7,
+    'staging': 1 << 8,
     'fail': 1 << 15,
 }
 
@@ -112,7 +114,7 @@ class DatabaseManager:
 
 def parse_build_log(log_path):
 
-    flags={'nocheck': 0, 'patch': 0, 'oldconfig': 0, 'haslog': 1, 'skippgp': 0, 'skiphash': 0, 'fail': 1, 'startbuild': 0}
+    flags={'nocheck': 0, 'patch': 0, 'oldconfig': 0, 'haslog': 1, 'skippgp': 0, 'skiphash': 0, 'fail': 1, 'startbuild': 0, 'testing': 0, 'staging': 0}
     fail_stage = 0
     global builder
     global timecost
@@ -148,6 +150,11 @@ def parse_build_log(log_path):
                             flags[stage] = 0
                         else:
                             flags[stage] = 1
+                        if stage == 'startbuild': # save the build type
+                            if 'extra-testing' in line:
+                                flags['testing'] = 1
+                            if 'extra-staging' in line:
+                                flags['staging'] = 1
                 for idx, err in error_entry:
                     if re.search(err, line):
                         fail_stage = idx;
