@@ -131,11 +131,12 @@ class DatabaseManager:
 
         try:
             if not pkgs.startswith('%'): # commands
-                query = "SELECT pkgbase FROM tasks WHERE pkgbase = ANY(%s);"
+                query = "SELECT pkgbase FROM tasks WHERE pkgbase = ANY(%s) AND tasklist!=0"
                 cursor.execute(query, (pkgbase_list,))
-                result = cursor.fetchone()
-                if result:
-                    print(f"Fail: {result[0]} had been added to the tasklist.")
+                results = cursor.fetchall()
+                if results:
+                    conflict = ", ".join([row[0] for row in results])
+                    print(f"Fail: {conflict} had been added to the tasklist.")
                     return
 
             cursor.execute("SELECT max(taskno),min(taskno) FROM tasks WHERE tasklist=%s and info is NULL", (tasklist,))
