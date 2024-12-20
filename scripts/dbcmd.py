@@ -147,7 +147,7 @@ class DatabaseManager:
             if first is None:
                 first = 0
                 last = 0
-            cursor.execute("SELECT max(taskid) FROM tasks")
+            cursor.execute("SELECT max(taskid) FROM tasks WHERE tasklist=0")
             result = cursor.fetchone()
             if result:
                 maxid = result[0]
