@@ -8,6 +8,9 @@
 
 umask 002
 
+source /usr/share/makepkg/util/message.sh
+colorize
+
 if [[ $# -lt 1 ]]; then
     echo "Usage: ${0##*/} <repo-name> [optional filelist]"
     exit 1
@@ -55,10 +58,15 @@ do_move(){
     if [ -f $FROM.db.tar.gz ]; then
         repo-remove $FROM.db.tar.gz "${ALLPKG[@]}"
     fi
-    for i in "${ALLZST[@]}"; do
-        echo "Copying file: $i ..."
-        cp $i $NEWPATH
-        cp $i.sig $NEWPATH
+    for i in "${!ALLZST[@]}"; do
+        echo "Copying file: ${ALLZST[$i]} ..."
+        if [ ! -f $NEWPATH/${ALLZST[$i]} ]; then
+            cp "${ALLZST[$i]}" $NEWPATH
+            cp "${ALLZST[$i]}.sig" $NEWPATH
+        else
+            error "${ALLZST[$i]} already there, ignore it."
+            unset 'ALLZST[$i]'
+        fi
     done
     repo-add -R $NEWPATH/$TO.db.tar.gz "${ALLZST[@]}" | tee add.log
     exit_code=${PIPESTATUS[0]}
