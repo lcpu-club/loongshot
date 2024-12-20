@@ -222,7 +222,7 @@ build_package() {
     TIMECOST=$((ENDTIME - STARTTIME))
 
     # add the zst file to the local-repo
-    if [[ "$EXITCODE" -eq 0 ]]; then
+    if [[ "$EXITCODE" -eq 0 ]] && [[ ! "$DEBUG" == "yes" ]]; then
         (source PKGBUILD;
         if [[ "$arch" == "any" ]]; then
             ARCH="any"
