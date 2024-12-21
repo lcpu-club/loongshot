@@ -147,7 +147,7 @@ class DatabaseManager:
             if first is None:
                 first = 0
                 last = 0
-            cursor.execute("SELECT max(taskid) FROM tasks WHERE tasklist=0")
+            cursor.execute("SELECT max(taskid) FROM tasks WHERE tasklist!=%s", (tasklist,))
             result = cursor.fetchone()
             if result:
                 maxid = result[0]
@@ -155,9 +155,9 @@ class DatabaseManager:
                 maxid = 0
 
             if insert:
-                cursor.execute("UPDATE tasks SET taskno=taskno+%s WHERE tasklist = %s",
-                               (len(pkgbase_list) - first + 1, tasklist))
-                last = 0
+                cursor.execute("UPDATE tasks SET taskno=taskno+%s WHERE tasklist=%s and info is NULL",
+                               (len(pkgbase_list), tasklist))
+                last = first - 1
             rows = [(i+1+last, pkgbase, maxid + 1, tasklist) for i, pkgbase in enumerate(pkgbase_list)]
             # Insert data
             insert_query = "INSERT INTO tasks (taskno, pkgbase, taskid, tasklist) VALUES (%s, %s, %s, %s)"
