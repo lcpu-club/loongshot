@@ -177,7 +177,8 @@ class DatabaseManager:
                                (pkgbase, tasklist))
             else:
                 # get build result from packages database
-                cursor.execute("SELECT flags FROM packages WHERE base = %s", (pkgbase,))
+                realbase = pkgbase.split(':')[0]
+                cursor.execute("SELECT flags FROM packages WHERE base = %s", (realbase,))
                 results = cursor.fetchone()
                 if results:
                     flags = results[0]
@@ -186,7 +187,7 @@ class DatabaseManager:
                 done = "failed" if flags > 32767 else "done"
                 repo = 1 if flags & BIT_MAP['testing'] else 2 if flags & BIT_MAP['staging'] else 0
                 # get build log it from logs database
-                cursor.execute("SELECT id FROM logs WHERE pkgbase=%s ORDER BY build_time DESC limit 1", (pkgbase,))
+                cursor.execute("SELECT id FROM logs WHERE pkgbase=%s ORDER BY build_time DESC limit 1", (realbase,))
                 results = cursor.fetchone()
                 if results:
                     logid = results[0]
