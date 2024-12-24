@@ -184,7 +184,7 @@ class DatabaseManager:
                     flags = results[0]
                 else:
                     flags = 0
-                done = "failed" if flags > 32767 else "done"
+                done = f"failed:{flags >> 16}" if flags > 32767 else "done"
                 repo = 1 if flags & BIT_MAP['testing'] else 2 if flags & BIT_MAP['staging'] else 0
                 # get build log it from logs database
                 cursor.execute("SELECT id FROM logs WHERE pkgbase=%s ORDER BY build_time DESC limit 1", (realbase,))
@@ -210,6 +210,8 @@ class DatabaseManager:
                 info = "waiting" if row[1] is None else row[1]
                 if row[0].startswith('%'):
                     info = "command"
+                if info.startswith("failed:"):
+                    info = f"failed: {error_type[int(info.split(':')[1])]}"
                 print(f"{row[0]:34} {info}")
         except Exception as e:
             print(f"An error occurred: {e}")
@@ -220,20 +222,24 @@ class DatabaseManager:
         """Show old task list result."""
         cursor = self.conn.cursor()
         try:
-            if hist_no == 0:
-                cursor.execute("SELECT max(taskid) from tasks")
-                results = cursor.fetchone()
-                if results:
-                    print(f"The max number of taskid will be: {results[0]}")
-                    return
+            cursor.execute("SELECT max(taskid) from tasks")
+            results = cursor.fetchone()
+            if results:
+                hist_no = results[0] - hist_no
+                print(hist_no)
+            else:
+                print("No history in database")
             select_query = "SELECT pkgbase,info,repo FROM tasks WHERE taskid=%s ORDER BY taskno ASC";
             cursor.execute(select_query, (hist_no,))
             results = cursor.fetchall()
-            print("pkgbase                           result      repo")
-            print("--------------------------------------------------")
+            print("pkgbase                            repo       result")
+            print("------------------------------------------------------------")
             for row in results:
-                repo = "main" if row[2] == 0 else "testing" if row[2] == 1 else "staging"
-                print(f"{row[0]:34} {row[1]:10} {repo}")
+                repo = "stable" if row[2] == 0 else "testing" if row[2] == 1 else "staging"
+                info = row[1]
+                if info and info.startswith("failed:"):
+                    info = f"failed: {error_type[int(info.split(':')[1])]}"
+                print(f"{row[0]:34} {repo:10} {info}")
         except Exception as e:
             print(f"An error occurred: {e}")
         finally:
@@ -308,7 +314,7 @@ def parse_args():
     task_parser.add_argument("--add", type=str, help="Packages to append (comma-separated)")
     task_parser.add_argument("--insert", type=str, help="Packages to insert from top(comma-separated)")
     task_parser.add_argument("--show", action="store_true", help="Show the packages in queue.")
-    task_parser.add_argument("--remove", type=str, help="Remove on package from list")
+    task_parser.add_argument("--remove", type=str, help="Remove one package from list")
     task_parser.add_argument("--get", action="store_true", help="Get one package from top")
     task_parser.add_argument("--done", type=str, help="Finished building package from list")
     task_parser.add_argument("--build", action="store_true", help="Get packages for build")
