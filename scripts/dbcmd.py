@@ -122,7 +122,7 @@ class DatabaseManager:
         finally:
             cursor.close()  # Close the cursor but keep the connection open
 
-    def insert_task(self, pkgs, tasklist, insert=False):
+    def insert_task(self, pkgs, tasklist, repo, insert=False):
         """Insert packages by list of pkgbase."""
 
         cursor = self.conn.cursor()
@@ -158,9 +158,9 @@ class DatabaseManager:
                 cursor.execute("UPDATE tasks SET taskno=taskno+%s WHERE tasklist=%s and info is NULL",
                                (len(pkgbase_list), tasklist))
                 last = first - 1
-            rows = [(i+1+last, pkgbase, maxid + 1, tasklist) for i, pkgbase in enumerate(pkgbase_list)]
+            rows = [(i+1+last, pkgbase, maxid + 1, tasklist, repo) for i, pkgbase in enumerate(pkgbase_list)]
             # Insert data
-            insert_query = "INSERT INTO tasks (taskno, pkgbase, taskid, tasklist) VALUES (%s, %s, %s, %s)"
+            insert_query = "INSERT INTO tasks (taskno, pkgbase, taskid, tasklist, repo) VALUES (%s, %s, %s, %s, %s)"
             cursor.executemany(insert_query, rows)
 
             # Commit changes and close connection
@@ -185,7 +185,6 @@ class DatabaseManager:
                 else:
                     flags = 0
                 done = f"failed:{flags >> 16}" if flags > 32767 else "done"
-                repo = 1 if flags & BIT_MAP['testing'] else 2 if flags & BIT_MAP['staging'] else 0
                 # get build log it from logs database
                 cursor.execute("SELECT id FROM logs WHERE pkgbase=%s ORDER BY build_time DESC limit 1", (realbase,))
                 results = cursor.fetchone()
@@ -193,8 +192,8 @@ class DatabaseManager:
                     logid = results[0]
                 else:
                     logid = 0
-                cursor.execute("UPDATE tasks SET info=%s,logid=%s,repo=%s WHERE pkgbase=%s and tasklist=%s",
-                    (done, logid, repo, pkgbase, tasklist))
+                cursor.execute("UPDATE tasks SET info=%s,logid=%s WHERE pkgbase=%s and tasklist=%s",
+                    (done, logid, pkgbase, tasklist))
             self.conn.commit()
         finally:
             cursor.close()
@@ -226,7 +225,6 @@ class DatabaseManager:
             results = cursor.fetchone()
             if results:
                 hist_no = results[0] - hist_no
-                print(hist_no)
             else:
                 print("No history in database")
             select_query = "SELECT pkgbase,info,repo FROM tasks WHERE taskid=%s ORDER BY taskno ASC";
@@ -320,6 +318,8 @@ def parse_args():
     task_parser.add_argument("--build", action="store_true", help="Get packages for build")
     task_parser.add_argument("--list", type=int, help="The list number to operate on", default=1)
     task_parser.add_argument("--hist", type=int, help="Show list history", default=-1)
+    task_parser.add_argument("--stag", action="store_true", help="Add tasks from staging repo")
+    task_parser.add_argument("--test", action="store_true", help="Add tasks from testing repo")
     return parser, parser.parse_args()
 
 def main():
@@ -373,10 +373,11 @@ def main():
             print("Error: 'pkgbase' argument is required for --add or --remove.")
 
     if args.command == "task":
+        repo = 1 if args.test else 2 if args.stag else 0
         if args.add:
-            db_manager.insert_task(args.add, args.list)
+            db_manager.insert_task(args.add, args.list, repo)
         if args.insert:
-            db_manager.insert_task(args.insert, args.list, True)
+            db_manager.insert_task(args.insert, args.list, repo, True)
         if args.get:
             print(db_manager.get_task(args.list, args.build))
         if args.remove:
