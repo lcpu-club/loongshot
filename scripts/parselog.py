@@ -142,7 +142,7 @@ def parse_build_log(log_path):
     ]
 
     try:
-        with open(log_path, 'r') as log_file:
+        with open(log_path, 'r', errors="ignore") as log_file:
             for line in log_file:
                 for stage, prefix in log_entry:
                     if re.search(prefix, line):
