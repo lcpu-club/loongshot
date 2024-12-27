@@ -185,7 +185,7 @@ build_package() {
     sed -i '/cargo fetch/s/\$CARCH\|\${CARCH}\|x86_64/`uname -m`/' PKGBUILD
 
     # When use cpython, $CARCH also need to chage to `uname -m`
-    sed -i 's/\$CARCH-cpython-\|\${CARCH}-cpython-/`uname -m`-cpython-/g; s/lib\.linux-x86_64-cpython/lib.linux-`uname -m`-cpython/' PKGBUILD
+    sed -i 's/lib\.linux-\$CARCH-\|lib\.linux-\${CARCH}-/lib.linux-`uname -m`-/g; s/lib\.linux-x86_64-cpython/lib.linux-`uname -m`-cpython/' PKGBUILD
 
     # More lua packages are building with luarocks, so..
     sed -i 's/linux-\$CARCH.rock/linux-`uname -m`.rock/g' PKGBUILD
