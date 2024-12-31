@@ -178,6 +178,24 @@ def show_package(pkg, repo):
         return pkg.version
     return None
 
+# show group
+def show_group(group, repo):
+    if group == 'all':
+        for g in repo.grpcache:
+            print(g[0])
+        return
+    group = repo.read_grp(group)
+    if not group:
+        return
+    allbase = set()
+    for pkg in group:
+        if isinstance(pkg, list):
+            for p in pkg:
+                # remove duplicate of pkgbase
+                allbase.add(p.base)
+    for p in allbase:
+        print(p)
+
 def main():
     global source_repos
 
@@ -190,6 +208,7 @@ def main():
     parser.add_argument("-B", "--build", action="store_true", help="Find package to build.")
     parser.add_argument("-t", "--time", action="store_true", help="Show package freshness.")
     parser.add_argument("-p", "--package", type=str, help="Find package in dbs.")
+    parser.add_argument("-g", "--group", type=str, help="list packages in group.")
     parser.add_argument("-s", "--stag", action="store_true", help="Consider staging db.")
     parser.add_argument("-T", "--test", action="store_true", help="Consider testing db.")
     parser.add_argument("-n", "--newer", action="store_true", help="Also show the packages that are newer than x86's.")
@@ -238,6 +257,12 @@ def main():
         x86_db = load_repo(os.path.join(cache_dir, x86_repo_path), repo)
         loong64_db = load_repo(os.path.join(cache_dir, loong64_repo_path), repo)
         compare_repos(x86_db, loong64_db, args.time, args.newer)
+
+    if args.group:
+        #for r in source_repos:
+        r = source_repos[1]
+        repo = load_repo(os.path.join(cache_dir, x86_repo_path), r)
+        show_group(args.group, repo)
 
     if args.package:
         if args.stag and args.test:
