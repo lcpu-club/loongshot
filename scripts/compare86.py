@@ -87,6 +87,21 @@ def safe_tobuild():
             print(f"{pkg_name:34} {x86_repo[pkg_name]}")
 
 
+# Check repo for errors
+def loong_lint():
+    loong = {}
+    base2name = {}
+    for repo in source_repos:
+        loong_db = load_repo(os.path.join(cache_dir, loong64_repo_path), repo)
+        for pkg in loong_db.pkgcache:
+            if pkg.base in loong:
+                if pkg.version != loong[pkg.base]:
+                    print(f"{pkg.base} has packages with different version: {base2name[pkg.base]}:{loong[pkg.base]} vs {pkg.name}:{pkg.version}.")
+            else:
+                loong[pkg.base] = pkg.version
+                base2name[pkg.base] = pkg.name
+
+
 # Compare all packages in both repos
 def compare_all():
     x86 = {}
@@ -214,6 +229,7 @@ def main():
     parser.add_argument("-n", "--newer", action="store_true", help="Also show the packages that are newer than x86's.")
     parser.add_argument("-m", "--move", action="store_true", help="Show packages in wrong repos.")
     parser.add_argument("-M", "--movehard", action="store_true", help="Show packages in wrong repos(ignore version difference.")
+    parser.add_argument("-l", "--lint", action="store_true", help="Check for db errors.")
 
     args = parser.parse_args()
 
@@ -263,6 +279,9 @@ def main():
         r = source_repos[1]
         repo = load_repo(os.path.join(cache_dir, x86_repo_path), r)
         show_group(args.group, repo)
+
+    if args.lint:
+        loong_lint()
 
     if args.package:
         if args.stag and args.test:
