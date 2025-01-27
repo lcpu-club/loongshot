@@ -246,6 +246,8 @@ def main():
         source_repos = ["core-testing", "extra-testing"]
 
     if args.sync:
+        if args.stag and args.test:
+            source_repos = ["core", "extra", "core-staging", "extra-staging", "core-testing", "extra-testing"]
         update_repo()
 
     if args.build:
