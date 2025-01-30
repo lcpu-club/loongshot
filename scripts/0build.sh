@@ -166,6 +166,8 @@ build_package() {
             FILENAME=$pkg-$PKGVERREL-any.pkg.tar.zst
             wget $MIRRORSITE/$BUILDREPO$TESTING/os/x86_64/$FILENAME
             wget $MIRRORSITE/$BUILDREPO$TESTING/os/x86_64/$FILENAME.sig
+            chmod 644 $FILENAME
+            chmod 644 $FILENAME.sig
             repo-add -R temp-$BUILDREPO$TESTING.db.tar.gz $FILENAME
         done)
         return 2
