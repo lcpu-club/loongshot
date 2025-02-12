@@ -1,7 +1,11 @@
 <template>
   <div>
     <div align="left" style="margin: 20px">
-      <input v-model="searchQuery" placeholder="Search..." />
+      <input
+        v-model="searchQuery"
+        placeholder="Search..."
+        @keyup.enter="onSearch"
+      />
       <button @click="onSearch">Search</button>
     </div>
     <div class="table-container">
