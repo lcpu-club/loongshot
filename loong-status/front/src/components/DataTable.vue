@@ -167,6 +167,7 @@ export default {
 .header-container {
   width: calc(100% - 40px);
   display: flex;
+  flex-wrap: wrap;
   justify-content: space-between; /* Aligns left and right */
   align-items: center; /* Vertically center items */
   margin: 20px;
