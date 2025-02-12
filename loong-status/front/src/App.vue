@@ -77,7 +77,7 @@ export default {
         if (flags & 2) status += '<span style="color: blue;">🅲</span>'; // nocheck
         if (flags & 4) status += '<span style="color: orange;">🅾</span>'; // old config
         if (flags & 16) status += `<span><a href="log.html?url=/buildlogs/${item.base}/all.log" class="no-change" style="color: gold;">🅻</a></span>`; // has logs
-        if (flags & (1 << 15)) status += `<span title="${fail_reason[flags >> 16 - 1]}" style="cursor: pointer; color: red;">🅵</span>`
+        if (flags & (1 << 15)) status += `<span title="${fail_reason[(flags >> 16) - 1]}" style="cursor: pointer; color: red;">🅵</span>`
       }
       return status;
     }

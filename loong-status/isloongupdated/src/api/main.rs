@@ -58,22 +58,52 @@ async fn get_data(
     let offset = (page - 1) * per_page;
 
     let search_query = query.search.as_deref().unwrap_or("");
+    let select_query = "SELECT name, base, repo, flags, x86_version, x86_testing_version, x86_staging_version, loong_version, loong_testing_version, loong_staging_version FROM packages";
 
-    let packages: Vec<Package> = sqlx::query_as(
-        "SELECT name, base, repo, flags, x86_version, x86_testing_version, x86_staging_version, loong_version, loong_testing_version, loong_staging_version FROM packages WHERE name ILIKE $1 ORDER BY repo, name LIMIT $2 OFFSET $3")
-    .bind(format!("%{}%", search_query))
-    .bind(per_page as i64)
-    .bind(offset as i64)
+    let (where_clause, order_clause, bind_values) = if search_query.starts_with(":code") {
+        (
+            "WHERE flags >> 16 = $1",
+            "ORDER BY repo, name LIMIT $2 OFFSET $3",
+            1,
+        )
+    } else if search_query.starts_with(":fail") {
+        (
+            "WHERE flags & (1 << 15) != 0",
+            "ORDER BY repo, name LIMIT $1 OFFSET $2",
+            2,
+        )
+    }else {
+        (
+            "WHERE name ILIKE $1",
+            "ORDER BY repo, name LIMIT $2 OFFSET $3",
+            3,
+        )
+    };
+
+    let query = format!("{} {} {}", select_query, where_clause, order_clause);
+    let mut sql_query = sqlx::query_as(&query);
+    match bind_values {
+        1 => sql_query = sql_query.bind(search_query[5..].parse().unwrap_or(0) as i64),
+        3 => sql_query = sql_query.bind(format!("%{}%", search_query)),
+        _ => (),
+    }
+    sql_query = sql_query.bind(per_page as i64).bind(offset as i64);
+
+    let packages: Vec<Package> = sql_query
     .fetch_all(pool.get_ref())
     .await
     .unwrap();
 
-    let total: i64 = sqlx::query("SELECT COUNT(*) FROM packages WHERE name ILIKE $1")
-        .bind(format!("%{}%", search_query))
+    let query_total = format!("{} {}", "SELECT COUNT(*) FROM packages", where_clause);
+    let mut total_query = sqlx::query_scalar::<_, i64>(&query_total);
+    match bind_values {
+        1 => total_query = total_query.bind(search_query[5..].parse().unwrap_or(0) as i64),
+        3 => total_query = total_query.bind(format!("%{}%", search_query)),
+        _ => (),
+    }
+    let total: i64 = total_query
         .fetch_one(pool.get_ref())
         .await
-        .unwrap()
-        .try_get::<i64, _>(0)
         .unwrap();
 
     HttpResponse::Ok().json(PagerResponse { data: packages, total})

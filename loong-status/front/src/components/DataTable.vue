@@ -8,6 +8,23 @@
           @keyup.enter="onSearch"
         />
         <button @click="onSearch">Search</button>
+        <div class="flags-filter">
+          Filter Fail:
+          <select v-model="selectedStatus" @change="onStatusChange">
+            <option value="All">All</option>
+            <option value="1">Fail to apply patch</option>
+            <option value="2">Fail before build</option>
+            <option value="3">Fail to download source</option>
+            <option value="4">Fail to pass the validity check</option>
+            <option value="5">Fail to pass PGP check</option>
+            <option value="6">Could not resolve all dependencies</option>
+            <option value="7">Fail in prepare</option>
+            <option value="8">Fail in build</option>
+            <option value="9">Fail in check</option>
+            <option value="10">Fail in package</option>
+            <option value="11">Old config.guess</option>
+          </select>
+        </div>
       </div>
       <div class="paginator">
         <button @click="prevPage" :disabled="currentPage === 1">Previous</button>
@@ -79,6 +96,7 @@ export default {
     const currentPage = ref(1);
     const searchQuery = ref('');
     const goToPage = ref(1);
+    const selectedStatus = ref('');
 
     const totalPages = computed(() => {
       return Math.ceil(props.total / props.perPage);
@@ -87,6 +105,9 @@ export default {
     const onSearch = () => {
       currentPage.value = 1; // 重置到第一页
       emit('search', searchQuery.value);
+      if (!searchQuery.value.startsWith(':')) {
+        selectedStatus.value = '';
+      }
     };
 
     const nextPage = () => {
@@ -110,6 +131,15 @@ export default {
       }
     };
 
+    const onStatusChange = () => {
+      if (selectedStatus.value === 'All') {
+        searchQuery.value = ':fail';
+      } else {
+        searchQuery.value = `:code${selectedStatus.value}`;
+      }
+      onSearch();
+    };
+
     return {
       currentPage,
       searchQuery,
@@ -119,6 +149,8 @@ export default {
       nextPage,
       prevPage,
       goToSpecificPage,
+      selectedStatus,
+      onStatusChange,
     };
   },
 };
@@ -141,8 +173,9 @@ export default {
 }
 
 .search-box {
+  align-items: center;
   display: flex;
-  gap: 10px; /* Adds spacing between input and button */
+  gap: 10px;
 }
 
 .legend {
@@ -179,6 +212,10 @@ th {
 }
 
 input {
+  height: 30px;
+}
+
+select {
   height: 30px;
 }
 </style>
