@@ -67,10 +67,6 @@ export default {
       else if (compareVersions(loong, x86)) {
           status = '✅';
       }
-      // if loongTestingVersion or loongStagingVersion matches x86Version, display ☯
-      else if (compareVersions(testing , x86) || compareVersions(staging, x86)) {
-          status = '☯';
-      }
       // if none of the versions are a match, but not 'N/A' either, display ⭕
       else {
           status = '⭕';

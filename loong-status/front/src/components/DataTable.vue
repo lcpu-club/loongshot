@@ -9,9 +9,23 @@
         />
         <button @click="onSearch">Search</button>
       </div>
+      <div class="paginator">
+        <button @click="prevPage" :disabled="currentPage === 1">Previous</button>
+        <span>Page {{ currentPage }} of {{ totalPages }}</span>
+        <button @click="nextPage" :disabled="currentPage === totalPages">Next</button>
+        <input
+          v-model.number="goToPage"
+          type="number"
+          min="1"
+          :max="totalPages"
+          @keyup.enter="goToSpecificPage"
+        />
+        <button @click="goToSpecificPage">Go</button>
+      </div>
       <div class="legend">
         <span>Status Legend:</span>
         <span title="loong's version matches x86's">✅</span>
+        <span title="loong's version mis-matches">⭕</span>
         <span title="missing this package in loong">❌</span>
         <span title="missing this package in x86">🗑</span>
         <span title="has patch in our repo" style="color: lime;">🅿</span>
@@ -34,13 +48,6 @@
           </tr>
         </tbody>
       </table>
-    </div>
-    <div>
-      <button @click="prevPage" :disabled="currentPage === 1">Previous</button>
-      <span>Page {{ currentPage }} of {{ totalPages }}</span>
-      <button @click="nextPage" :disabled="currentPage === totalPages">Next</button>
-      <input v-model.number="goToPage" type="number" min="1" :max="totalPages" />
-      <button @click="goToSpecificPage">Go</button>
     </div>
   </div>
 </template>
@@ -139,6 +146,12 @@ export default {
 }
 
 .legend {
+  display: flex;
+  gap: 10px;
+}
+
+.paginator {
+  align-items: center;
   display: flex;
   gap: 10px;
 }
