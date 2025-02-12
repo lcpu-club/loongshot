@@ -1,12 +1,25 @@
 <template>
   <div>
-    <div align="left" style="margin: 20px">
-      <input
-        v-model="searchQuery"
-        placeholder="Search..."
-        @keyup.enter="onSearch"
-      />
-      <button @click="onSearch">Search</button>
+    <div class="header-container">
+      <div class="search-box">
+        <input
+          v-model="searchQuery"
+          placeholder="Search..."
+          @keyup.enter="onSearch"
+        />
+        <button @click="onSearch">Search</button>
+      </div>
+      <div class="legend">
+        <span>Status Legend:</span>
+        <span title="loong's version matches x86's">✅</span>
+        <span title="missing this package in loong">❌</span>
+        <span title="missing this package in x86">🗑</span>
+        <span title="has patch in our repo" style="color: lime;">🅿</span>
+        <span title="has build log on server" style="color: gold;">🅻</span>
+        <span title="build with nocheck" style="color: blue;">🅲</span>
+        <span title="config.sub is too old" style="color: orange;">🅾</span>
+        <span title="build fails" style="color: red;">🅵</span>
+      </div>
     </div>
     <div class="table-container">
       <table>
@@ -17,7 +30,7 @@
         </thead>
         <tbody>
           <tr v-for="row in data" :key="row.id">
-            <td v-for="column in columns" :key="column">{{ row[column] }}</td>
+            <td v-for="column in columns" :key="column" v-html="row[column]"></td>
           </tr>
         </tbody>
       </table>
@@ -112,6 +125,24 @@ export default {
   margin: 20px;
 }
 
+.header-container {
+  width: calc(100% - 40px);
+  display: flex;
+  justify-content: space-between; /* Aligns left and right */
+  align-items: center; /* Vertically center items */
+  margin: 20px;
+}
+
+.search-box {
+  display: flex;
+  gap: 10px; /* Adds spacing between input and button */
+}
+
+.legend {
+  display: flex;
+  gap: 10px;
+}
+
 table {
   width: 100%;
   border-collapse: collapse;
@@ -119,12 +150,13 @@ table {
 
 th, td {
   border: 1px solid #ddd;
+  white-space: pre-line;
+  word-wrap: break-word;
   padding: 8px;
   text-align: left;
 }
 
 td {
-  white-space: nowrap;
   overflow: hidden;
   text-overflow:ellipsis;
 }
