@@ -82,8 +82,21 @@ def safe_tobuild():
         loong_db = load_repo(os.path.join(cache_dir, loong64_repo_path), repo)
         loong_pkg = {pkg.base: pkg.version for pkg in loong_db.pkgcache}
         loong = {**loong, **loong_pkg}
+
+    # For -testing or -staging repo, also check dependency from stable repo
+    dep_repos = [*source_repos, 'core', 'extra'] if source_repos[0].find('-') > 0 else source_repos
+    loong_stable = {}
+    for repo in dep_repos:
+        loong_db = load_repo(os.path.join(cache_dir, loong64_repo_path), repo)
+        loong_pkg = {pkg.name: pkg.version for pkg in loong_db.pkgcache}
+        for pkg in loong_db.pkgcache:
+            for provide in pkg.provides:
+                provide = provide.split("=")[0].split(">")[0].split("<")[0]
+                loong_pkg[provide] = pkg.version
+        loong_stable = {**loong_stable, **loong_pkg}
+
     for pkg_name in x86:
-        if (not pkg_name in loong) and (all(pkg in loong for pkg in x86[pkg_name])):
+        if (not pkg_name in loong) and (all(pkg in loong_stable for pkg in x86[pkg_name])):
             print(f"{pkg_name:34} {x86_repo[pkg_name]}")
 
 
