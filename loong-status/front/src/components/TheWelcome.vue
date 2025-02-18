@@ -10,6 +10,7 @@
     <h2>Resources</h2>
     <ul>
       <li><router-link to="/status">Package Status</router-link></li>
+      <li><router-link to="/stat">Package Statistics</router-link></li>
       <li><a href="https://github.com/lcpu-club/loongarch-packages">Patches collection</a></li>
       <li><a href="https://github.com/lcpu-club/loongshot">Git repository for infrastructure</a></li>
       <li>Package repos: <a href="https://mirrors.pku.edu.cn/loongarch-lcpu/archlinux/">https://mirrors.pku.edu.cn/loongarch-lcpu/archlinux/</a></li>

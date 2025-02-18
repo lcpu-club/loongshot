@@ -36,6 +36,16 @@ struct QueryParams {
     search: Option<String>,
 }
 
+#[derive(Serialize, Debug, FromRow)]
+struct CountResponse {
+    core_match: i64,
+    extra_match: i64,
+    core_mismatch: i64,
+    extra_mismatch: i64,
+    core_total: i64,
+    extra_total: i64,
+}
+
 #[get("/api/packages/status")]
 async fn get_packages(pool: web::Data<sqlx::Pool<sqlx::Postgres>>) -> impl Responder {
     let packages: Vec<Package> = sqlx::query_as(
@@ -46,6 +56,26 @@ async fn get_packages(pool: web::Data<sqlx::Pool<sqlx::Postgres>>) -> impl Respo
     .unwrap();
 
     HttpResponse::Ok().json(packages)
+}
+
+#[get("/api/packages/stat")]
+async fn get_stat(pool: web::Data<sqlx::Pool<sqlx::Postgres>>) -> impl Responder {
+    let counts = sqlx::query_as::<_, CountResponse>(
+        r#"
+        SELECT
+            COUNT(*) FILTER (WHERE repo = 'core' AND x86_version = regexp_replace(loong_version, '(-\w+)\.\w+$', '\1')) AS core_match,
+            COUNT(*) FILTER (WHERE repo = 'extra' AND x86_version = regexp_replace(loong_version, '(-\w+)\.\w+$', '\1')) AS extra_match,
+            COUNT(*) FILTER (WHERE repo = 'core' AND x86_version != regexp_replace(loong_version, '(-\w+)\.\w+$', '\1')) AS core_mismatch,
+            COUNT(*) FILTER (WHERE repo = 'extra' AND x86_version != regexp_replace(loong_version, '(-\w+)\.\w+$', '\1')) AS extra_mismatch,
+            COUNT(*) FILTER (WHERE repo='core' AND NOT x86_version is NULL) as core_total,
+            COUNT(*) FILTER (WHERE repo='extra' AND NOT x86_version is NULL) as extra_total
+        FROM packages
+        "#
+    )
+    .fetch_one(pool.get_ref())
+    .await.unwrap();
+
+    HttpResponse::Ok().json( counts )
 }
 
 #[get("/api/packages/data")]
@@ -133,6 +163,7 @@ async fn main() -> std::io::Result<()> {
             .service(get_packages)
             .service(get_data)
             .service(get_last_update)
+            .service(get_stat)
     })
     .bind(("127.0.0.1", 8080))?
     .run()
