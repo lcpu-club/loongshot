@@ -256,7 +256,7 @@ class DatabaseManager:
             if result:
                 taskno = result[0]
                 pkgbase = result[1]
-                if building:
+                if building and not pkgbase.startswith('%'):
                     cursor.execute("UPDATE tasks SET info=%s WHERE tasklist=%s and taskno=%s",
                                    ("building", tasklist, taskno))
                     self.conn.commit()
