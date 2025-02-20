@@ -1,9 +1,9 @@
 [Unit]
-Description=Run loong-updator every 5 minutes
+Description=Run loong-updator every 20 minutes
 
 [Timer]
-OnBootSec=5min
-OnUnitActiveSec=5min
+OnBootSec=20min
+OnUnitActiveSec=20min
 Unit=lupdator.service
 
 [Install]
