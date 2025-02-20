@@ -1,6 +1,7 @@
 use dotenv;
 use sqlx::postgres::PgPoolOptions;
 use sqlx::Row;
+use chrono::{DateTime, Utc, TimeZone};
 use std::env;
 use std::fs::File;
 use std::path::Path;
@@ -119,25 +120,42 @@ async fn main() -> Result<(), sqlx::Error> {
     let loong_url = env::var("LOONG_URL").unwrap_or_else(|_| "https://mirrors.pku.edu.cn/loongarch-lcpu/archlinux".to_string());
 
     let all_repos = vec!["core", "extra", "core-testing", "extra-testing", "core-staging", "extra-staging"];
+    let last_update_time = get_last_update_time(&pool).await?;
 
-    for repo in all_repos.iter() {
-        let column = match *repo {
-            "core" | "extra" => "x86_version",
-            "core-testing" | "extra-testing" => "x86_testing_version",
-            "core-staging" | "extra-staging" => "x86_staging_version",
-            _ => panic!("Unknown repo"),
-        };
-        handle_repo_update(&pool, &x86_url, "x86_64", repo, column).await?;
-    }
+    for (arch, url, column_prefix) in [
+        ("x86_64", &x86_url, "x86"),
+        ("loong64", &loong_url, "loong"),
+    ] {
+        for repo in all_repos.iter() {
+            let column = match *repo {
+                "core" | "extra" => format!("{}_version", column_prefix),
+                "core-testing" | "extra-testing" => format!("{}_testing_version", column_prefix),
+                "core-staging" | "extra-staging" => format!("{}_staging_version", column_prefix),
+                _ => panic!("Unknown repo"),
+            };
 
-    for repo in all_repos.iter() {
-        let column = match *repo {
-            "core" | "extra" => "loong_version",
-            "core-testing" | "extra-testing" => "loong_testing_version",
-            "core-staging" | "extra-staging" => "loong_staging_version",
-            _ => panic!("Unknown repo"),
-        };
-        handle_repo_update(&pool, &loong_url, "loong64", repo, column).await?;
+            let db_path = if url.starts_with("file:///") {
+                if arch == "loong64" {
+                    format!("{}/{}/os/{}/{}.db", &url[7..], repo, arch, repo)
+                } else {
+                    format!("{}/{}.db", &url[7..], repo)
+                }
+            } else {
+                String::new() // This ensures db_path is always initialized
+            };
+
+            if !db_path.is_empty() {
+                let src_path = Path::new(&db_path);
+                if !src_path.exists() {
+                    continue;
+                }
+                let file_modification_time = get_file_modification_time(&src_path)?;
+                if last_update_time > file_modification_time {
+                    continue;
+                }
+            }
+            handle_repo_update(&pool, url, arch, repo, &column).await?;
+        }
     }
 
     sqlx::query(
@@ -310,15 +328,35 @@ async fn update_last_update_time(pool: &sqlx::PgPool) -> Result<(), sqlx::Error>
 
     if last_update == 0 {
         sqlx::query("INSERT INTO last_update (last_update) VALUES ($1)")
-            .bind(chrono::Utc::now().to_string())
+            .bind(Utc::now().to_string())
             .execute(pool)
             .await?;
     } else {
         sqlx::query("UPDATE last_update SET last_update = $1")
-            .bind(chrono::Utc::now().to_string())
+            .bind(Utc::now().to_string())
             .execute(pool)
             .await?;
     }
 
     Ok(())
+}
+
+async fn get_last_update_time(pool: &sqlx::PgPool) -> Result<DateTime<Utc>, sqlx::Error> {
+    let row: (String,) = sqlx::query_as("SELECT last_update FROM last_update LIMIT 1")
+        .fetch_one(pool)
+        .await?;
+
+    let last_update_time = chrono::NaiveDateTime::parse_from_str(&row.0, "%Y-%m-%d %H:%M:%S%.f UTC")
+    .map_err(|e| sqlx::Error::Decode(Box::new(e)))?;
+    let last_update_time = Utc.from_utc_datetime(&last_update_time);
+
+    Ok(last_update_time)
+}
+
+fn get_file_modification_time(path: &Path) -> Result<DateTime<Utc>, std::io::Error> {
+    let metadata = std::fs::metadata(path)?;
+    let modified_time = metadata.modified()?;
+    let modified_time = DateTime::from(modified_time);
+
+    Ok(modified_time)
 }
