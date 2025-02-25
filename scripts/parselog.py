@@ -105,6 +105,16 @@ class DatabaseManager:
         finally:
             cursor.close()  # Close the cursor but keep the connection open
 
+    def update_logver(self, base, version):
+        cursor = self.conn.cursor()
+        try:
+            cursor.execute("UPDATE packages SET log_version=%s WHERE base=%s", (version, base))
+            self.conn.commit()
+        except Exception as e:
+            self.conn.rollback()
+        finally:
+            cursor.close()
+
     def __del__(self):
         """Destructor to close the database connection."""
         if self.conn:
@@ -170,6 +180,17 @@ def parse_build_log(log_path):
         return None, -1
 
 
+def get_logversion(filepath):
+    pattern = re.compile(r'\x1b.*==>.*\[1m Making package: (\S+) (\S+)')
+    with open(filepath, 'r', errors='ignore') as file:
+        for line in file:
+            match = pattern.search(line)
+            if match:
+                pkg_name = match.group(1)
+                version = match.group(2)
+                return pkg_name, version
+    return 'no_pkg_version_found', 'null'
+
 if __name__ == "__main__":
     if len(sys.argv) != 2:
         print(f"Usage: {sys.argv[0]} <pkgbase>")
@@ -198,3 +219,6 @@ if __name__ == "__main__":
     db_manager = DatabaseManager()
     db_manager.update_bits(pkgbase, add_bit, rm_bit)
     db_manager.insert_log(pkgbase, builder, add_bit)
+    log_base, version = get_logversion(f"{logpath}/{pkgbase}/all.log")
+    if (log_base == pkgbase):
+        db_manager.update_logver(pkgbase, version)
