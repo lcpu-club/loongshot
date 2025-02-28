@@ -2,6 +2,7 @@ use actix_web::{get, web, App, HttpResponse, HttpServer, Responder};
 use dotenv::dotenv;
 use serde::{Serialize, Deserialize};
 use sqlx::{postgres::PgPoolOptions, FromRow, Row};
+use chrono::NaiveDateTime;
 
 #[derive(Serialize, Debug, FromRow)]
 struct Package {
@@ -46,6 +47,52 @@ struct CountResponse {
     extra_total: i64,
 }
 
+#[derive(Deserialize)]
+struct TaskParams {
+    taskid: Option<i64>,  // The query date parameter
+}
+
+#[derive(Serialize, Debug, FromRow)]
+struct Task {
+    pkgbase: String,
+    repo: i32,
+    build_result: Option<i32>,
+    build_time: Option<String>,
+}
+
+#[get("/api/tasks/result")]
+async fn get_tasks(pool: web::Data<sqlx::Pool<sqlx::Postgres>>,
+    query: web::Query<TaskParams>) -> impl Responder {
+
+    let taskid = query.taskid.unwrap_or(0);
+
+    let query = "SELECT t.pkgbase,t.repo,l.build_time,l.build_result FROM tasks t LEFT JOIN logs l ON t.logid = l.id WHERE t.taskid = (SELECT MAX(taskid) from tasks) - $1 ORDER by t.taskno";
+    let rows = sqlx::query(query)
+        .bind(taskid)
+        .fetch_all(pool.get_ref())
+        .await;
+
+    match rows {
+        Ok(tasks) => {
+            let tasks_with_converted_time: Vec<Task> = tasks.into_iter().map(|row| {
+                let build_time: Option<NaiveDateTime> = row.try_get("build_time").ok();
+                // Convert NaiveDateTime to formatted String, or None if NULL
+                let build_time_str = build_time.map(|dt| dt.format("%Y-%m-%d %H:%M:%S").to_string());
+
+                Task {
+                    pkgbase: row.get("pkgbase"),
+                    repo: row.get("repo"),
+                    build_time: build_time_str, // Store as String
+                    build_result: row.get("build_result"),
+                }
+            }).collect();
+
+            HttpResponse::Ok().json(tasks_with_converted_time)
+        },
+        Err(_) => HttpResponse::InternalServerError().body("Database query failed"),
+    }
+}
+
 #[get("/api/packages/status")]
 async fn get_packages(pool: web::Data<sqlx::Pool<sqlx::Postgres>>) -> impl Responder {
     let packages: Vec<Package> = sqlx::query_as(
@@ -57,6 +104,8 @@ async fn get_packages(pool: web::Data<sqlx::Pool<sqlx::Postgres>>) -> impl Respo
 
     HttpResponse::Ok().json(packages)
 }
+
+
 
 #[get("/api/packages/stat")]
 async fn get_stat(pool: web::Data<sqlx::Pool<sqlx::Postgres>>) -> impl Responder {
@@ -164,6 +213,7 @@ async fn main() -> std::io::Result<()> {
             .service(get_data)
             .service(get_last_update)
             .service(get_stat)
+            .service(get_tasks)
     })
     .bind(("127.0.0.1", 8080))?
     .run()
