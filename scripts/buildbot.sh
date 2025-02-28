@@ -73,10 +73,18 @@ while [ 1 ]; do
                 done
                 continue
             fi
+
             if grep -q "Could not download sources." $ALLLOGS; then
                 for failed in `awk '/is not a clone/ && $3 ~ /^\/mnt\/repos\//  {print $3}' "$ALLLOGS"`; do
+                    # remove bad repo
                     ssh $BUILDER -t "rm $failed -rf"
                 done
+                continue
+            fi
+
+            if grep -q "remote: GitLab is not responding" $ALLLOGS; then
+                # Wait for gitlab to recover
+                sleep 100
                 continue
             fi
         fi
