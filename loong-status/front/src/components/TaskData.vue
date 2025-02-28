@@ -135,4 +135,9 @@ th {
   color: #101010;
   background-color: #f4f4f4;
 }
+
+tr:hover {
+  background-color: #f0f0f0;
+  cursor: pointer;
+}
 </style>

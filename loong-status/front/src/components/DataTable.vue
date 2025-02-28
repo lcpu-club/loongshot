@@ -289,6 +289,11 @@ th {
   background-color: #f4f4f4;
 }
 
+tr:hover {
+  background-color: #f0f0f0; /* Light gray background on hover */
+  cursor: pointer; /* Optional: changes cursor to pointer */
+}
+
 input {
   height: 30px;
 }
