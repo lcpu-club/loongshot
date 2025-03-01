@@ -1,9 +1,9 @@
 <template>
   <div>
     <div>
-      <input type="number" v-model="taskid" min="0" />
-      <button @click="prevTask">Previous</button>
-      <button @click="nextTask" :disabled="taskid === 0">Next</button>
+      <input type="number" v-model="taskid" />
+      <button style="width: 100px;" @click="prevTask">Previous</button>
+      <button style="width: 100px;" @click="nextTask">Next</button>
     </div>
 
     <table>
@@ -85,11 +85,11 @@ export default {
 
     // Update the taskid and fetch data when it's changed
     const nextTask = () => {
-      if (taskid.value > 0) taskid.value -= 1;
+      taskid.value += 1;
     };
 
     const prevTask = () => {
-      taskid.value += 1;
+      taskid.value -= 1;
     };
 
     // Watch for changes to taskid and refetch data

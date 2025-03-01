@@ -49,7 +49,7 @@ struct CountResponse {
 
 #[derive(Deserialize)]
 struct TaskParams {
-    taskid: Option<i64>,  // The query date parameter
+    taskid: Option<i32>,
 }
 
 #[derive(Serialize, Debug, FromRow)]
@@ -65,10 +65,12 @@ async fn get_tasks(pool: web::Data<sqlx::Pool<sqlx::Postgres>>,
     query: web::Query<TaskParams>) -> impl Responder {
 
     let taskid = query.taskid.unwrap_or(0);
+    let last_taskid: i32 = sqlx::query("SELECT max(taskid) from tasks").fetch_one(pool.get_ref()).await.unwrap().get(0);
+    let realid = if taskid <= 0 { last_taskid + taskid } else { taskid };
 
-    let query = "SELECT t.pkgbase,t.repo,l.build_time,l.build_result FROM tasks t LEFT JOIN logs l ON t.logid = l.id WHERE t.taskid = (SELECT MAX(taskid) from tasks) - $1 ORDER by t.taskno";
+    let query = "SELECT t.pkgbase,t.repo,l.build_time,l.build_result FROM tasks t LEFT JOIN logs l ON t.logid = l.id WHERE t.taskid = $1 ORDER by t.taskno";
     let rows = sqlx::query(query)
-        .bind(taskid)
+        .bind(realid)
         .fetch_all(pool.get_ref())
         .await;
 
