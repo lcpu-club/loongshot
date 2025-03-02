@@ -9,9 +9,9 @@
     <table>
       <thead>
         <tr>
-          <th>Pkgbase</th>
+          <th>Package Base</th>
           <th>Repo</th>
-          <th>Build Time</th>
+          <th>Finish Time</th>
           <th>Build Result</th>
         </tr>
       </thead>
