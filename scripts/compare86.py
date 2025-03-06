@@ -5,6 +5,7 @@ import argparse
 import requests
 from datetime import datetime
 from signal import signal, SIGPIPE, SIG_DFL
+from collections import deque
 
 home_dir = os.path.expanduser("~")
 cache_dir = os.path.join(home_dir, ".cache", "compare86")
@@ -142,6 +143,26 @@ def compare_all():
         print(f"{pkg_name:34} {x86_version:24} {loong64_version:24}")
 
 
+def show_reverse_depends(depend):
+    queue = deque()
+    queue.append(depend)
+    depends = set()
+    allchecked = set()
+    while queue:
+        curpkg = queue.popleft()
+        for repo in source_repos:
+            x86_db = load_repo(os.path.join(cache_dir, x86_repo_path), repo)
+            for pkg in x86_db.pkgcache:
+                if curpkg in pkg.depends and pkg.name not in allchecked:
+                    allchecked.add(pkg.name)
+                    queue.append(pkg.name)
+                    for provide in pkg.provides:
+                        queue.append(provide)
+                    depends.add(pkg.base)
+    print(depend)
+    for pkg in depends:
+        print(pkg)
+
 def move_repos(ignore_version=False):
     x86 = {}
     for repo in source_repos:
@@ -243,6 +264,7 @@ def main():
     parser.add_argument("-m", "--move", action="store_true", help="Show packages in wrong repos.")
     parser.add_argument("-M", "--movehard", action="store_true", help="Show packages in wrong repos(ignore version difference.")
     parser.add_argument("-l", "--lint", action="store_true", help="Check for db errors.")
+    parser.add_argument("-d", "--depend", type=str, help="List reverse depends.")
 
     args = parser.parse_args()
 
@@ -294,6 +316,9 @@ def main():
         r = source_repos[1]
         repo = load_repo(os.path.join(cache_dir, x86_repo_path), r)
         show_group(args.group, repo)
+
+    if args.depend:
+        show_reverse_depends(args.depend)
 
     if args.lint:
         loong_lint()
