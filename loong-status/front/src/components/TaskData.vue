@@ -20,7 +20,8 @@
           <td>{{ task.pkgbase }}</td>
           <td>{{ task.repo }}</td>
           <td>{{ task.build_time }}</td>
-          <td>{{ task.build_result }}</td>
+          <td><a v-if="task.build_result !== 'Waiting'" :href="`log.html?url=/buildlogs/${task.pkgbase}/all.log`"> {{ task.build_result }} </a>
+            <span v-else>{{ task.build_result }}</span></td>
         </tr>
       </tbody>
     </table>
