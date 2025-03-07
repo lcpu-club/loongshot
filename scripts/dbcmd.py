@@ -175,6 +175,8 @@ class DatabaseManager:
             if remove or pkgbase.startswith('%'): # commands just delete
                 cursor.execute("DELETE FROM tasks WHERE pkgbase=%s and tasklist=%s",
                                (pkgbase, tasklist))
+                if cursor.rowcount == 0:
+                    print("No package deleted")
             else:
                 # get build result from packages database
                 realbase = pkgbase.split(':')[0]
