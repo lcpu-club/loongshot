@@ -188,11 +188,12 @@ class DatabaseManager:
                     flags = 0
                 done = f"failed:{flags >> 16}" if flags > 32767 else "done"
                 # get build log it from logs database
-                cursor.execute("SELECT id FROM logs WHERE pkgbase=%s ORDER BY build_time DESC limit 1", (realbase,))
+                cursor.execute("SELECT id FROM logs WHERE pkgbase=%s AND build_time > NOW() - INTERVAL '1 hour' ORDER BY build_time DESC limit 1", (realbase,))
                 results = cursor.fetchone()
                 if results:
                     logid = results[0]
                 else:
+                    done = "nolog"
                     logid = 0
                 cursor.execute("UPDATE tasks SET info=%s,logid=%s WHERE pkgbase=%s and tasklist=%s",
                     (done, logid, pkgbase, tasklist))
