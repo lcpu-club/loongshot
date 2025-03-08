@@ -56,7 +56,7 @@ struct TaskParams {
 struct Task {
     pkgbase: String,
     repo: i32,
-    build_result: Option<i32>,
+    build_result: Option<String>,
     build_time: Option<String>,
 }
 
@@ -68,7 +68,7 @@ async fn get_tasks(pool: web::Data<sqlx::Pool<sqlx::Postgres>>,
     let last_taskid: i32 = sqlx::query("SELECT max(taskid) from tasks").fetch_one(pool.get_ref()).await.unwrap().get(0);
     let realid = if taskid <= 0 { last_taskid + taskid } else { taskid };
 
-    let query = "SELECT t.pkgbase,t.repo,l.build_time,l.build_result FROM tasks t LEFT JOIN logs l ON t.logid = l.id WHERE t.taskid = $1 ORDER by t.taskno";
+    let query = "SELECT t.pkgbase,t.repo,l.build_time,t.info FROM tasks t LEFT JOIN logs l ON t.logid = l.id WHERE t.taskid = $1 ORDER by t.taskno";
     let rows = sqlx::query(query)
         .bind(realid)
         .fetch_all(pool.get_ref())
@@ -85,7 +85,7 @@ async fn get_tasks(pool: web::Data<sqlx::Pool<sqlx::Postgres>>,
                     pkgbase: row.get("pkgbase"),
                     repo: row.get("repo"),
                     build_time: build_time_str, // Store as String
-                    build_result: row.get("build_result"),
+                    build_result: row.get("info"),
                 }
             }).collect();
 
@@ -106,8 +106,6 @@ async fn get_packages(pool: web::Data<sqlx::Pool<sqlx::Postgres>>) -> impl Respo
 
     HttpResponse::Ok().json(packages)
 }
-
-
 
 #[get("/api/packages/stat")]
 async fn get_stat(pool: web::Data<sqlx::Pool<sqlx::Postgres>>) -> impl Responder {

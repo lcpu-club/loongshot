@@ -20,8 +20,7 @@
           <td>{{ task.pkgbase }}</td>
           <td>{{ task.repo }}</td>
           <td>{{ task.build_time }}</td>
-          <td><a v-if="task.build_result !== 'Waiting'" :href="`log.html?url=/buildlogs/${task.pkgbase}/all.log`"> {{ task.build_result }} </a>
-            <span v-else>{{ task.build_result }}</span></td>
+          <td v-html="task.build_result"></td>
         </tr>
       </tbody>
     </table>
@@ -48,7 +47,7 @@ export default {
           ...task,
           build_time: convertToLocalTime(task.build_time),
           repo: lookupRepo(task.repo),
-          build_result: lookupBuildResult(task.build_result), // Lookup for build result
+          build_result: lookupBuildResult(task.build_result, task.pkgbase), // Lookup for build result
         }));
       } catch (error) {
         console.error("Error fetching task data:", error);
@@ -67,8 +66,10 @@ export default {
     };
 
     // Lookup for the build result values
-    const lookupBuildResult = (result) => {
-      const fail_reason = ['Fail to apply patch',
+    const lookupBuildResult = (info, base) => {
+      let value;
+      const fail_reason = ['Unknown error',
+          'Fail to apply patch',
           'Fail before build',
           'Fail to download source',
           'Fail to pass the validity check',
@@ -79,9 +80,15 @@ export default {
           'Fail in check',
           'Fail in package',
           'Old config.guess'];
-      if (! result) return "Waiting";
-      if (!(result & (1 << 15))) return "Done"
-      return fail_reason[(result >> 16) - 1];
+      if (!info) return 'Waiting';
+      if (info === 'nolog') return 'No Log';
+      if (info === 'building') return 'Building';
+      if (info === 'done') value = 'Done';
+      if (info.startsWith('failed:')) {
+        const failIndex = parseInt(info.split(':')[1], 10);
+        value = fail_reason[failIndex] || 'Unknown Failure';
+      }
+      return `<a href="log.html?url=/buildlogs/${base}/all.log"> ${value} </a>`
     };
 
     // Update the taskid and fetch data when it's changed
