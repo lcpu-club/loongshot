@@ -290,8 +290,7 @@ th {
 }
 
 tr:hover {
-  background-color: #f0f0f0; /* Light gray background on hover */
-  cursor: pointer; /* Optional: changes cursor to pointer */
+  background: var(--color-background-mute);
 }
 
 input {

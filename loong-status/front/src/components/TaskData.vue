@@ -145,7 +145,6 @@ th {
 }
 
 tr:hover {
-  background-color: #f0f0f0;
-  cursor: pointer;
+  background: var(--color-background-mute);
 }
 </style>

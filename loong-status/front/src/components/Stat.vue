@@ -103,7 +103,7 @@ td {
 }
 
 tbody tr:hover {
-  background-color: #f1f1f1;
+  background: var(--color-background-mute);
 }
 
 /* Color Classes */
