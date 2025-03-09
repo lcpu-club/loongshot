@@ -69,17 +69,17 @@ export default {
     const lookupBuildResult = (info, base) => {
       let value;
       const fail_reason = ['Unknown error',
-          'Fail to apply patch',
-          'Fail before build',
-          'Fail to download source',
-          'Fail to pass the validity check',
-          'Fail to pass PGP check',
+          'Failed to apply patch',
+          'Failed before build',
+          'Failed to download source',
+          'Failed to pass the validity check',
+          'Failed to pass the PGP check',
           'Could not resolve all dependencies',
-          'Fail in prepare',
-          'Fail in build',
-          'Fail in check',
-          'Fail in package',
-          'Old config.guess'];
+          'Failed in preparation',
+          'Failed in build',
+          'Failed in check',
+          'Failed in packaging',
+          'Outdated config.guess'];
       if (!info) return 'Waiting';
       if (info === 'nolog') return 'No Log';
       if (info === 'building') return 'Building';
