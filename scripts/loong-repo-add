@@ -29,7 +29,7 @@ for idx in ${!ALLFILES[@]}; do
         unset 'ALLFILES[$idx]'
     fi
     # some package may have "debug" in their names, such as ruby-debug, python-flask-debug
-    if [[ "$pkg" == *"-debug-"* ]]; then
+    if [[ -f HASDEBUG && "$pkg" == *"-debug-"* ]]; then
         unset "ALLFILES[$idx]"
         ALLDEBUG+=($pkg)
         DEBUGSIG+=($pkg.sig)
@@ -66,7 +66,7 @@ if [ ! "${#ALLDEBUG[@]}" -eq 0 ]; then
     cp ${ALLDEBUG[@]} $WORKDIR
     cp ${DEBUGSIG[@]} $WORKDIR
     # delete old version if any
-    ssh -tt $TIER0 "for pkg in ${ALLDEBUG[@]}; do pkgname=\${pkg%%-debug-*}; rm -f $_debug_path/\$pkgname-debug*; done" 2>/dev/null
+    ssh -tt $TIER0 "for pkg in ${ALLDEBUG[@]}; do pkgname=\${pkg%-debug-*}; rm -f $_debug_path/\$pkgname-debug*; done" 2>/dev/null
     rsync -e ssh -p '--chmod=ug=rw,o=r' -c -h -L --progress --partial -y $WORKDIR/* $TIER0:$_debug_path/
 fi
 rm -rf $WORKDIR
