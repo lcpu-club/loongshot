@@ -234,11 +234,17 @@ build_package() {
         cd $LOCALREPO/temp-$BUILDREPO$TESTING/os/loong64
         for pkg in ${pkgname[@]}; do
             FILENAME=$pkg-$PKGVERREL-$ARCH.pkg.tar.zst
-            ssh -t $BUILDER "cd $BUILDPATH/$PKGBASE; [[ -f $FILENAME.sig ]] && rm $FILENAME.sig; gpg --detach-sign $FILENAME"
+            ssh -t $BUILDER "cd $BUILDPATH/$PKGBASE; [[ -f $FILENAME.sig ]] && rm -f $FILENAME.sig; gpg --detach-sign $FILENAME"
             scp $BUILDER:$BUILDPATH/$PKGBASE/$FILENAME{,.sig} .
             chmod 664 $FILENAME{,.sig}
             repo-add -R temp-$BUILDREPO$TESTING.db.tar.gz $FILENAME
         done)
+        DEBUGPKG=$PKGBASE-debug-$PKGVERREL-loong64.pkg.tar.zst
+        echo $DEBUGPKG
+        if ssh -t $BUILDER "cd $BUILDPATH/$PKGBASE; if [ -f $DEBUGPKG ]; then rm -f $DEBUGPKG.sig; gpg --detach-sign $DEBUGPKG; fi; [ -f $BUILDPATH/$PKGBASE/$DEBUGPKG ]" 2>/dev/null; then
+            scp $BUILDER:$BUILDPATH/$PKGBASE/$DEBUGPKG{,.sig} $LOCALREPO/debug-pool
+            chmod 664 $LOCALREPO/debug-pool/$DEBUGPKG{,.sig}
+        fi
         msg "$PKGBASE-$PKGVERREL built on $BUILDER, time cost: $TIMECOST"
     else
         msg "$PKGBASE-$PKGVERREL failed on $BUILDER, time cost: $TIMECOST"
