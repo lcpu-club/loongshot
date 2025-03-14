@@ -7,26 +7,66 @@ fi
 
 TIER0=${TIER0:-""}
 
-_remote_path=/srv/http/loongarch/archlinux/
+_remote_path=/srv/http/loongarch/archlinux
+_debug_path=/srv/http/debug-pool
+
 REPO=$1
 shift
-ALLFILES="$@"
+ALLFILES=($@)
 
 ALLSIG=()
-for pkg in ${ALLFILES[@]}; do
+ALLDEBUG=()
+DEBUGSIG=()
+
+for idx in ${!ALLFILES[@]}; do
+    pkg=${ALLFILES[$idx]}
     if [ ! -f $pkg.sig ]; then
         echo "Signing $pkg ..."
         gpg --detach-sign $pkg || exit 1
     fi
-    ALLSIG+=($pkg.sig)
+    if ssh -tt $TIER0 "[ -f $_remote_path/pool/packages/$pkg ]" 2>/dev/null; then
+        echo "$pkg already in server, skip it."
+        unset 'ALLFILES[$idx]'
+    fi
+    # some package may have "debug" in their names, such as ruby-debug, python-flask-debug
+    if [[ "$pkg" == *"-debug-"* ]]; then
+        unset "ALLFILES[$idx]"
+        ALLDEBUG+=($pkg)
+        DEBUGSIG+=($pkg.sig)
+    fi
 done
 
+for file in "${ALLFILES[@]}"; do
+    ALLSIG+=("$file.sig")
+done
+
+
 WORKDIR=$(mktemp -d)
-cp ${ALLFILES[@]} $WORKDIR
-echo ${ALLSIG[@]}
-cp ${ALLSIG[@]} $WORKDIR
 
-rsync -e ssh -p '--chmod=ug=rw,o=r' -c -h -L --progress --partial -y $WORKDIR/* $TIER0:$_remote_path/$REPO/os/loong64/ || exit 2
-ssh -tt $TIER0"cd $_remote_path/$REPO/os/loong64/; repo-add -R $REPO.db.tar.gz ${ALLFILES[@]};"
+if [ ! "${#ALLFILES[@]}" -eq 0 ]; then
+    cp ${ALLFILES[@]} $WORKDIR
+    cp ${ALLSIG[@]} $WORKDIR
 
+    rsync -e ssh -p '--chmod=ug=rw,o=r' -c -h -L --progress --partial -y $WORKDIR/* $TIER0:$_remote_path/pool/packages/ || exit 2
+    ssh -tt "$TIER0" "for file in ${ALLFILES[@]} ${ALLSIG[@]}; do ln -sf \"../../../pool/packages/\$file\" \"$_remote_path/$REPO/os/loong64/\"; done; cd \"$_remote_path/$REPO/os/loong64/\"; repo-add -R $REPO.db.tar.gz ${ALLFILES[@]}" | tee add.log
+
+    about_to_delete=()
+    for pkg in $(grep -oP "Removing old package file '\K[^']*(?=')" add.log); do
+        about_to_delete+=($pkg)
+    done
+    rm add.log -f
+
+    if [ ! "${#about_to_delete[@]}" -eq 0 ]; then
+        ssh -tt $TIER0 "for file in ${about_to_delete[@]}; do echo \"Deleting \$file ...\"; rm -f $_remote_path/pool/packages/\$file{,.sig}; done" 2>/dev/null
+    fi
+fi
+
+if [ ! "${#ALLDEBUG[@]}" -eq 0 ]; then
+    rm -f $WORKDIR/*
+    cp ${ALLDEBUG[@]} $WORKDIR
+    cp ${DEBUGSIG[@]} $WORKDIR
+    # delete old version if any
+    ssh -tt $TIER0 "for pkg in ${ALLDEBUG[@]}; do pkgname=\${pkg%%-debug-*}; rm -f $_debug_path/\$pkgname-debug*; done" 2>/dev/null
+    rsync -e ssh -p '--chmod=ug=rw,o=r' -c -h -L --progress --partial -y $WORKDIR/* $TIER0:$_debug_path/
+fi
 rm -rf $WORKDIR
