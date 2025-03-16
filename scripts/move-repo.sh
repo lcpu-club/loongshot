@@ -7,6 +7,7 @@
 #
 
 umask 002
+REPODIR=/home/pluto/loongarch
 
 source /usr/share/makepkg/util/message.sh
 colorize
@@ -24,8 +25,10 @@ if [[ "$TO" == *"/"* ]]; then
     # with full path
     NEWPATH=$TO/os/loong64
     TO=$(basename $TO)
+    NEWREPO=$NEWPATH
 else
-    NEWPATH=/srv/http/loongarch/archlinux/$TO/os/loong64
+    NEWREPO=$REPODIR/archlinux/$TO/os/loong64
+    NEWPATH=$REPODIR/archlinux/pool/packages
 fi
 
 if [ "$(realpath $NEWPATH)" = "$(realpath `pwd`)" ]; then
@@ -40,7 +43,7 @@ fi
 
 if [[ $# -gt 1 ]]; then
     shift
-    ALLFILES="$@"
+    ALLFILES=($@)
 else
     ALLFILES=$(ls *.zst)
 fi
@@ -58,17 +61,24 @@ do_move(){
     if [ -f $FROM.db.tar.gz ]; then
         repo-remove $FROM.db.tar.gz "${ALLPKG[@]}"
     fi
+
     for i in "${!ALLZST[@]}"; do
         echo "Copying file: ${ALLZST[$i]} ..."
-        if [ ! -f $NEWPATH/${ALLZST[$i]} ]; then
-            cp "${ALLZST[$i]}" $NEWPATH
-            cp "${ALLZST[$i]}.sig" $NEWPATH
+        if [ -L ${ALLZST[$i]} ]; then
+            cp -a ${ALLZST[$i]}{,.sig} $NEWREPO
         else
-            error "${ALLZST[$i]} already there, ignore it."
-            unset 'ALLZST[$i]'
+            if [ ! -f $NEWPATH/${ALLZST[$i]} ]; then
+                cp ${ALLZST[$i]}{,.sig} $NEWPATH
+                if [[ $NEWPATH != $NEWREPO ]]; then
+                    ln -sf ../../../pool/packages/${ALLZST[$i]}{,.sig} $NEWREPO
+                fi
+            else
+                error "${ALLZST[$i]} already there, ignore it."
+                unset 'ALLZST[$i]'
+            fi
         fi
     done
-    repo-add -R $NEWPATH/$TO.db.tar.gz "${ALLZST[@]}" | tee add.log
+    repo-add -R $NEWREPO/$TO.db.tar.gz "${ALLZST[@]}" | tee add.log
     exit_code=${PIPESTATUS[0]}
     if [[ ! $exit_code -eq 0 ]]; then
         exit 2
