@@ -1,6 +1,6 @@
-- name: Ensure borg are installed
+- name: Ensure following packages are installed
   pacman:
-    name: borg
+    name: borg,debuginfod
     state: present
 
 - name: Check if /home/backups exists
@@ -44,3 +44,17 @@
   with_items:
     - createlinks.timer
     - backuprepo.timer
+
+- name: Install debuginfod service file
+  copy:
+    src: debuginfod.service
+    dest: /etc/systemd/system/debuginfod.service
+    mode: '0644'
+    owner: root
+    group: root
+
+- name: Enable and start debuginfod service
+  systemd:
+    name: debuginfod
+    enabled: yes
+    state: started

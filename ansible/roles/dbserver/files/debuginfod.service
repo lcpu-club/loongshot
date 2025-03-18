@@ -1,0 +1,12 @@
+[Unit]
+Description=Debuginfod Service
+After=network.target
+
+[Service]
+ExecStart=/usr/bin/debuginfod -p 8002 -F -Z .tar.zst=zstdcat /srv/http/debug-pool
+Restart=always
+User=arch
+Group=arch
+
+[Install]
+WantedBy=multi-user.target
