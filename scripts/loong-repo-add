@@ -81,7 +81,7 @@ for idx in ${!ALLPKG[@]}; do
     done
     
     # Check if the package is already on the server
-    if ssh -tt "$TIER0" "[ -f $_remote_path/pool/packages/$pkg ]" 2>/dev/null; then
+    if ssh -tt "$TIER0" "[ -f $_remote_path/$REPO/os/loong64/$pkg ]" 2>/dev/null; then
         echo "$pkg already in server, skip it."
         EXISTING_PKGS+=("$pkg") # Record the existing package name
         unset "ALLPKG[$idx]"
@@ -112,7 +112,7 @@ for idx in ${!ALLDEBUG[@]}; do
 done
 
 # Continue processing upload for regular packages
-if [ ! "${#ALLPKG[@]}" -eq 0 ]; then
+if [[ ! "${#ALLPKG[@]}" -eq 0 ]]; then
     echo "Uploading packages to remote server: $TIER0:$_remote_path/pool/packages/"
     rsync -e ssh -p '--chmod=ug=rw,o=r' -c -h -L --progress --partial -y $WORKDIR/* $TIER0:$_remote_path/pool/packages/ || exit 2
     pkg_command="
@@ -129,7 +129,7 @@ if [ ! "${#ALLPKG[@]}" -eq 0 ]; then
     done
     rm "$WORKDIR/add.log" -f
 
-    if [ ! "${#about_to_delete[@]}" -eq 0 ]; then
+    if [[ ! "${#about_to_delete[@]}" -eq 0 ]]; then
         delete_command="
             for file in ${about_to_delete[@]}; do
                 echo \"Deleting \$file ...\"
@@ -140,7 +140,7 @@ if [ ! "${#ALLPKG[@]}" -eq 0 ]; then
 fi
 
 # Process debug packages
-if [ ! "${#ALLDEBUG[@]}" -eq 0 ]; then
+if [[ ! "${#ALLDEBUG[@]}" -eq 0 ]]; then
     # Delete old version if any
     debug_command="
         for pkg in ${ALLDEBUG[@]}; do
