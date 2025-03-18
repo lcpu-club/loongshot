@@ -5,68 +5,161 @@ if [[ $# -lt 2 ]]; then
     exit 1
 fi
 
-TIER0=${TIER0:-""}
+TIER0=${TIER0:-"loongarchlinux-tier0"}
+echo "Checking connection to TIER0 server ($TIER0)..."
+if ! ssh -o BatchMode=yes -o ConnectTimeout=5 "$TIER0" "echo Connection successful!" 2>/dev/null; then
+    echo "Error: Unable to connect to TIER0 server ($TIER0). Please check configuration."
+    exit 1
+fi
 
 _remote_path=/srv/http/loongarch/archlinux
 _debug_path=/srv/http/debug-pool
 
 REPO=$1
 shift
-ALLFILES=($@)
+ALL_INPUT_FILES=($@)
 
+ALLPKG=() # Store base names of regular packages
 ALLSIG=()
-ALLDEBUG=()
+ALLDEBUG=() # Store base names of debug packages
 DEBUGSIG=()
+EXISTING_PKGS=() # Array to store packages that already exist on the server
 
-for idx in ${!ALLFILES[@]}; do
-    pkg=${ALLFILES[$idx]}
-    if [ ! -f $pkg.sig ]; then
-        echo "Signing $pkg ..."
-        gpg --detach-sign $pkg || exit 1
-    fi
-    if ssh -tt $TIER0 "[ -f $_remote_path/pool/packages/$pkg ]" 2>/dev/null; then
-        echo "$pkg already in server, skip it."
-        unset 'ALLFILES[$idx]'
-    fi
-    # some package may have "debug" in their names, such as ruby-debug, python-flask-debug
-    if [[ -f HASDEBUG && "$pkg" == *"-debug-"* ]]; then
-        unset "ALLFILES[$idx]"
-        ALLDEBUG+=($pkg)
-        DEBUGSIG+=($pkg.sig)
-    fi
-done
-
-for file in "${ALLFILES[@]}"; do
-    ALLSIG+=("$file.sig")
-done
-
-
+# Create temporary working directories
 WORKDIR=$(mktemp -d)
+WORKDIR_DEBUG=$(mktemp -d)
 
-if [ ! "${#ALLFILES[@]}" -eq 0 ]; then
-    cp ${ALLFILES[@]} $WORKDIR
-    cp ${ALLSIG[@]} $WORKDIR
+# Define whitelist for packages that contain "-debug-" but are not debug packages
+DEBUG_WHITELIST=(
+    "lua*-std-debug"  # Use wildcard to match all lua*-std-debug packages
+    "python-django-debug-toolbar"
+    "perl-b-debug-cpan"
+    "python-flask-debug"
+)
 
+# Function to check if a package is in whitelist
+is_in_whitelist() {
+    local pkg_name="$1"
+    for pattern in "${DEBUG_WHITELIST[@]}"; do
+        # Use bash pattern matching to handle wildcards
+        if [[ "$pkg_name" == "${pattern}-"* ]]; then
+            return 0
+        fi
+    done
+    return 1
+}
+
+# First, separate regular packages from debug packages
+for file in "${ALL_INPUT_FILES[@]}"; do
+    pkg_basename=$(basename "$file")
+    
+    # Check if the package is in the debug whitelist
+    if [[ "$pkg_basename" == *"-debug-"* ]] && ! is_in_whitelist "$pkg_basename"; then
+        ALLDEBUG+=("$pkg_basename")
+        echo "Copying debug package: $file"
+        cp "$file" "$WORKDIR_DEBUG/"
+    else
+        ALLPKG+=("$pkg_basename")
+        echo "Copying package: $file"
+        cp "$file" "$WORKDIR/"
+    fi
+done
+
+# Process each regular package
+for idx in ${!ALLPKG[@]}; do
+    pkg=${ALLPKG[$idx]}
+    PKG_PATH="$WORKDIR/$pkg"
+    
+    # Sign the package
+    echo "Signing $pkg ..."
+    gpg --detach-sign --use-agent $PKG_PATH
+    
+    # Ensure the signature is valid
+    while [[ ! -s $PKG_PATH.sig ]]; do
+        echo "Signature file not found or empty. Trying to sign again..."
+        gpg --detach-sign --use-agent $PKG_PATH
+    done
+    
+    # Check if the package is already on the server
+    if ssh -tt "$TIER0" "[[ -f $_remote_path/$REPO/os/loong64/$pkg ]]" 2>/dev/null; then
+        echo "$pkg already in server, skip it."
+        EXISTING_PKGS+=("$pkg") # Record the existing package name
+        unset "ALLPKG[$idx]"
+        rm -f "$PKG_PATH" "$PKG_PATH.sig"
+    fi
+
+    # Generate signature list for packages
+    ALLSIG+=("$pkg.sig")
+done
+
+# Process each debug package
+for idx in ${!ALLDEBUG[@]}; do
+    pkg=${ALLDEBUG[$idx]}
+    PKG_PATH="$WORKDIR_DEBUG/$pkg"
+    
+    # Sign the package
+    echo "Signing debug package $pkg ..."
+    gpg --detach-sign --use-agent $PKG_PATH
+    
+    # Ensure the signature is valid
+    while [[ ! -s $PKG_PATH.sig ]]; do
+        echo "Signature file not found or empty. Trying to sign again..."
+        gpg --detach-sign --use-agent $PKG_PATH
+    done
+    
+    # Generate signature list for debug packages
+    DEBUGSIG+=("$pkg.sig")
+done
+
+# Continue processing upload for regular packages
+if [[ ! "${#ALLPKG[@]}" -eq 0 ]]; then
+    echo "Uploading packages to remote server: $TIER0:$_remote_path/pool/packages/"
     rsync -e ssh -p '--chmod=ug=rw,o=r' -c -h -L --progress --partial -y $WORKDIR/* $TIER0:$_remote_path/pool/packages/ || exit 2
-    ssh -tt "$TIER0" "for file in ${ALLFILES[@]} ${ALLSIG[@]}; do ln -sf \"../../../pool/packages/\$file\" \"$_remote_path/$REPO/os/loong64/\"; done; cd \"$_remote_path/$REPO/os/loong64/\"; repo-add -R $REPO.db.tar.gz ${ALLFILES[@]}" | tee add.log
+    pkg_command="
+        for file in ${ALLPKG[@]} ${ALLSIG[@]}; do
+            ln -sf \"../../../pool/packages/\$file\" \"$_remote_path/$REPO/os/loong64/\"
+        done
+        cd \"$_remote_path/$REPO/os/loong64/\"
+        repo-add -R $REPO.db.tar.gz ${ALLPKG[@]}"
+    ssh -tt "$TIER0" "$pkg_command" | tee "$WORKDIR/add.log"
 
     about_to_delete=()
-    for pkg in $(grep -oP "Removing old package file '\K[^']*(?=')" add.log); do
+    for pkg in $(grep -oP "Removing old package file '\K[^']*(?=')" "$WORKDIR/add.log"); do
         about_to_delete+=($pkg)
     done
-    rm add.log -f
+    rm "$WORKDIR/add.log" -f
 
-    if [ ! "${#about_to_delete[@]}" -eq 0 ]; then
-        ssh -tt $TIER0 "for file in ${about_to_delete[@]}; do echo \"Deleting \$file ...\"; rm -f $_remote_path/pool/packages/\$file{,.sig}; done" 2>/dev/null
+    if [[ ! "${#about_to_delete[@]}" -eq 0 ]]; then
+        delete_command="
+            for file in ${about_to_delete[@]}; do
+                echo \"Deleting \$file ...\"
+                rm -f $_remote_path/pool/packages/\$file{,.sig}
+            done"
+        ssh -tt $TIER0 "$delete_command" 2>/dev/null
     fi
 fi
 
-if [ ! "${#ALLDEBUG[@]}" -eq 0 ]; then
-    rm -f $WORKDIR/*
-    cp ${ALLDEBUG[@]} $WORKDIR
-    cp ${DEBUGSIG[@]} $WORKDIR
-    # delete old version if any
-    ssh -tt $TIER0 "for pkg in ${ALLDEBUG[@]}; do pkgname=\${pkg%-debug-*}; rm -f $_debug_path/\$pkgname-debug*; done" 2>/dev/null
-    rsync -e ssh -p '--chmod=ug=rw,o=r' -c -h -L --progress --partial -y $WORKDIR/* $TIER0:$_debug_path/
+# Process debug packages
+if [[ ! "${#ALLDEBUG[@]}" -eq 0 ]]; then
+    # Delete old version if any
+    debug_command="
+        for pkg in ${ALLDEBUG[@]}; do
+            pkgname=\${pkg%-debug-*}
+            rm -f $_debug_path/\$pkgname-debug*
+        done"
+    ssh -tt $TIER0 "$debug_command" 2>/dev/null
+    echo "Uploading debug packages to remote server: $TIER0:$_debug_path/"
+    rsync -e ssh -p '--chmod=ug=rw,o=r' -c -h -L --progress --partial -y $WORKDIR_DEBUG/* $TIER0:$_debug_path/
 fi
+
+# Clean up both working directories
 rm -rf $WORKDIR
+rm -rf $WORKDIR_DEBUG
+
+# Print warnings for existing packages
+if [[ ! "${#EXISTING_PKGS[@]}" -eq 0 ]]; then
+    echo -e "\nExisting packages warnings:"
+    for pkg in "${EXISTING_PKGS[@]}"; do
+        echo "WARNING: Package $pkg already exists on the server, skipped."
+    done
+fi
