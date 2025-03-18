@@ -19,9 +19,9 @@ REPO=$1
 shift
 ALL_INPUT_FILES=($@)
 
-ALLPKG=()
+ALLPKG=() # Store base names of regular packages
 ALLSIG=()
-ALLDEBUG=()
+ALLDEBUG=() # Store base names of debug packages
 DEBUGSIG=()
 EXISTING_PKGS=() # Array to store packages that already exist on the server
 
@@ -55,11 +55,11 @@ for file in "${ALL_INPUT_FILES[@]}"; do
     
     # Check if the package is in the debug whitelist
     if [[ "$pkg_basename" == *"-debug-"* ]] && ! is_in_whitelist "$pkg_basename"; then
-        ALLDEBUG+=("$file")
+        ALLDEBUG+=("$pkg_basename")
         echo "Copying debug package: $file"
         cp "$file" "$WORKDIR_DEBUG/"
     else
-        ALLPKG+=("$file")
+        ALLPKG+=("$pkg_basename")
         echo "Copying package: $file"
         cp "$file" "$WORKDIR/"
     fi
@@ -68,10 +68,10 @@ done
 # Process each regular package
 for idx in ${!ALLPKG[@]}; do
     pkg=${ALLPKG[$idx]}
-    PKG_PATH="$WORKDIR/$(basename $pkg)"
+    PKG_PATH="$WORKDIR/$pkg"
     
     # Sign the package
-    echo "Signing $(basename $pkg) ..."
+    echo "Signing $pkg ..."
     gpg --detach-sign --use-agent $PKG_PATH
     
     # Ensure the signature is valid
@@ -89,16 +89,16 @@ for idx in ${!ALLPKG[@]}; do
     fi
 
     # Generate signature list for packages
-    ALLSIG+=("$(basename $pkg).sig")
+    ALLSIG+=("$pkg.sig")
 done
 
 # Process each debug package
 for idx in ${!ALLDEBUG[@]}; do
     pkg=${ALLDEBUG[$idx]}
-    PKG_PATH="$WORKDIR_DEBUG/$(basename $pkg)"
+    PKG_PATH="$WORKDIR_DEBUG/$pkg"
     
     # Sign the package
-    echo "Signing debug package $(basename $pkg) ..."
+    echo "Signing debug package $pkg ..."
     gpg --detach-sign --use-agent $PKG_PATH
     
     # Ensure the signature is valid
@@ -108,7 +108,7 @@ for idx in ${!ALLDEBUG[@]}; do
     done
     
     # Generate signature list for debug packages
-    DEBUGSIG+=("$(basename $pkg).sig")
+    DEBUGSIG+=("$pkg.sig")
 done
 
 # Continue processing upload for regular packages
@@ -147,7 +147,7 @@ if [ ! "${#ALLDEBUG[@]}" -eq 0 ]; then
             pkgname=\${pkg%-debug-*}
             rm -f $_debug_path/\$pkgname-debug*
         done"
-    ssh -tt $TIER0 "bash -c "$debug_command"" 2>/dev/null
+    ssh -tt $TIER0 "$debug_command" 2>/dev/null
     echo "Uploading debug packages to remote server: $TIER0:$_debug_path/"
     rsync -e ssh -p '--chmod=ug=rw,o=r' -c -h -L --progress --partial -y $WORKDIR_DEBUG/* $TIER0:$_debug_path/
 fi
