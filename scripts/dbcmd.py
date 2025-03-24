@@ -139,14 +139,22 @@ class DatabaseManager:
                     print(f"Fail: {conflict} had been added to the tasklist.")
                     return
 
-            cursor.execute("SELECT max(taskno),min(taskno) FROM tasks WHERE tasklist=%s and info is NULL", (tasklist,))
+            cursor.execute("SELECT min(taskno),max(taskno) FROM tasks WHERE tasklist=%s and info is NULL", (tasklist,))
             result = cursor.fetchone()
             if result:
-                first = result[1]
-                last = result[0]
+                first = result[0]
+                last = result[1]
             if first is None:
-                first = 0
-                last = 0
+                # when building the last package, all info fields are filled.
+                cursor.execute("SELECT max(taskno) FROM tasks WHERE tasklist=%s", (tasklist,))
+                result = cursor.fetchone()
+                if result:
+                    first = result[0]
+                if first is None:
+                    first = 1
+                else:
+                    first = first + 1
+                last = first - 1
             cursor.execute("SELECT max(taskid) FROM tasks WHERE tasklist!=%s", (tasklist,))
             result = cursor.fetchone()
             if result:
@@ -157,8 +165,9 @@ class DatabaseManager:
             if insert:
                 cursor.execute("UPDATE tasks SET taskno=taskno+%s WHERE tasklist=%s and info is NULL",
                                (len(pkgbase_list), tasklist))
-                last = first - 1
-            rows = [(i+1+last, pkgbase, maxid + 1, tasklist, repo) for i, pkgbase in enumerate(pkgbase_list)]
+            else:
+                first = last + 1
+            rows = [(i+first, pkgbase, maxid + 1, tasklist, repo) for i, pkgbase in enumerate(pkgbase_list)]
             # Insert data
             insert_query = "INSERT INTO tasks (taskno, pkgbase, taskid, tasklist, repo) VALUES (%s, %s, %s, %s, %s)"
             cursor.executemany(insert_query, rows)
