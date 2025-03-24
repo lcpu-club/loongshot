@@ -7,7 +7,7 @@
 #
 
 umask 002
-REPODIR=/home/pluto/loongarch
+REPODIR=/srv/http/loongarch
 
 source /usr/share/makepkg/util/message.sh
 colorize
