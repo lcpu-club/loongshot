@@ -78,7 +78,7 @@ do_move(){
             fi
         fi
     done
-    repo-add -R $NEWREPO/$TO.db.tar.gz "${ALLZST[@]}" | tee add.log
+    repo-add --include-sigs -R $NEWREPO/$TO.db.tar.gz "${ALLZST[@]}" | tee add.log
     exit_code=${PIPESTATUS[0]}
     if [[ ! $exit_code -eq 0 ]]; then
         exit 2
@@ -90,6 +90,7 @@ do_move(){
     if [ ! "${#about_to_delete[@]}" -eq 0 ]; then
         for file in "${about_to_delete[@]}"; do
             echo "Deleting $file ..."
+            rm -f $NEWREPO/$file{,.sig} # somehow repo-add -R don't remove old links.
             rm -f $NEWPATH/$file{,.sig}
         done
     fi
