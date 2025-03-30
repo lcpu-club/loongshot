@@ -120,7 +120,7 @@ if [[ ! "${#ALLPKG[@]}" -eq 0 ]]; then
             ln -sf \"../../../pool/packages/\$file\" \"$_remote_path/$REPO/os/loong64/\"
         done
         cd \"$_remote_path/$REPO/os/loong64/\"
-        repo-add -R $REPO.db.tar.gz ${ALLPKG[@]}"
+        repo-add --include-sigs -R $REPO.db.tar.gz ${ALLPKG[@]}"
     ssh -tt "$TIER0" "$pkg_command" | tee "$WORKDIR/add.log"
 
     about_to_delete=()
