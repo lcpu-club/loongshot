@@ -277,7 +277,7 @@ if [[ ${PIPESTATUS[0]} -eq 2 ]] || [[ "$DEBUG" == "yes" ]]; then
 else
     # 1. mkdir for log. 2. upload. 3. parse the log
     mkdir -p $LOGPATH/$PKGBASE
-    cp all.log.$BUILDER $LOGPATH/$PKGBASE/
+    cp all.log.$BUILDER $LOGPATH/$PKGBASE/all.log
     parselog.py $PKGBASE
     if [[ -f $WORKDIR/$PKGBASE/PKGBUILD ]]; then
         PKGVERREL=$(source $WORKDIR/$PKGBASE/PKGBUILD; echo $epoch${epoch:+:}$pkgver-$pkgrel)
