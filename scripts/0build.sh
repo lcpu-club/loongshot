@@ -157,6 +157,9 @@ build_package() {
         BUILDREPO=${BUILDREPO%-staging}
         BUILDREPO=${BUILDREPO%-testing}
     fi
+    if [[ -z "$BUILDREPO" ]]; then
+        BUILDREPO="extra"  # default to extra
+    fi
 
     if grep -qFx "$PKGBASE" $SCRIPTSPATH/trueany.lst; then
         MIRRORSITE=https://mirrors.pku.edu.cn/archlinux
@@ -234,15 +237,31 @@ build_package() {
         cd $LOCALREPO/temp-$BUILDREPO$TESTING/os/loong64
         for pkg in ${pkgname[@]}; do
             FILENAME=$pkg-$PKGVERREL-$ARCH.pkg.tar.zst
-            ssh -t $BUILDER "cd $BUILDPATH/$PKGBASE; [[ -f $FILENAME.sig ]] && rm -f $FILENAME.sig; gpg --detach-sign $FILENAME"
-            scp $BUILDER:$BUILDPATH/$PKGBASE/$FILENAME{,.sig} .
+            if [ "$BUILDER" = "loong1" ]; then
+                ssh -t $BUILDER "cd $BUILDPATH/$PKGBASE; [[ -f $FILENAME.sig ]] && rm -f $FILENAME.sig; gpg --detach-sign $FILENAME"
+                scp $BUILDER:$BUILDPATH/$PKGBASE/$FILENAME{,.sig} .
+            else # Only loong1 has the signing key
+                scp $BUILDER:$BUILDPATH/$PKGBASE/$FILENAME .
+                scp "$FILENAME" "loong1:/mnt/repos/"
+                ssh -t loong1 "cd /mnt/repos; gpg --detach-sign $FILENAME"
+                scp loong1:/mnt/repos/$FILENAME.sig .
+                ssh -t loong1 "cd /mnt/repos; rm $FILENAME{,.sig} -f"
+            fi
             chmod 664 $FILENAME{,.sig}
             repo-add -R temp-$BUILDREPO$TESTING.db.tar.gz $FILENAME
         done)
         DEBUGPKG=$PKGBASE-debug-$PKGVERREL-loong64.pkg.tar.zst
-        echo $DEBUGPKG
+        # echo $DEBUGPKG
         if ssh -t $BUILDER "cd $BUILDPATH/$PKGBASE; if [ -f $DEBUGPKG ]; then rm -f $DEBUGPKG.sig; gpg --detach-sign $DEBUGPKG; fi; [ -f $BUILDPATH/$PKGBASE/$DEBUGPKG ]" 2>/dev/null; then
-            scp $BUILDER:$BUILDPATH/$PKGBASE/$DEBUGPKG{,.sig} $LOCALREPO/debug-pool
+            if [ "$BUILDER" = "loong1" ]; then
+                scp $BUILDER:$BUILDPATH/$PKGBASE/$DEBUGPKG{,.sig} $LOCALREPO/debug-pool
+            else # Only loong1 has the signing key
+                scp $BUILDER:$BUILDPATH/$PKGBASE/$DEBUGPKG $LOCALREPO/debug-pool
+                scp "$LOCALREPO/debug-pool/$DEBUGPKG" "loong1:/mnt/repos/"
+                ssh -t loong1 "cd /mnt/repos; gpg --detach-sign $DEBUGPKG"
+                scp loong1:/mnt/repos/$DEBUGPKG.sig $LOCALREPO/debug-pool
+                ssh -t loong1 "cd /mnt/repos; rm $DEBUGPKG{,.sig} -f"
+            fi
             chmod 664 $LOCALREPO/debug-pool/$DEBUGPKG{,.sig}
         fi
         msg "$PKGBASE-$PKGVERREL built on $BUILDER, time cost: $TIMECOST"
@@ -251,18 +270,18 @@ build_package() {
     fi
 }
 
-build_package | tee all.log
+build_package | tee all.log.$BUILDER
 
 if [[ ${PIPESTATUS[0]} -eq 2 ]] || [[ "$DEBUG" == "yes" ]]; then
     exit 1
 else
     # 1. mkdir for log. 2. upload. 3. parse the log
     mkdir -p $LOGPATH/$PKGBASE
-    cp all.log $LOGPATH/$PKGBASE/
+    cp all.log.$BUILDER $LOGPATH/$PKGBASE/
     parselog.py $PKGBASE
     if [[ -f $WORKDIR/$PKGBASE/PKGBUILD ]]; then
         PKGVERREL=$(source $WORKDIR/$PKGBASE/PKGBUILD; echo $epoch${epoch:+:}$pkgver-$pkgrel)
         mkdir -p $ZSTLOGDIR/$PKGBASE
-        mv all.log $ZSTLOGDIR/$PKGBASE/$PKGBASE-$PKGVERREL.log
+        mv all.log.$BUILDER $ZSTLOGDIR/$PKGBASE/$PKGBASE-$PKGVERREL.log
     fi
 fi
