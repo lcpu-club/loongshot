@@ -3,8 +3,9 @@
 WORKDIR=${WORKDIR:=$HOME/repos}
 ZSTLOGDIR=${ZSTLOGDIR:=$HOME/logs}
 SCRIPTSPATH=${SCRIPTSPATH:=$HOME/loongshot/scripts}
-BUILDER=loong1
-BUILDDIR=/mnt/repos
+BUILDER=${BUILDER:=loong1}
+BUILDDIR=${BUILDDIR:=/mnt/repos}
+BUILDLIST=${BUILDLIST:="1"}
 
 max_retries=2
 max_size=102400  # if the build fails quick ( with small size ), try to recovery
@@ -22,7 +23,7 @@ umask 002
 while [ 1 ]; do
     retries=0
 
-    pkg=`$SCRIPTSPATH/dbcmd.py task --get --build`
+    pkg=`$SCRIPTSPATH/dbcmd.py task --get --build --list $BUILDLIST`
     orig=$pkg
 
     if [[ "$pkg" == None ]]; then
@@ -51,8 +52,8 @@ while [ 1 ]; do
     while [[ $retries -lt $max_retries ]]; do
         ./0build.sh $pkg $VER "$@" $DOUBLEDASH $NOCHECK
         ((retries++))
-        if [[ -f all.log ]]; then
-            ALLLOGS=all.log
+        if [[ -f all.log.$BUILDER ]]; then
+            ALLLOGS=all.log.$BUILDER
         else
             PKGVER=$(source $WORKDIR/$pkg/PKGBUILD; echo $epoch${epoch:+:}$pkgver-$pkgrel)
             ALLLOGS=$ZSTLOGDIR/$pkg/$pkg-$PKGVER.log
@@ -91,7 +92,7 @@ while [ 1 ]; do
         break
     done
 
-    $SCRIPTSPATH/dbcmd.py task --done $orig
+    $SCRIPTSPATH/dbcmd.py task --done $orig --list $BUILDLIST
 
     # tracking the soname changes
     grep -A4 "WARNING.*Sonames differ" $ALLLOGS >> sonames.log
