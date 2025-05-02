@@ -155,12 +155,21 @@ class DatabaseManager:
                 else:
                     first = first + 1
                 last = first - 1
-            cursor.execute("SELECT max(taskid) FROM tasks WHERE tasklist!=%s", (tasklist,))
+            cursor.execute("SELECT max(taskid) FROM tasks WHERE tasklist=%s", (tasklist,))
             result = cursor.fetchone()
             if result:
-                maxid = result[0]
+                maxid = result[0];
             if maxid is None:
                 maxid = 0
+            else:
+                maxid = maxid - 1
+            if maxid < 1:
+                cursor.execute("SELECT max(taskid) FROM tasks WHERE tasklist!=%s", (tasklist,))
+                result = cursor.fetchone()
+                if result:
+                    maxid = result[0]
+                if maxid is None:
+                    maxid = 0
 
             if insert:
                 cursor.execute("UPDATE tasks SET taskno=taskno+%s WHERE tasklist=%s and info is NULL",
