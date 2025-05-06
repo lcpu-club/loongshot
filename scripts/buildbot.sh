@@ -16,6 +16,10 @@ for para in "$@"; do
         DOUBLEDASH=""
         break
     fi
+    if [[ $para == *":"* ]]; then
+        BUILDER=${para%:*}
+        BUILDDIR=${para#*:}
+    fi
 done
 
 umask 002
@@ -83,13 +87,7 @@ while [ 1 ]; do
                 continue
             fi
 
-            if grep -q "remote: GitLab is not responding" $ALLLOGS; then
-                # Wait for gitlab to recover
-                sleep 100
-                continue
-            fi
-
-            if grep -q "Resolving timed out after 10000 milliseconds" $ALLLOGS; then
+            if grep -q -e "remote: GitLab is not responding" -e "Resolving timed out after 10000 milliseconds" -e "Connection timed out after 10001 milliseconds" $ALLLOGS; then
                 sleep 100
                 continue
             fi
