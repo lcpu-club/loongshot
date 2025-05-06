@@ -88,6 +88,11 @@ while [ 1 ]; do
                 sleep 100
                 continue
             fi
+
+            if grep -q "Resolving timed out after 10000 milliseconds" $ALLLOGS; then
+                sleep 100
+                continue
+            fi
         fi
         break
     done
