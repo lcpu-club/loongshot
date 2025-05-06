@@ -242,7 +242,7 @@ build_package() {
                 scp $BUILDER:$BUILDPATH/$PKGBASE/$FILENAME{,.sig} .
             else # Only loong1 has the signing key
                 scp $BUILDER:$BUILDPATH/$PKGBASE/$FILENAME .
-                scp "$FILENAME" "loong1:/mnt/repos/"
+                scp "./$FILENAME" "loong1:/mnt/repos/"
                 ssh -t loong1 "cd /mnt/repos; gpg --detach-sign $FILENAME"
                 scp loong1:/mnt/repos/$FILENAME.sig .
                 ssh -t loong1 "cd /mnt/repos; rm $FILENAME{,.sig} -f"
