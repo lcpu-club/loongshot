@@ -287,7 +287,17 @@ class DatabaseManager:
                     cursor.execute("UPDATE tasks SET tasklist=0 WHERE tasklist=%s and info is not NULL",
                                    (tasklist,))
                     self.conn.commit()
-                return None
+                cursor.execute("SELECT count(*) from tasks WHERE tasklist != %s",
+                               (tasklist,))
+                result = cursor.fetchone()
+                if result:
+                    remain = result[0]
+                if remain is None:
+                    remain = 0
+                if remain > 0: # wait for other task to finish
+                    return "%stop"
+                else:  # all done, can do clean up
+                    return None
         except Exception as e:
             # print(f"Error: {e}")
             return None
