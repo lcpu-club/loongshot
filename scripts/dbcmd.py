@@ -287,7 +287,7 @@ class DatabaseManager:
                     cursor.execute("UPDATE tasks SET tasklist=0 WHERE tasklist=%s and info is not NULL",
                                    (tasklist,))
                     self.conn.commit()
-                cursor.execute("SELECT count(*) from tasks WHERE tasklist != %s",
+                cursor.execute("SELECT count(*) from tasks WHERE tasklist!=%s and tasklist!=0",
                                (tasklist,))
                 result = cursor.fetchone()
                 if result:
