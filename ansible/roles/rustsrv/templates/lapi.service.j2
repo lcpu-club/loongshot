@@ -7,6 +7,8 @@ WorkingDirectory={{ ldest_dir }}
 ExecStart={{ ldest_dir }}/loong-api
 Restart=always
 RestartSec=5
+User=arch
+Group=arch
 
 [Install]
 WantedBy=multi-user.target
