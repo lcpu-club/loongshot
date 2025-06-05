@@ -215,6 +215,7 @@ async fn main() -> std::io::Result<()> {
             .service(get_stat)
             .service(get_tasks)
     })
+    .workers(2)
     .bind(("127.0.0.1", 8080))?
     .run()
     .await
