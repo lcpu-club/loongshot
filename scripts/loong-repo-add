@@ -1,7 +1,40 @@
 #!/bin/bash
 
+# Parse command line options
+TEMP_BASE=""
+POSITIONAL_ARGS=()
+
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        -t|--temp-dir)
+            TEMP_BASE="$2"
+            shift 2
+            ;;
+        -h|--help)
+            echo "Usage: ${0##*/} [OPTIONS] <repo-name> <pkg-files>"
+            echo "Options:"
+            echo "  -t, --temp-dir DIR  Use DIR as base for temporary directories (default: system temp)"
+            echo "  -h, --help          Show this help message"
+            exit 0
+            ;;
+        -*)
+            echo "Unknown option: $1"
+            echo "Use -h or --help for usage information"
+            exit 1
+            ;;
+        *)
+            POSITIONAL_ARGS+=("$1")
+            shift
+            ;;
+    esac
+done
+
+# Restore positional parameters
+set -- "${POSITIONAL_ARGS[@]}"
+
 if [[ $# -lt 2 ]]; then
-    echo "Usage: ${0##*/} <repo-name> <pkg-files>"
+    echo "Usage: ${0##*/} [OPTIONS] <repo-name> <pkg-files>"
+    echo "Use -h or --help for more information"
     exit 1
 fi
 
@@ -26,8 +59,23 @@ DEBUGSIG=()
 EXISTING_PKGS=() # Array to store packages that already exist on the server
 
 # Create temporary working directories
-WORKDIR=$(mktemp -d)
-WORKDIR_DEBUG=$(mktemp -d)
+if [[ -n "$TEMP_BASE" ]]; then
+    # Ensure the custom temp directory exists
+    if [[ ! -d "$TEMP_BASE" ]]; then
+        echo "Error: Temporary directory base '$TEMP_BASE' does not exist."
+        exit 1
+    fi
+    if [[ ! -w "$TEMP_BASE" ]]; then
+        echo "Error: Temporary directory base '$TEMP_BASE' is not writable."
+        exit 1
+    fi
+    WORKDIR=$(mktemp -d -p "$TEMP_BASE")
+    WORKDIR_DEBUG=$(mktemp -d -p "$TEMP_BASE")
+    echo "Using custom temporary directory base: $TEMP_BASE"
+else
+    WORKDIR=$(mktemp -d)
+    WORKDIR_DEBUG=$(mktemp -d)
+fi
 
 # Define whitelist for packages that contain "-debug-" but are not debug packages
 DEBUG_WHITELIST=(
