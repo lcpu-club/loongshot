@@ -1,11 +1,15 @@
 #!/usr/bin/env python3
+import argparse
+import json
 import os
 import pyalpm
-import argparse
 import requests
-from datetime import datetime
-from signal import signal, SIGPIPE, SIG_DFL
 from collections import deque
+from datetime import datetime
+from pathlib import Path
+from pydantic import BaseModel
+from signal import signal, SIGPIPE, SIG_DFL
+
 
 home_dir = os.path.expanduser("~")
 cache_dir = os.path.join(home_dir, ".cache", "compare86")
@@ -18,9 +22,15 @@ mirror_loong64 = "https://loongarchlinux.lcpu.dev/loongarch/archlinux/"
 source_repos = ['core', 'extra']
 
 pkgtime = {}
+# Store package info
+pkglist = []
 
 signal(SIGPIPE, SIG_DFL)
 
+class PackageMetadata(BaseModel):
+    name: str = ""
+    x86_version: str = ""
+    loong64_version: str = ""
 
 # Download repo db from mirrors.
 def download_file(source, dest):
@@ -98,7 +108,13 @@ def safe_tobuild():
 
     for pkg_name in x86:
         if (not pkg_name in loong) and (all(pkg in loong_stable for pkg in x86[pkg_name])):
-            print(f"{pkg_name:34} {x86_repo[pkg_name]}")
+            # print(f"{pkg_name:34} {x86_repo[pkg_name]}")
+            p = PackageMetadata(
+                name=f'{pkg_name}',
+                x86_version=f'{x86_repo[pkg_name]}',
+            )
+            pkglist.append(p)
+
 
 
 # Check repo for errors
@@ -140,8 +156,13 @@ def compare_all():
             loong64_version = loong[pkg_name]
         else:
             loong64_version = 'missing'
-        print(f"{pkg_name:34} {x86_version:24} {loong64_version:24}")
-
+        # print(f"{pkg_name:34} {x86_version:24} {loong64_version:24}")
+        p = PackageMetadata(
+            name=f'{pkg_name}',
+            x86_version=f'{x86_version}',
+            loong64_version=f'{loong64_version}'
+        )
+        pkglist.append(p)
 
 def show_reverse_depends(depend):
     queue = deque()
@@ -217,7 +238,14 @@ def compare_repos(x86_db, loong64_db, showtime, show_newer=False):
             delta = (time_now - time_then).days
             print(f"{pkg_name:34} {x86_version:24} {loong64_version:24} {delta} days old")
         else:
-            print(f"{pkg_name:34} {x86_version:24} {loong64_version:24}")
+            # print(f"{pkg_name:34} {x86_version:24} {loong64_version:24}")
+            p = PackageMetadata(
+                name=f'{pkg_name}',
+                x86_version=f'{x86_version}',
+                loong64_version=f'{loong64_version}'
+            )
+        pkglist.append(p)
+
 
 
 # compare one package
@@ -245,6 +273,30 @@ def show_group(group, repo):
     for p in allbase:
         print(p)
 
+# Write packages to a json file
+def write_to_json(data, file):
+    serializable = [pkg.dict() for pkg in data]
+    
+    try:
+        with file.open('w', encoding='utf-8') as f:
+            json.dump(
+                serializable,
+                f,
+                indent=1,
+                ensure_ascii=False,
+                separators=(',', ': ')
+            )
+            f.write('\n')
+        
+    except (IOError, json.JSONDecodeError) as e:
+        print(f"Failed to save: {str(e)}")
+        raise
+
+# Print packages to screen
+def print_to_screen(data):
+    for d in data:
+        print(f'{d.name:34} {d.x86_version:24} {d.loong64_version:24}')
+    
 def main():
     global source_repos
 
@@ -265,9 +317,16 @@ def main():
     parser.add_argument("-M", "--movehard", action="store_true", help="Show packages in wrong repos(ignore version difference.")
     parser.add_argument("-l", "--lint", action="store_true", help="Check for db errors.")
     parser.add_argument("-d", "--depend", type=str, help="List reverse depends.")
+    parser.add_argument("-o", "--output", type=str, help="Save output to file.")
 
     args = parser.parse_args()
 
+    required_for_output = [
+        args.core, args.extra, args.all, args.build
+    ]
+    if args.output and not any(required_for_output):
+        parser.error("The -o/--output option can only be used with other specific options")
+    
     if args.time is None:
         args.time = False
 
@@ -339,5 +398,11 @@ def main():
             if ver:
                 print(f"{args.package} found in repo {r} of loong64 with ver={ver}")
 
+    if args.output:
+        write_to_json(pkglist, Path(args.output))
+    else:
+        print_to_screen(pkglist)
+    
+                
 if __name__ == "__main__":
     main()
