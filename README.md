@@ -1,5 +1,7 @@
 # Arch Linux Loong64 Support Packages
 
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/lcpu-club/loongshot)
+
 This repository contains documents and tools to support building Arch Linux for Loong64.
 
 ## Status
