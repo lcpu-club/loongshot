@@ -4,6 +4,7 @@ import json
 import os
 import pyalpm
 import requests
+import sqlite3
 from collections import deque
 from datetime import datetime
 from pathlib import Path
@@ -28,9 +29,10 @@ pkglist = []
 signal(SIGPIPE, SIG_DFL)
 
 class PackageMetadata(BaseModel):
-    name: str = ""
-    x86_version: str = ""
-    loong64_version: str = ""
+    name: str = "missing"
+    x86_version: str = "missing"
+    loong64_version: str = "missing"
+    repo:str = "missing"
 
 # Download repo db from mirrors.
 def download_file(source, dest):
@@ -87,7 +89,13 @@ def safe_tobuild():
             if (not pkg.base in x86):
                 x86[pkg.base] = set()
             x86[pkg.base] |= alldep
-            x86_repo[pkg.base] = f"{pkg.version:24} {repo}"
+            x86_repo[pkg.base] = PackageMetadata(
+                name=pkg.base,
+                x86_version=pkg.version,
+                repo=repo
+            )
+            # f"{pkg.version:24} {repo}"
+            
     loong = {}
     for repo in source_repos:
         loong_db = load_repo(os.path.join(cache_dir, loong64_repo_path), repo)
@@ -111,7 +119,8 @@ def safe_tobuild():
             # print(f"{pkg_name:34} {x86_repo[pkg_name]}")
             p = PackageMetadata(
                 name=f'{pkg_name}',
-                x86_version=f'{x86_repo[pkg_name]}',
+                x86_version=f'{x86_repo[pkg_name].x86_version}',
+                repo=f'{x86_repo[pkg_name].repo}'
             )
             pkglist.append(p)
 
@@ -134,35 +143,36 @@ def loong_lint():
 
 # Compare all packages in both repos
 def compare_all():
-    x86 = {}
     for repo in source_repos:
+        x86 = {}
+        loong = {}
+        
         x86_db = load_repo(os.path.join(cache_dir, x86_repo_path), repo)
         x86_pkg = {pkg.base: pkg.version for pkg in x86_db.pkgcache}
         x86 = {**x86, **x86_pkg}
-
-    loong = {}
-    for repo in source_repos:
+    
         loong_db = load_repo(os.path.join(cache_dir, loong64_repo_path), repo)
         loong_pkg = {pkg.base: pkg.version for pkg in loong_db.pkgcache}
         loong = {**loong, **loong_pkg}
 
-    allpkg = {**loong, **x86}
-    for pkg_name in allpkg:
-        if pkg_name in x86:
-            x86_version = x86[pkg_name]
-        else:
-            x86_version = 'missing'
-        if pkg_name in loong:
-            loong64_version = loong[pkg_name]
-        else:
-            loong64_version = 'missing'
-        # print(f"{pkg_name:34} {x86_version:24} {loong64_version:24}")
-        p = PackageMetadata(
-            name=f'{pkg_name}',
-            x86_version=f'{x86_version}',
-            loong64_version=f'{loong64_version}'
-        )
-        pkglist.append(p)
+        allpkg = {**loong, **x86}
+        for pkg_name in allpkg:
+            if pkg_name in x86:
+                x86_version = x86[pkg_name]
+            else:
+                x86_version = 'missing'
+            if pkg_name in loong:
+                loong64_version = loong[pkg_name]
+            else:
+                loong64_version = 'missing'
+             # print(f"{pkg_name:34} {x86_version:24} {loong64_version:24}")
+            p = PackageMetadata(
+                name=f'{pkg_name}',
+                x86_version=f'{x86_version}',
+                loong64_version=f'{loong64_version}',
+                repo=repo
+            )
+            pkglist.append(p)
 
 def show_reverse_depends(depend):
     queue = deque()
@@ -212,7 +222,7 @@ def move_repos(ignore_version=False):
 
 
 # Compare the packages in one repos
-def compare_repos(x86_db, loong64_db, showtime, show_newer=False):
+def compare_repos(x86_db, loong64_db, showtime, show_newer=False, repo='missing'):
     get_builddate()
     time_now = datetime.now()
     x86_pkg = {pkg.base: pkg.version for pkg in x86_db.pkgcache}
@@ -242,7 +252,8 @@ def compare_repos(x86_db, loong64_db, showtime, show_newer=False):
             p = PackageMetadata(
                 name=f'{pkg_name}',
                 x86_version=f'{x86_version}',
-                loong64_version=f'{loong64_version}'
+                loong64_version=f'{loong64_version}',
+                repo=repo
             )
         pkglist.append(p)
 
@@ -292,6 +303,30 @@ def write_to_json(data, file):
         print(f"Failed to save: {str(e)}")
         raise
 
+# Write packages to database
+def write_to_database(data, db, compare_method):
+    conn = sqlite3.connect(db)
+    cursor = conn.cursor()
+    cursor.execute(f'''DROP TABLE IF EXISTS {compare_method} ''')
+    # Create a table for each compare method
+    cursor.execute(f'''
+    CREATE TABLE {compare_method} (
+        pkgname TEXT NOT NULL,
+        x86_version TEXT NOT NULL,
+        loong64_version TEXT NOT NULL,
+    repo TEXT NOT NULL
+    )
+    ''')
+
+    cursor.executemany(f'''
+    INSERT INTO {compare_method} (pkgname, x86_version, loong64_version, repo)
+    VALUES (?, ?, ?, ?)
+    ''', [(pkg.name, pkg.x86_version, pkg.loong64_version, pkg.repo) for pkg in data])
+    
+    conn.commit()
+    cursor.close()
+    conn.close()
+
 # Print packages to screen
 def print_to_screen(data):
     for d in data:
@@ -318,7 +353,8 @@ def main():
     parser.add_argument("-l", "--lint", action="store_true", help="Check for db errors.")
     parser.add_argument("-d", "--depend", type=str, help="List reverse depends.")
     parser.add_argument("-o", "--output", type=str, help="Save output to file.")
-
+    parser.add_argument( "--db", type=str, help="Save output to database.")
+    
     args = parser.parse_args()
 
     required_for_output = [
@@ -326,7 +362,10 @@ def main():
     ]
     if args.output and not any(required_for_output):
         parser.error("The -o/--output option can only be used with other specific options")
-    
+
+    if args.db and not any(required_for_output):
+        parser.error("The --db option can only be used with other specific options")
+        
     if args.time is None:
         args.time = False
 
@@ -362,13 +401,13 @@ def main():
         repo = source_repos[0]
         x86_db = load_repo(os.path.join(cache_dir, x86_repo_path), repo)
         loong64_db = load_repo(os.path.join(cache_dir, loong64_repo_path), repo)
-        compare_repos(x86_db, loong64_db, args.time, args.newer)
+        compare_repos(x86_db, loong64_db, args.time, args.newer, repo)
 
     if args.extra:
         repo = source_repos[1]
         x86_db = load_repo(os.path.join(cache_dir, x86_repo_path), repo)
         loong64_db = load_repo(os.path.join(cache_dir, loong64_repo_path), repo)
-        compare_repos(x86_db, loong64_db, args.time, args.newer)
+        compare_repos(x86_db, loong64_db, args.time, args.newer, repo)
 
     if args.group:
         #for r in source_repos:
@@ -400,6 +439,15 @@ def main():
 
     if args.output:
         write_to_json(pkglist, Path(args.output))
+    elif args.db:
+        if args.core:
+            write_to_database(pkglist, Path(args.db), 'core_pkg')
+        elif args.extra:
+            write_to_database(pkglist, Path(args.db), 'extra_pkg')
+        elif args.all:
+            write_to_database(pkglist, Path(args.db), 'all_pkg')
+        elif args.build:
+            write_to_database(pkglist, Path(args.db), 'build_pkg')
     else:
         print_to_screen(pkglist)
     
