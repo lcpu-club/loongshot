@@ -1,10 +1,12 @@
 #!/usr/bin/python
 import argparse
 import colorlog
-from collections import defaultdict
 import networkx as nx
 import pyalpm
 import random
+import sqlite3
+from collections import defaultdict
+from pathlib import Path
 
 # TODO: Automate this. The packages listed here depend on ghc/ghc-libs but don't have .so files.
 HASKELL_DO_NOT_EXPAND = {
@@ -44,7 +46,11 @@ parser.add_argument('-d', '--db', nargs='*', default=["core", "extra", "communit
                                              help='Pacman sync db to consider. Defaulting to all stable dbs.')
 parser.add_argument('--dbpath', nargs='?', default="/var/lib/pacman",
                                            help='Pacman sync db location. Default: /var/lib/pacman')
-parser.add_argument('package', nargs='+', help='Packages to rebuild')
+# Either packages or a database that contains packages must be provided
+group = parser.add_mutually_exclusive_group()
+group.add_argument('package', nargs='*', help='Packages to rebuild')
+group.add_argument('--pkgdb', nargs=2, metavar=('DB_PATH', 'TABLE_NAME'), help='Packages to rebuild from a database')
+
 args = parser.parse_args()
 
 args.ignore = set(args.ignore.split(","))
@@ -61,7 +67,26 @@ handler = colorlog.StreamHandler()
 handler.setFormatter(colorlog.ColoredFormatter())
 logger.addHandler(handler)
 
-rebuild_list = set(filter(lambda p: not p.endswith(":nocheck"), args.package))
+if args.package and args.pkgdb:
+    parser.error("Cannot specify both 'package' and '--pkgdb'")
+if not args.package and not args.pkgdb:
+    parser.error("Either 'package' or '--pkgdb' must be provided")
+
+rebuild_list = set()
+
+if args.pkgdb:
+    db = args.pkgdb[0]
+    table = args.pkgdb[1]
+    conn = sqlite3.connect(Path(db))
+    cursor = conn.cursor()
+    cursor.execute(f'''
+    SELECT pkgname FROM {table} WHERE x86_version IS NOT 'missing';
+    ''')
+    rebuild_list = {row[0] for row in cursor.fetchall()}
+    cursor.close()
+    conn.close()
+else:
+    rebuild_list = set(filter(lambda p: not p.endswith(":nocheck"), args.package))
 
 package_db = defaultdict(dict)
 pkglist = rebuild_list.copy()
@@ -276,5 +301,51 @@ for pkg in nx.topological_sort(G):
                 continue
             result.extend(_pass1 + _pass2)
             break
+
+# Write back to database
+if args.pkgdb:
+    db = args.pkgdb[0]
+    table = args.pkgdb[1]
+    conn = sqlite3.connect(Path(db))
+    cursor = conn.cursor()
+
+    try:
+        cursor.execute(f"PRAGMA table_info({table})")
+        columns = [row[1] for row in cursor.fetchall()]  # Get column name
+        
+        cursor.execute(f'''DROP TABLE IF EXISTS build_list ''')
+        create_buildlist = f"""
+        CREATE TABLE build_list (
+            task_no INTEGER PRIMARY KEY AUTOINCREMENT,
+            {', '.join([f'"{col}"' for col in columns])},
+            status TEXT DEFAULT 'pending' NOT NULL
+        )
+        """
+        cursor.execute(create_buildlist)
+
+        # Create a new build_list table
+        serial = 1
+        for pkg in result:
+            # Get packages' entry
+            cursor.execute(f'SELECT * FROM {table} WHERE pkgname=?', (pkg,))
+            rows = cursor.fetchall()
+            
+            # Insert into build_list
+            for row in rows:
+                placeholders = ', '.join(['?'] * len(columns))
+                insert_sql = f"""
+                INSERT INTO build_list (task_no, {', '.join(columns)})
+                VALUES ({serial}, {placeholders})
+                """
+                cursor.execute(insert_sql, row)
+                serial += 1
+
+        conn.commit()
+
+    except Exception as e:
+        conn.rollback()
+        print(f"{str(e)}")
+    finally:
+        conn.close()
 
 print(" ".join(result))
