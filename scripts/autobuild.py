@@ -7,7 +7,9 @@ from pathlib import Path
 
 # Define retry triggers
 RETRY_TRIGGERS = {
-    "Network Error": ["Failure while downloading", "TLS connect error", "Could not download sources"],
+    "Fail to download source": ["Failure while downloading", "TLS connect error"],
+    # "Failed to apply patch": ["Fail to apply loong's patch"],
+    "Fail to pass PGP check" : ["One or more PGP signatures could not be verified"],
 }
 
 # Fetch one task from build list
@@ -22,77 +24,6 @@ def get_first_pending_record(db_path, table):
     
     return dict(record) if record else None
 
-# Execute build 
-def execute_script_with_record(script_path: str, record, builder="localhost"):
-    print("Start to build")
-    try:
-        # Build args
-        command = [
-            script_path,
-            record['name'],
-            "--ver",
-            record['x86_version'],
-            "--repo",
-            record['repo'],
-            "--builder",
-            builder
-        ]
-        
-        # Start to build package
-        print(f"Args: {command}")
-        result = subprocess.run(command, check=True, text=True)
-        print(f"Package built successfully.")
-        return True
-
-    except subprocess.CalledProcessError as e:
-        print(f"Failed to run script, exit code: {e.returncode}")
-
-        return False
-
-def execute_with_retry(script_path, record, builder="localhost", max_retries=3):
-    attempt = 0
-    command = [
-        script_path,
-        record['name'],
-        "--ver",
-        record['x86_version'],
-        "--repo",
-        record['repo'],
-        "--builder",
-        builder
-    ]
-        
-
-    while attempt < max_retries:
-        process = subprocess.Popen(
-            command,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            text=True
-        )
-        
-        need_retry = False
-        while True:
-            line = process.stdout.readline()
-            if not line and process.poll() is not None:
-                break
-            
-            print(line, end='')
-            if any(keyword in line for keywords in RETRY_TRIGGERS.values() for keyword in keywords):
-                print(f"Detect possible retry: {line}")
-                process.terminate()
-                need_retry = True
-                break
-            
-        if process.returncode == 0:
-            return True
-        elif need_retry:
-            attempt += 1
-            print(f"Retry attempt {attempt} ...")
-            time.sleep(attempt * 5)  
-        else:
-            return False
-    return False
 
 def mark_record_failed(db_path: str, record_id: int) -> None:
     """Mark when failed to build"""
@@ -107,9 +38,83 @@ def mark_record_failed(db_path: str, record_id: int) -> None:
 def delete_record(db_path: str, record_id: int) -> None:
     conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
-    cursor.execute("DELETE FROM build_list WHERE task_no = ?", (record_id,))
-    conn.commit()
-    conn.close()
+
+    try:
+        conn.execute("BEGIN TRANSACTION")
+
+        cursor.execute("""
+            INSERT INTO packages(name, repo, x86_version, loong_version)  
+            SELECT name, repo, x86_version, loong_version
+            FROM build_list 
+            WHERE task_no = ?
+        """, (record_id,))
+    
+        cursor.execute("DELETE FROM build_list WHERE task_no = ?", (record_id,))
+        conn.commit()
+
+    except sqlite3.Error as e:
+        conn.rollback()
+        raise RuntimeError(f"Failed: {e}") from e
+        
+    finally:
+        conn.close()
+
+# Execute build 
+def execute_with_retry(script_path, db, record, builder="localhost", max_retries=3):
+    attempt = 0
+    command = [
+        script_path,
+        record['name'],
+        "--ver",
+        record['x86_version'],
+        "--repo",
+        record['repo'],
+        "--builder",
+        builder
+    ]
+        
+
+    while attempt < max_retries:
+        # Start running script
+        process = subprocess.run(
+            command,
+            text=True
+        )
+        
+        need_retry = False
+
+        # pkgname = record['name']
+        with open(f"{record['name']}-{record['x86_version']}.log", 'r') as f:
+            lines = f.readlines()[-100:]
+        
+            # Look for retry opportunities
+            for line in lines:
+                for error_type, keywords in RETRY_TRIGGERS.items():
+                    if any(keyword in line for  keyword in keywords):
+                        print(f"Detect retry trigger in logs: {line.strip()} - type: {error_type}")
+                        
+                        if error_type == "Fail to download source":
+                            need_retry = True
+                        # TODO: May append extra args
+                        elif error_type == "Fail to pass PGP check":
+                            command += ["--","--skippgpcheck"]
+                            need_retry = True
+                        break
+                if need_retry:
+                    break
+        
+   
+        if process.returncode == 0:
+            delete_record(db, record['task_no'])
+            break
+        elif need_retry:
+            attempt += 1
+            print(f"Retry attempt {attempt} ...")
+            time.sleep(attempt * 5)  
+        else:
+            mark_record_failed(db, record['task_no'])
+            break
+
 
 def main():
     parser = argparse.ArgumentParser(description='Constantly fetch tasks from build list and run 0build')
@@ -137,12 +142,7 @@ def main():
         print(f"\nTask ID={record['task_no']}, name={record['name']}, version={record['x86_version']}")
 
         try:
-            success = execute_with_retry(args.script, record, args.builder)
-
-            if success:       
-                delete_record(db, record['task_no'])
-            else:
-                mark_record_failed(db, record['task_no'])
+            success = execute_with_retry(args.script, db, record, args.builder)        
 
         except Exception as e:
             print(f"Failed to run script {e}")
