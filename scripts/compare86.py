@@ -311,15 +311,20 @@ def write_to_database(data, db, compare_method):
     # Create a table for each compare method
     cursor.execute(f'''
     CREATE TABLE {compare_method} (
-        pkgname TEXT NOT NULL,
-        x86_version TEXT NOT NULL,
-        loong64_version TEXT NOT NULL,
-    repo TEXT NOT NULL
+        name TEXT PRIMARY KEY,
+        base TEXT,
+        repo TEXT,
+        x86_version TEXT,
+        x86_testing_version TEXT,
+        x86_staging_version TEXT,
+        loong_version TEXT,
+        loong_testing_version TEXT,
+        loong_staging_version TEXT
     )
     ''')
 
     cursor.executemany(f'''
-    INSERT INTO {compare_method} (pkgname, x86_version, loong64_version, repo)
+    INSERT INTO {compare_method} (name, x86_version, loong_version, repo)
     VALUES (?, ?, ?, ?)
     ''', [(pkg.name, pkg.x86_version, pkg.loong64_version, pkg.repo) for pkg in data])
     
