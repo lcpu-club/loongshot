@@ -80,7 +80,7 @@ if args.pkgdb:
     conn = sqlite3.connect(Path(db))
     cursor = conn.cursor()
     cursor.execute(f'''
-    SELECT pkgname FROM {table} WHERE x86_version IS NOT 'missing';
+    SELECT name FROM {table} WHERE x86_version IS NOT 'missing';
     ''')
     rebuild_list = {row[0] for row in cursor.fetchall()}
     cursor.close()
@@ -327,7 +327,7 @@ if args.pkgdb:
         serial = 1
         for pkg in result:
             # Get packages' entry
-            cursor.execute(f'SELECT * FROM {table} WHERE pkgname=?', (pkg,))
+            cursor.execute(f'SELECT * FROM {table} WHERE name=?', (pkg,))
             rows = cursor.fetchall()
             
             # Insert into build_list
