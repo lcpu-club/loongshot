@@ -1,10 +1,12 @@
 #!/usr/bin/python
 import argparse
 import colorlog
+import dbinit
+import json
 import networkx as nx
+import psycopg2
 import pyalpm
 import random
-import sqlite3
 from collections import defaultdict
 from pathlib import Path
 
@@ -77,11 +79,11 @@ rebuild_list = set()
 if args.pkgdb:
     db = args.pkgdb[0]
     table = args.pkgdb[1]
-    conn = sqlite3.connect(Path(db))
+    conn = dbinit.get_conn(Path(db))
     cursor = conn.cursor()
-    cursor.execute(f'''
-    SELECT name FROM {table} WHERE x86_version IS NOT 'missing';
-    ''')
+    select_name = f'''SELECT name FROM {table} WHERE x86_version != 'missing'; '''
+    cursor.execute(select_name)
+    
     rebuild_list = {row[0] for row in cursor.fetchall()}
     cursor.close()
     conn.close()
@@ -306,45 +308,60 @@ for pkg in nx.topological_sort(G):
 if args.pkgdb:
     db = args.pkgdb[0]
     table = args.pkgdb[1]
-    conn = sqlite3.connect(Path(db))
+    conn = dbinit.get_conn(Path(db))
     cursor = conn.cursor()
 
     try:
-        cursor.execute(f"PRAGMA table_info({table})")
-        columns = [row[1] for row in cursor.fetchall()]  # Get column name
+        get_table_schema = f"""SELECT column_name FROM information_schema.columns WHERE table_name = '{table}' ORDER BY ordinal_position"""
+        print(get_table_schema)
+        cursor.execute(get_table_schema)
+        columns = [row[0] for row in cursor.fetchall()]
+
         
-        cursor.execute(f'''DROP TABLE IF EXISTS build_list ''')
+        print("drop table")
+        cursor.execute('''DROP TABLE IF EXISTS build_list ''')
+
+        columns_definition = ''
+        if columns:
+            columns_definition = ', ' + ', '.join([f'"{col}" TEXT' for col in columns])
+        
+        # Create a new build_list table
         create_buildlist = f"""
         CREATE TABLE build_list (
-            task_no INTEGER PRIMARY KEY AUTOINCREMENT,
-            {', '.join([f'"{col}"' for col in columns])},
-            status TEXT DEFAULT 'pending' NOT NULL
+            task_no SERIAL PRIMARY KEY
+            {columns_definition},
+            flags INTEGER DEFAULT 0 
         )
         """
         cursor.execute(create_buildlist)
 
-        # Create a new build_list table
+
         serial = 1
         for pkg in result:
             # Get packages' entry
-            cursor.execute(f'SELECT * FROM {table} WHERE name=?', (pkg,))
+            print("get package")
+            get_package = f"""SELECT * FROM {table} WHERE name = '{pkg}'"""
+            cursor.execute(get_package)
             rows = cursor.fetchall()
-            
+
             # Insert into build_list
+            print("Insert packages")
             for row in rows:
-                placeholders = ', '.join(['?'] * len(columns))
-                insert_sql = f"""
-                INSERT INTO build_list (task_no, {', '.join(columns)})
-                VALUES ({serial}, {placeholders})
-                """
-                cursor.execute(insert_sql, row)
+                insert_columns = ['task_no'] + columns + ['flags']
+                placeholders = ', '.join(['%s'] * (len(columns) + 2))
+                insert_sql = f"""INSERT INTO build_list ({', '.join(insert_columns)}) VALUES ({placeholders}) """
+                params = (serial,) + tuple(row) + (0,)
+                cursor.execute(insert_sql, params)
                 serial += 1
 
+            print(f"Insert package success")
+
+        print("Success")
         conn.commit()
 
     except Exception as e:
         conn.rollback()
-        print(f"{str(e)}")
+        print(f"Write to database error:{str(e)}")
     finally:
         conn.close()
 
