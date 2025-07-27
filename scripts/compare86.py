@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 import argparse
+import dbinit
 import json
 import os
+import psycopg2
 import pyalpm
 import requests
-import sqlite3
 from collections import deque
 from datetime import datetime
 from pathlib import Path
@@ -30,6 +31,7 @@ signal(SIGPIPE, SIG_DFL)
 
 class PackageMetadata(BaseModel):
     name: str = "missing"
+    base: str = "missing"
     x86_version: str = "missing"
     loong64_version: str = "missing"
     repo:str = "missing"
@@ -91,6 +93,7 @@ def safe_tobuild():
             x86[pkg.base] |= alldep
             x86_repo[pkg.base] = PackageMetadata(
                 name=pkg.base,
+                base=pkg.base,
                 x86_version=pkg.version,
                 repo=repo
             )
@@ -119,6 +122,7 @@ def safe_tobuild():
             # print(f"{pkg_name:34} {x86_repo[pkg_name]}")
             p = PackageMetadata(
                 name=f'{pkg_name}',
+                base=f'{pkg_name}',
                 x86_version=f'{x86_repo[pkg_name].x86_version}',
                 repo=f'{x86_repo[pkg_name].repo}'
             )
@@ -168,6 +172,7 @@ def compare_all():
              # print(f"{pkg_name:34} {x86_version:24} {loong64_version:24}")
             p = PackageMetadata(
                 name=f'{pkg_name}',
+                base=f'{pkg_name}',
                 x86_version=f'{x86_version}',
                 loong64_version=f'{loong64_version}',
                 repo=repo
@@ -251,6 +256,7 @@ def compare_repos(x86_db, loong64_db, showtime, show_newer=False, repo='missing'
             # print(f"{pkg_name:34} {x86_version:24} {loong64_version:24}")
             p = PackageMetadata(
                 name=f'{pkg_name}',
+                base=f'{pkg_name}',
                 x86_version=f'{x86_version}',
                 loong64_version=f'{loong64_version}',
                 repo=repo
@@ -303,9 +309,12 @@ def write_to_json(data, file):
         print(f"Failed to save: {str(e)}")
         raise
 
+    
 # Write packages to database
 def write_to_database(data, db, compare_method):
-    conn = sqlite3.connect(db)
+
+    conn = dbinit.get_conn(db)
+    
     cursor = conn.cursor()
     cursor.execute(f'''DROP TABLE IF EXISTS {compare_method} ''')
     # Create a table for each compare method
@@ -325,7 +334,7 @@ def write_to_database(data, db, compare_method):
 
     cursor.executemany(f'''
     INSERT INTO {compare_method} (name, x86_version, loong_version, repo)
-    VALUES (?, ?, ?, ?)
+    VALUES (%s, %s, %s, %s)
     ''', [(pkg.name, pkg.x86_version, pkg.loong64_version, pkg.repo) for pkg in data])
     
     conn.commit()
@@ -453,8 +462,8 @@ def main():
             write_to_database(pkglist, Path(args.db), 'all_pkg')
         elif args.build:
             write_to_database(pkglist, Path(args.db), 'build_pkg')
-    else:
-        print_to_screen(pkglist)
+
+    print_to_screen(pkglist)
     
                 
 if __name__ == "__main__":
