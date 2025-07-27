@@ -1,58 +1,76 @@
 import argparse
+import dbinit
 import os
-import sqlite3
+import psycopg2
 import subprocess
 import time
 from pathlib import Path
+from psycopg2 import extras
 
 # Define retry triggers
-RETRY_TRIGGERS = {
+error_type = {
     "Fail to download source": ["Failure while downloading", "TLS connect error"],
     # "Failed to apply patch": ["Fail to apply loong's patch"],
     "Fail to pass PGP check" : ["One or more PGP signatures could not be verified"],
+    "Others": ["Could not resolve all dependencies",
+    "A failure occurred in prepare",
+    "A failure occurred in build",
+    "A failure occurred in check",
+    "A failure occurred in package",
+    "configure: error: cannot guess build type",]
 }
+bit_mapping = {key: idx for idx, key in enumerate(error_type.keys())}
 
 # Fetch one task from build list
 def get_first_pending_record(db_path, table):
-    conn = sqlite3.connect(db_path)
-    conn.row_factory = sqlite3.Row 
-    cursor = conn.cursor()
-    
-    cursor.execute(f"SELECT * FROM {table} WHERE status = 'pending' ORDER BY task_no LIMIT 1")
-    record = cursor.fetchone()
-    conn.close()
-    
-    return dict(record) if record else None
-
+    conn = dbinit.get_conn(db_path)
+    try:
+        with conn.cursor(cursor_factory=extras.DictCursor) as cursor:
+            cursor.execute(
+                f"SELECT * FROM {table} WHERE flags = 0 ORDER BY task_no LIMIT 1"
+            )
+            record = cursor.fetchone()
+            return dict(record) if record else None
+    finally:
+        conn.close()
 
 def mark_record_failed(db_path: str, record_id: int) -> None:
     """Mark when failed to build"""
-    conn = sqlite3.connect(db_path)
-    cursor = conn.cursor()
-    cursor.execute("UPDATE build_list SET status = 'failed' WHERE task_no = ?", (record_id,))
-    conn.commit()
-    conn.close()
-    print(f"{record_id} failed to build")
+    conn = dbinit.get_conn(db_path)
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute(
+                "UPDATE build_list SET status = 'failed' WHERE task_no = %s",
+                (record_id,)
+            )
+            conn.commit()
+            print(f"{record_id} failed to build")
+    finally:
+        conn.close()
 
 # Remove completed build task
-def delete_record(db_path: str, record_id: int) -> None:
-    conn = sqlite3.connect(db_path)
+def delete_record(db_path: str, record_id: int, error) -> None:
+    conn = dbinit.get_conn(db_path)
     cursor = conn.cursor()
 
     try:
-        conn.execute("BEGIN TRANSACTION")
+        cursor.execute("BEGIN TRANSACTION")
 
         cursor.execute("""
-            INSERT INTO packages(name, repo, x86_version, loong_version)  
-            SELECT name, repo, x86_version, loong_version
-            FROM build_list 
-            WHERE task_no = ?
-        """, (record_id,))
-    
-        cursor.execute("DELETE FROM build_list WHERE task_no = ?", (record_id,))
+            INSERT INTO packages(name, repo, flags, x86_version, loong_version)
+            SELECT name, repo, flags & 0xFFFF | (%s << 16), x86_version, loong_version
+            FROM build_list
+            WHERE task_no = %s
+            ON CONFLICT(name) DO UPDATE SET
+        repo = EXCLUDED.repo,
+                x86_version = EXCLUDED.x86_version,
+                loong_version = EXCLUDED.loong_version
+        """, (error, record_id,))
+        
+        cursor.execute("DELETE FROM build_list WHERE task_no = %s", (record_id,))
         conn.commit()
 
-    except sqlite3.Error as e:
+    except psycopg2.Error as e:
         conn.rollback()
         raise RuntimeError(f"Failed: {e}") from e
         
@@ -60,7 +78,7 @@ def delete_record(db_path: str, record_id: int) -> None:
         conn.close()
 
 # Execute build 
-def execute_with_retry(script_path, db, record, builder="localhost", max_retries=3):
+def execute_with_retry(script_path, db, record, builder, max_retries=3):
     attempt = 0
     command = [
         script_path,
@@ -72,7 +90,6 @@ def execute_with_retry(script_path, db, record, builder="localhost", max_retries
         "--builder",
         builder
     ]
-        
 
     while attempt < max_retries:
         # Start running script
@@ -80,40 +97,48 @@ def execute_with_retry(script_path, db, record, builder="localhost", max_retries
             command,
             text=True
         )
+        # An error mask, 0 stands for no error
+        mask = 0
         
-        need_retry = False
+        # A success build
+        if process.returncode == 0:
+            delete_record(db, record['task_no'], mask)
+            return        
 
-        # pkgname = record['name']
+        # When build fails
+        need_retry = False
+        error = ""
         with open(f"{record['name']}-{record['x86_version']}.log", 'r') as f:
             lines = f.readlines()[-100:]
-        
-            # Look for retry opportunities
+
+            # Error handler: Look for retry opportunities
             for line in lines:
-                for error_type, keywords in RETRY_TRIGGERS.items():
+                for err, keywords in error_type.items():
                     if any(keyword in line for  keyword in keywords):
-                        print(f"Detect retry trigger in logs: {line.strip()} - type: {error_type}")
-                        
-                        if error_type == "Fail to download source":
+                        print(f"Detect retry trigger in logs: {line.strip()} - type: {err}")
+                        if err == "Fail to download source":
                             need_retry = True
+                            break
                         # TODO: May append extra args
-                        elif error_type == "Fail to pass PGP check":
+                        elif err == "Fail to pass PGP check":
                             command += ["--","--skippgpcheck"]
                             need_retry = True
-                        break
+                            break
+                        elif err == "Others":
+                            error = err
+                            break
                 if need_retry:
                     break
-        
-   
-        if process.returncode == 0:
-            delete_record(db, record['task_no'])
-            break
-        elif need_retry:
+                
+        if need_retry:
             attempt += 1
             print(f"Retry attempt {attempt} ...")
             time.sleep(attempt * 5)  
         else:
-            mark_record_failed(db, record['task_no'])
-            break
+            # Error type to bit
+            mask |= 1 << bit_mapping[error]
+            delete_record(db, record['task_no'], mask)
+            return
 
 
 def main():
@@ -126,14 +151,46 @@ def main():
     args = parser.parse_args()
 
     if not args.db:
-        print("No arguments provided!")
+        print("No database provided!")
+        return
+
+    if not args.script:
+        print("No build script provided!")
         return
 
     db = args.db[0]
     table = args.db[1]
+    script = args.script
+    builder = "localhost"
+
+    if args.builder:
+        builder = args.builder
+    
+    print(f"Database: {db}\nBuild List: {table}\nBuild script: {script}")
+    # Create the resulting packages table
+    conn = dbinit.get_conn(db)
+    cursor = conn.cursor()
+    cursor.execute(f'''
+        CREATE TABLE IF NOT EXISTS packages (
+        name TEXT PRIMARY KEY,
+        base TEXT,
+        repo TEXT,
+        flags INTEGER,
+        x86_version TEXT,
+        x86_testing_version TEXT,
+        x86_staging_version TEXT,
+        loong_version TEXT,
+        loong_testing_version TEXT,
+        loong_staging_version TEXT
+        )
+    ''')
+    conn.commit()
+    cursor.close()
+    conn.close()
+    
     while True:
 
-        record = get_first_pending_record(Path(db), table)
+        record = get_first_pending_record(db, table)
 
         if not record:
             print("All task completed")
@@ -142,7 +199,7 @@ def main():
         print(f"\nTask ID={record['task_no']}, name={record['name']}, version={record['x86_version']}")
 
         try:
-            success = execute_with_retry(args.script, db, record, args.builder)        
+            success = execute_with_retry(script, db, record, builder)        
 
         except Exception as e:
             print(f"Failed to run script {e}")
