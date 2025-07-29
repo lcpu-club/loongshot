@@ -9,15 +9,16 @@ from psycopg2 import extras
 
 # Define retry triggers
 error_type = {
+    "Fail to apply loong's patch": ["Fail to apply loong's patch"],
+    "Unknown error before build": ["Unknown error before build"],
     "Fail to download source": ["Failure while downloading", "TLS connect error"],
-    # "Failed to apply patch": ["Fail to apply loong's patch"],
     "Fail to pass PGP check" : ["One or more PGP signatures could not be verified"],
-    "Others": ["Could not resolve all dependencies",
-    "A failure occurred in prepare",
-    "A failure occurred in build",
-    "A failure occurred in check",
-    "A failure occurred in package",
-    "configure: error: cannot guess build type",]
+    "Could not resolve all dependencies": ["Could not resolve all dependencies"],
+    "A failure occurred in prepare": ["A failure occurred in prepare"],
+    "A failure occurred in build": ["A failure occurred in build"],
+    "A failure occurred in check": ["A failure occurred in check"],
+    "A failure occurred in package": ["A failure occurred in package"],
+    "Cannot guess build type": ["configure: error: cannot guess build type"]
 }
 bit_mapping = {key: idx for idx, key in enumerate(error_type.keys())}
 
