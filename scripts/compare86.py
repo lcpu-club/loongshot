@@ -333,9 +333,9 @@ def write_to_database(data, db, compare_method):
     ''')
 
     cursor.executemany(f'''
-    INSERT INTO {compare_method} (name, x86_version, loong_version, repo)
-    VALUES (%s, %s, %s, %s)
-    ''', [(pkg.name, pkg.x86_version, pkg.loong64_version, pkg.repo) for pkg in data])
+    INSERT INTO {compare_method} (name, base, x86_version, loong_version, repo)
+    VALUES (%s, %s, %s, %s, %s)
+    ''', [(pkg.name, pkg.base, pkg.x86_version, pkg.loong64_version, pkg.repo) for pkg in data])
     
     conn.commit()
     cursor.close()
