@@ -12,6 +12,7 @@ error_type = {
     "Fail to apply loong's patch": ["Fail to apply loong's patch"],
     "Unknown error before build": ["Unknown error before build"],
     "Fail to download source": ["Failure while downloading", "TLS connect error"],
+    "Fail to pass the validity check":["Fail to pass the validity check"],
     "Fail to pass PGP check" : ["One or more PGP signatures could not be verified"],
     "Could not resolve all dependencies": ["Could not resolve all dependencies"],
     "A failure occurred in prepare": ["A failure occurred in prepare"],
@@ -35,20 +36,6 @@ def get_first_pending_record(db_path, table):
     finally:
         conn.close()
 
-def mark_record_failed(db_path: str, record_id: int) -> None:
-    """Mark when failed to build"""
-    conn = dbinit.get_conn(db_path)
-    try:
-        with conn.cursor() as cursor:
-            cursor.execute(
-                "UPDATE build_list SET status = 'failed' WHERE task_no = %s",
-                (record_id,)
-            )
-            conn.commit()
-            print(f"{record_id} failed to build")
-    finally:
-        conn.close()
-
 # Remove completed build task
 def delete_record(db_path: str, record_id: int, error) -> None:
     conn = dbinit.get_conn(db_path)
@@ -56,17 +43,17 @@ def delete_record(db_path: str, record_id: int, error) -> None:
 
     try:
         cursor.execute("BEGIN TRANSACTION")
-
+        # If build success, update loong_version, otherwise don't
         cursor.execute("""
-            INSERT INTO packages(name, repo, flags, x86_version, loong_version)
-            SELECT name, repo, flags & 0xFFFF | (%s << 16), x86_version, loong_version
+            INSERT INTO packages(name, base, repo, flags, x86_version, loong_version)
+            SELECT name, base, repo, flags & 0xFFFF | (%s << 16), x86_version, CASE WHEN %s = 0 THEN x86_version ELSE loong_version END
             FROM build_list
             WHERE task_no = %s
             ON CONFLICT(name) DO UPDATE SET
         repo = EXCLUDED.repo,
                 x86_version = EXCLUDED.x86_version,
                 loong_version = EXCLUDED.loong_version
-        """, (error, record_id,))
+        """, (error, error, record_id,))
         
         cursor.execute("DELETE FROM build_list WHERE task_no = %s", (record_id,))
         conn.commit()
@@ -125,7 +112,7 @@ def execute_with_retry(script_path, db, record, builder, max_retries=3):
                             command += ["--","--skippgpcheck"]
                             need_retry = True
                             break
-                        elif err == "Others":
+                        else:
                             error = err
                             break
                 if need_retry:
@@ -137,8 +124,12 @@ def execute_with_retry(script_path, db, record, builder, max_retries=3):
             time.sleep(attempt * 5)  
         else:
             # Error type to bit
-            mask |= 1 << bit_mapping[error]
-            delete_record(db, record['task_no'], mask)
+            print("Failed to build... Now removing task")
+            if error not in bit_mapping:
+                print(f"Unmapped error type: {error}")
+
+            # Error code starts with 1, not 0
+            delete_record(db, record['task_no'], bit_mapping[error] + 1)
             return
 
 
