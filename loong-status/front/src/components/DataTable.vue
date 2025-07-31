@@ -45,7 +45,7 @@
       </button>
     </div>
   </div>
-
+  
     <!-- Current building list sidebar -->
     <button class="nav-button task-button" @click="toggleSidebar">
       <svg class="sidebar-icon" viewBox="0 0 24 24">
@@ -58,6 +58,9 @@
         <button class="close-btn" @click="toggleSidebar">&times;</button>
       </div>
       <div class="sidebar-content">
+        <div v-if="activeTask" class="current-task">
+        Current building task: # {{ activeTask.name }} <!-- Cannot display task_no due to backend - database compatability -->
+        </div>
         <div v-if="loading" class="loading">Loading...</div>
         <div v-else-if="error" class="error">{{ error }}</div>
         <div v-else>
@@ -71,7 +74,11 @@
           </tr>
         </thead>
         <tbody>
-          <tr v-for="(task, index) in buildingTasks" :key="task.id">
+          <tr 
+            v-for="(task, index) in buildingTasks" 
+            :key="task.id"
+            :class="{ 'processing': task.flags === 0xFFFF }"
+          >
             <td>{{ index + 1 }}</td>
             <td class="text-ellipsis">{{ task.name }}</td>
             <td>{{ task.base }}</td>
@@ -363,7 +370,7 @@ export default {
           { width: '20%' },
           { width: '20%' },
           { width: '15%' }
-        ]
+        ],
     };
     
   },
@@ -425,7 +432,14 @@ export default {
       try {
         const response = await fetch('/api/packages/building_list');
         if (!response.ok) throw new Error('Failed to fetch tasks');
-        this.buildingTasks = await response.json();
+        
+        const tasks = await response.json();
+        this.buildingTasks = tasks;
+
+        this.activeTask = tasks.find(task => 
+          task.flags === 0xFFFF
+        ) || null;
+
       } catch (err) {
         this.error = err.message;
       } finally {
@@ -454,6 +468,7 @@ export default {
   position: relative;
   z-index: 100; 
   min-height: 60px;
+  gap: 20px;
 }
 
 .main-content {
@@ -493,10 +508,10 @@ export default {
 
 /* Search box */
 .search-container {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  transform: translate(-50%, -50%);
+  position: static;
+  /* left: 50%;
+  top: 50%; */
+  transform: none;
   width: 50%;
   min-width: 400px;
 }
@@ -918,6 +933,37 @@ export default {
   padding: 1rem;
   text-align: center;
 }
+
+/* 当前任务提示样式 */
+.current-task {
+  font-size: 0.9em;
+  color: #666;
+  padding: 8px 12px;
+  background: #f5f5f5;
+  border-radius: 4px;
+  margin-bottom: 12px;
+}
+
+/* 处理中的表格行样式 */
+tr.processing {
+  background-color: #fffbe6 !important;
+  border-left: 3px solid #ffc107;
+  position: relative;
+}
+
+tr.processing td:first-child {
+  font-weight: 600;
+  color: #ffc107;
+}
+
+/* tr.processing::after {
+  content: "▶";
+  color: #ffc107;
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+} */
 
 /* Home button */
 .home-button .icon {
