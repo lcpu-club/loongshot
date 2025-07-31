@@ -1,34 +1,143 @@
 <template>
+  <div class="page-container">
   <div class="header-container">
-    <div class="search-box">
+    <!-- Return button -->
+    <router-link to="/" class="nav-button home-button">
+      <svg class="icon" viewBox="0 0 24 24">
+        <path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/>
+      </svg>
+    </router-link>
+
+    <div class="search-container">
+    <div class="search-group">
+      <!-- Input box-->
       <input
         v-model="searchQuery"
-        placeholder="Search..."
+        placeholder="Search packages..."
         @keyup.enter="onSearch"
+        class="search-input"
       />
-      <button @click="onSearch">Search</button>
-      <div class="flags-filter">
-        Filter Fails:
-        <select v-model="selectedStatus" @change="onStatusChange">
-          <option value="All">All</option>
-          <option value="1">Fail to apply patch</option>
-          <option value="2">Fail before build</option>
-          <option value="3">Fail to download source</option>
-          <option value="4">Fail to pass the validity check</option>
-          <option value="5">Fail to pass PGP check</option>
-          <option value="6">Could not resolve all dependencies</option>
-          <option value="7">Fail in prepare</option>
-          <option value="8">Fail in build</option>
-          <option value="9">Fail in check</option>
-          <option value="10">Fail in package</option>
-          <option value="11">Old config.guess</option>
-        </select>
+      <!-- Filter button -->
+        <div class="filter-wrapper">
+          <button class="filter-btn" @click="toggleFilter">
+            <svg class="filter-icon" viewBox="0 0 24 24">
+              <path d="M4 21h16v-2H4v2zm0-4h16v-2H4v2zm0-4h16v-2H4v2zm0-4h16V7H4v2zm0-4h16V3H4v2z"/>
+            </svg>
+          </button>
+          
+          <!-- Filter menu -->
+          <div v-show="showFilter" class="filter-panel">
+            <div 
+              v-for="option in filterOptions"
+              :key="option.value"
+              class="filter-item"
+              :class="{ active: selectedStatus === option.value }"
+              @click="selectFilter(option.value)"
+            >
+              {{ option.label }}
+            </div>
+          </div>
+        </div>
+      <button @click="onSearch" class="search-btn">
+        <svg class="search-icon" viewBox="0 0 24 24">
+          <path d="M15.5 14h-.79l-.28-.27a6.5 6.5 0 1 0-.7.7l.27.28v.79l5 5 1.5-1.5-5-5zm-6 0a4.5 4.5 0 1 1 0-9 4.5 4.5 0 0 1 0 9z"/>
+        </svg>
+      </button>
+    </div>
+  </div>
+
+    <!-- Current building list sidebar -->
+    <button class="nav-button task-button" @click="toggleSidebar">
+      <svg class="sidebar-icon" viewBox="0 0 24 24">
+        <path d="M4 18h16c.55 0 1-.45 1-1s-.45-1-1-1H4c-.55 0-1 .45-1 1s.45 1 1 1zm0-5h16c.55 0 1-.45 1-1s-.45-1-1-1H4c-.55 0-1 .45-1 1s.45 1 1 1zM3 7c0 .55.45 1 1 1h16c.55 0 1-.45 1-1s-.45-1-1-1H4c-.55 0-1 .45-1 1z"/>
+      </svg>
+    </button>
+    <div class="sidebar" :class="{ active: isSidebarOpen }">
+      <div class="sidebar-header">
+        <h3>Building Tasks</h3>
+        <button class="close-btn" @click="toggleSidebar">&times;</button>
+      </div>
+      <div class="sidebar-content">
+        <div v-if="loading" class="loading">Loading...</div>
+        <div v-else-if="error" class="error">{{ error }}</div>
+        <div v-else>
+          <table class="sidebar-table">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Name</th>
+            <th>Base</th>
+            <th>Repo</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="(task, index) in buildingTasks" :key="task.id">
+            <td>{{ index + 1 }}</td>
+            <td class="text-ellipsis">{{ task.name }}</td>
+            <td>{{ task.base }}</td>
+            <td>{{ task.repo }}</td>
+          </tr>
+        </tbody>
+      </table>
+        </div>
       </div>
     </div>
+    <!-- Sidebar overlay -->
+    <div v-if="isSidebarOpen" class="sidebar-overlay" @click="toggleSidebar"></div>
+  </div>
+  <div class="main-content">
+  <!-- Package data displaying table -->
+  <div class="table-container" :class="{ 'no-data': !tableData.length }">
+      <table>
+        <colgroup>
+        <col v-for="(col, index) in columnWidths" 
+            :key="index" 
+            :style="{ width: col.width }">
+      </colgroup>
+        <thead>
+          <tr>
+            <th v-for="column in columns" :key="column">
+              <div class="column-header">
+                {{ column }}
+                <!-- Status Legend -->
+                <span v-if="column === 'Status'" class="help-tooltip">
+                  [?]
+                  <div class="tooltip-content">
+                    <div v-for="item in legendItems" :key="item.symbol">
+                      <span :style="item.style">{{ item.symbol }}</span>: {{ item.description }}
+                    </div>
+                  </div>
+                </span>
+              </div>
+            </th>
+          </tr>
+        </thead>
+        <tbody v-if="tableData.length">
+          <tr v-for="row in tableData" :key="row.id">
+            <td v-for="column in columns" :key="column" v-html="row[column]"></td>
+          </tr>
+        </tbody>
+        <tbody v-else>
+          <tr class="empty-row">
+            <td :colspan="columns.length">
+              <div class="empty-message">No packages found</div>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+    <!-- Page button -->
     <div class="paginator">
-      <button @click="prevPage" :disabled="currentPage === 1">Previous</button>
-      <span>Page {{ currentPage }} of {{ totalPages }}</span>
-      <button @click="nextPage" :disabled="currentPage >= totalPages">Next</button>
+      <button 
+      class="page-arrow"
+      @click="prevPage" 
+      :disabled="currentPage === 1"
+    >
+      &lt;
+    </button>
+    
+    <div class="page-input">
       <input
         v-model.number="goToPage"
         type="number"
@@ -36,35 +145,18 @@
         :max="totalPages"
         @keyup.enter="goToSpecificPage"
       />
-      <button @click="goToSpecificPage">Go</button>
+      <span>of {{ totalPages }}</span>
     </div>
-    <div class="legend">
-      <span>Status Legend:</span>
-      <span title="loong's version matches x86's">✅</span>
-      <span title="loong's version mis-matches">⭕</span>
-      <span title="missing this package in loong">❌</span>
-      <span title="missing this package in x86">🗑</span>
-      <span title="has patch in our repo" style="color: lime;">🅿</span>
-      <span title="has build log on server" style="color: gold;">🅻</span>
-      <span title="build with nocheck" style="color: blue;">🅲</span>
-      <span title="config.sub is too old" style="color: orange;">🅾</span>
-      <span title="build fails" style="color: red;">🅵</span>
+    
+    <button
+      class="page-arrow"
+      @click="nextPage"
+      :disabled="currentPage >= totalPages"
+    >
+      &gt;
+    </button>
     </div>
-  </div>
-  <div class="table-container">
-    <table>
-      <thead>
-        <tr>
-          <th v-for="column in columns" :key="column">{{ column }}</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr v-for="row in tableData" :key="row.id">
-          <td v-for="column in columns" :key="column" v-html="row[column]"></td>
-        </tr>
-      </tbody>
-    </table>
-  </div>
+</div>
 </template>
 
 <script>
@@ -86,7 +178,7 @@ export default {
     const columns = ref(['Name', 'Base', 'Repo', 'x86 Version', 'Loong Version', 'Status']);
 
     function compareVersions(loongVersion, x86Version) {
-      if (!loongVersion || !x86Version) return false;
+      if (!loongVersion || !x86Version || loongVersion === 'missing') return false;
       const [loong_pkgver, loong_rel] = loongVersion.split('-')
       const loong_relver = loong_rel.split('.')[0]
       const [x86_pkgver, x86_relver] = x86Version.split('-')
@@ -230,45 +322,644 @@ export default {
       onSearch,
     };
   },
+  data() {
+    return {
+      windowHeight: 0,
+      rowHeight: 40,
+      isSidebarOpen: false,
+      buildingTasks: [],
+      loading: false,
+      error: null,
+      showFilter: false,
+      filterOptions: [
+        { value: 'All', label: 'All' },
+        { value: '1', label: 'Patch Fail' },
+        { value: '2', label: 'Pre-Build Fail' },
+        { value: '3', label: 'Source Fail' },
+        { value: '4', label: 'Validity Check' },
+        { value: '5', label: 'PGP Check' },
+        { value: '6', label: 'Dependencies' },
+        { value: '7', label: 'Prepare Fail' },
+        { value: '8', label: 'Build Fail' },
+        { value: '9', label: 'Check Fail' },
+        { value: '10', label: 'Package Fail' },
+        { value: '11', label: 'Old Config' }
+      ],
+      legendItems: [
+      { symbol: '✅', description: 'loong\'s version matches x86\'s', style: '' },
+      { symbol: '⭕', description: 'loong\'s version mis-matches', style: '' },
+      { symbol: '❌', description: 'missing this package in loong', style: '' },
+      { symbol: '🗑', description: 'missing this package in x86', style: '' },
+      { symbol: '🅿', description: 'has patch in our repo', style: 'color: lime;' },
+      { symbol: '🅻', description: 'has build log on server', style: 'color: gold;' },
+      { symbol: '🅲', description: 'build with nocheck', style: 'color: blue;' },
+      { symbol: '🅾', description: 'config.sub is too old', style: 'color: orange;' },
+      { symbol: '🅵', description: 'build fails', style: 'color: red;' }
+      ],
+      columnWidths: [
+          { width: '20%' },  // 根据实际列数配置
+          { width: '20%' },
+          { width: '5%' },
+          { width: '20%' },
+          { width: '20%' },
+          { width: '15%' }
+        ]
+    };
+    
+  },
+  computed: {
+    visibleData() {
+      const availableHeight = this.windowHeight - 200
+      const visibleRows = Math.floor(availableHeight / this.rowHeight)
+      return this.tableData.slice(0, visibleRows)
+    }
+  },
+  mounted() {
+    this.updateWindowSize()
+    window.addEventListener('resize', this.updateWindowSize)
+  },
+  beforeDestroy() {
+    window.removeEventListener('resize', this.updateWindowSize)
+  },
+  methods: {
+    updateWindowSize() {
+      this.windowHeight = window.innerHeight
+    },
+    toggleFilter() {
+      this.showFilter = !this.showFilter
+    },
+    selectFilter(value) {
+      this.selectedStatus = value
+      this.onStatusChange()
+      this.showFilter = false
+    },
+    toggleSidebar() {
+      this.isSidebarOpen = !this.isSidebarOpen;
+      if (this.isSidebarOpen) {
+        this.fetchBuildingTasks();
+      }
+    },
+    prevPage() {
+    if (this.currentPage > 1) {
+      this.currentPage--;
+      this.goToPage = this.currentPage;
+      this.fetchData();
+    }
+    },
+    nextPage() {
+      if (this.currentPage < this.totalPages) {
+        this.currentPage++;
+        this.goToPage = this.currentPage;
+        this.fetchData();
+      }
+    },
+    goToSpecificPage() {
+      const page = Math.max(1, Math.min(this.goToPage, this.totalPages));
+      this.currentPage = page;
+      this.goToPage = page;
+      this.fetchData();
+    },
+    async fetchBuildingTasks() {
+      this.loading = true;
+      this.error = null;
+      try {
+        const response = await fetch('/api/packages/building_list');
+        if (!response.ok) throw new Error('Failed to fetch tasks');
+        this.buildingTasks = await response.json();
+      } catch (err) {
+        this.error = err.message;
+      } finally {
+        this.loading = false;
+      }
+    },
+  }
 };
 </script>
 <style scoped>
-.table-container {
-  width: 100%;
-  margin-top: 10px;
-  overflow-x: auto;
+.page-container {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
 }
 
 .header-container {
-  width: 100%;
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: space-between; /* Aligns left and right */
-  align-items: center; /* Vertically center items */
-}
-
-.search-box {
+  flex-shrink: 0;
+  height: 60px;
   display: flex;
   align-items: center;
-  flex-wrap: wrap;
-  display: flex;
-  gap: 10px; /* Adds spacing between input and button */
+  justify-content: space-between;
+  padding: 12px 20px;
+  background: #fff;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+  position: relative;
+  z-index: 100; 
+  min-height: 60px;
 }
 
-.legend {
+.main-content {
+  flex: 1;
   display: flex;
-  gap: 10px;
+  flex-direction: column;
+  min-height: 0; 
+}
+
+.nav-button {
+  width: 40px;
+  height: 40px;
+  padding: 8px;
+  border: none;
+  border-radius: 8px;
+  background: #f8f9fa;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.nav-button:hover {
+  background: #e9ecef;
+}
+
+.icon {
+  width: 24px;
+  height: 24px;
+  fill: #666;
+}
+
+.home-button .icon {
+  transform: translateX(-2px);
+}
+
+/* Search box */
+.search-container {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 50%;
+  min-width: 400px;
+}
+
+.search-group {
+  display: flex;
+  align-items: stretch;
+  background: #fff;
+  border-radius: 35px;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+  transition: all 0.3s ease;
+}
+
+.search-input {
+  flex: 1;
+  height: 50px;
+  padding: 0 25px;
+  border: none;
+  background: transparent;
+  font-size: 16px;
+  border-radius: 35px 0 0 35px;
+}
+
+.search-input:focus {
+  outline: none;
+  box-shadow: none;
+}
+
+/* Search button */
+.search-btn {
+  width: 60px;
+  height: 50px; 
+  border: none;
+  background: #007bff;
+  border-radius: 0 35px 35px 0;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.search-btn:hover {
+  background: #0056b3;
+}
+
+/* Filter */
+.filter-wrapper {
+  position: relative;
+  display: inline-block;
+}
+
+.filter-btn {
+  height: 50px; 
+  padding: 0 12px; 
+  background: #f8f9fa;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.2s;
+}
+
+.filter-btn:hover {
+  background: #e9ecef;
+}
+
+.filter-icon {
+  width: 18px;
+  height: 18px;
+  fill: #666;
+}
+
+.filter-panel {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  width: 240px;
+  background: white;
+  border: 1px solid #eee;
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+  margin-top: 8px;
+  z-index: 1000;
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.filter-item {
+  padding: 10px 16px;
+  cursor: pointer;
+  transition: all 0.2s;
+  border-bottom: 1px solid #f8f9fa;
+}
+
+.filter-item:hover {
+  background: #f8f9fa;
+}
+
+.filter-item.active {
+  background: #e3f2fd;
+  color: #007bff;
+  font-weight: 500;
+}
+
+.search-icon {
+  width: 22px;
+  height: 22px;
+  fill: white;
+}
+
+.filter-icon {
+  width: 20px;
+  height: 20px;
+  fill: #666;
 }
 
 .paginator {
-  align-items: center;
+  flex-shrink: 0;
   display: flex;
-  gap: 10px;
+  justify-content: center;
+  align-items: center;
+  gap: 15px;
+  padding: 20px;
+  margin-top: 20px;
+  background: var(--bg-primary);
+  border-top: 1px solid var(--border-color);
 }
+
+.page-arrow {
+  width: 40px;
+  height: 40px;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  background: white;
+  cursor: pointer;
+  font-weight: bold;
+  transition: all 0.2s;
+}
+
+.page-arrow:hover:not(:disabled) {
+  border-color: #007bff;
+  color: #007bff;
+}
+
+.page-arrow:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.page-input {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.page-input input {
+  width: 60px;
+  height: 40px;
+  padding: 0 10px;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  text-align: center;
+  -moz-appearance: textfield;
+  appearance: textfield;
+  
+  &::-webkit-outer-spin-button,
+  &::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+}
+
+.page-input span {
+  color: #666;
+  font-size: 0.9em;
+}
+
+@media (max-width: 768px) {
+  .header-container {
+    padding: 8px 12px;
+    min-height: 52px;
+  }
+
+  .search-container {
+    width: 60%;
+    min-width: 300px;
+    top: 8px;
+  }
+
+  .search-group {
+    border-radius: 25px;
+  }
+
+  .search-input {
+    padding: 0 15px;
+    font-size: 14px;
+  }
+
+  .filter-panel {
+    width: 200px;
+    right: -50%;
+  }
+
+  .tooltip-content {
+    min-width: 200px;
+    font-size: 0.9em;
+    left: 50%;
+    transform: translateX(-50%);
+  }
+
+  .nav-button {
+    width: 36px;
+    height: 36px;
+  }
+
+  .sidebar-table thead {
+    top: 60px; 
+  }
+  
+  .sidebar-content {
+    height: calc(100vh - 80px);
+  }
+
+  .paginator {
+    gap: 10px;
+    padding: 15px;
+  }
+  
+  .page-arrow {
+    width: 35px;
+    height: 35px;
+  }
+}
+
+.column-header {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.help-tooltip {
+  cursor: help;
+  position: relative;
+  color: #666;
+  font-size: 0.8em;
+  margin-left: 4px;
+  
+  &:hover .tooltip-content {
+    visibility: visible;
+    opacity: 1;
+  }
+}
+
+.tooltip-content {
+  visibility: hidden;
+  opacity: 0;
+  position: absolute;
+  top: 100%;
+  bottom: auto;
+  left: 50%;
+  transform: translateX(-50%) translateY(8px);
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  padding: 12px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+  min-width: 240px;
+  z-index: 1000; 
+  transition: opacity 0.2s;
+  font-size: 14px;
+  line-height: 1.6;
+  text-align: left;
+  
+  div {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 4px 0;
+  }
+}
+
+.task-button {
+  background: #ffffff;
+  
+  .icon {
+    fill: white;
+  }
+  
+  &:hover {
+    background: #e9ecef;
+  }
+}
+
+.sidebar {
+  position: fixed;
+  right: -1000px;
+  top: 0;
+  width: 1000px;
+  height: 100%;
+  min-width: 360px; 
+  max-width: 90%; 
+  background: white;
+  box-shadow: -2px 0 5px rgba(0,0,0,0.2);
+  transition: right 0.3s ease;
+  z-index: 1001;
+}
+
+.sidebar:hover {
+  background: #e9ecef;
+}
+
+.sidebar-icon {
+  width: 24px;
+  height: 24px;
+  fill: #666;
+}
+
+.sidebar.active {
+  right: 0;
+}
+
+.sidebar-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0,0,0,0.5);
+  z-index: 1000;
+}
+
+.sidebar-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem;
+  border-bottom: 1px solid #ddd;
+}
+
+.close-btn {
+  background: none;
+  border: none;
+  font-size: 1.5rem;
+  cursor: pointer;
+}
+
+.sidebar-content {
+  padding: 1rem;
+  height: calc(100% - 60px);
+  overflow-y: auto;
+}
+
+.sidebar-table {
+  width: 100%;
+  table-layout: auto;
+  min-width: 380px;
+  border-collapse: collapse;
+  overflow-x: auto;
+  display: block; 
+  scroll-behavior: smooth;
+  th, td {
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border-color);
+    text-align: left;
+  }
+
+  th {
+    font-weight: 500;
+    background: var(--bg-secondary);
+  }
+
+  tr:hover {
+    background: rgba(var(--accent-color-rgb), 0.05);
+  }
+}
+
+.sidebar-table thead {
+  display: block;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: var(--bg-primary);
+  box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+}
+
+.sidebar-table tbody {
+  display: block;
+  overflow-y: auto;
+  max-height: calc(100vh - 160px); 
+}
+
+.sidebar-table thead tr,
+.sidebar-table tbody tr {
+  display: table;
+  width: 100%;
+  table-layout: fixed;
+}
+
+.sidebar-table::-webkit-scrollbar {
+  height: 6px;
+  width: 6px;
+}
+
+.sidebar-table::-webkit-scrollbar-thumb {
+  background: var(--border-color);
+  border-radius: 3px;
+}
+
+.task-item {
+  padding: 0.5rem;
+  margin-bottom: 0.5rem;
+  border-bottom: 1px solid #eee;
+}
+
+.loading, .error {
+  padding: 1rem;
+  text-align: center;
+}
+
+/* Home button */
+.home-button .icon {
+  transform: translateX(-2px); 
+}
+
+.table-container {
+  min-height: 200px; 
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  flex: 1;
+  overflow: hidden;
+  position: relative;
+}
+
+.table-container.no-data {
+  overflow: hidden; 
+}
+
+.empty-row td {
+  height: 150px;
+  vertical-align: middle;
+  text-align: center;
+}
+
+.empty-message {
+  color: var(--text-secondary);
+  font-size: 0.95em;
+}
+
+thead {
+  position: sticky;
+  top: 0;
+  background: var(--bg-primary);
+  z-index: 2;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+} 
 
 table {
   width: 100%;
   border-collapse: collapse;
+  background: white;
 }
 
 th, td {
@@ -295,5 +986,12 @@ tr:hover {
 
 input {
   height: 30px;
+}
+
+.text-ellipsis {
+  max-width: 150px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 </style>
