@@ -107,6 +107,25 @@ async fn get_packages(pool: web::Data<sqlx::Pool<sqlx::Postgres>>) -> impl Respo
     HttpResponse::Ok().json(packages)
 }
 
+#[get("/api/packages/building_list")]
+async fn get_building_list(pool: web::Data<sqlx::Pool<sqlx::Postgres>>) -> impl Responder {
+    let packages: Vec<Package> = sqlx::query_as(
+        "SELECT name, base, repo, flags,
+        NULL as x86_version,
+        NULL as x86_testing_version,
+        NULL as x86_staging_version,
+        NULL as loong_version,
+        NULL as loong_testing_version,
+        NULL as loong_staging_version
+        FROM build_list ORDER by task_no"
+    )
+    .fetch_all(pool.get_ref())
+    .await
+    .unwrap();
+
+    HttpResponse::Ok().json(packages)
+}
+
 #[get("/api/packages/stat")]
 async fn get_stat(pool: web::Data<sqlx::Pool<sqlx::Postgres>>) -> impl Responder {
     let counts = sqlx::query_as::<_, CountResponse>(
@@ -214,6 +233,7 @@ async fn main() -> std::io::Result<()> {
             .service(get_last_update)
             .service(get_stat)
             .service(get_tasks)
+            .service(get_building_list)
     })
     .workers(2)
     .bind(("127.0.0.1", 8080))?

@@ -24,14 +24,19 @@ error_type = {
 bit_mapping = {key: idx for idx, key in enumerate(error_type.keys())}
 
 # Fetch one task from build list
-def get_first_pending_record(db_path, table):
+def get_pending_task(db_path, table, task_no):
     conn = dbinit.get_conn(db_path)
     try:
         with conn.cursor(cursor_factory=extras.DictCursor) as cursor:
             cursor.execute(
-                f"SELECT * FROM {table} WHERE flags = 0 ORDER BY task_no LIMIT 1"
+                f"SELECT * FROM {table} WHERE task_no = %s", (task_no,)
             )
             record = cursor.fetchone()
+            cursor.execute(
+                f"UPDATE {table} SET flags = 0xFFFF WHERE task_no = %s", (task_no,)
+            )
+            conn.commit()
+
             return dict(record) if record else None
     finally:
         conn.close()
@@ -46,16 +51,21 @@ def delete_record(db_path: str, record_id: int, error) -> None:
         # If build success, update loong_version, otherwise don't
         cursor.execute("""
             INSERT INTO packages(name, base, repo, flags, x86_version, loong_version)
-            SELECT name, base, repo, flags & 0xFFFF | (%s << 16), x86_version, CASE WHEN %s = 0 THEN x86_version ELSE loong_version END
+            SELECT name, base, repo, %s << 16, x86_version, CASE WHEN %s = 0 THEN x86_version ELSE loong_version END
             FROM build_list
             WHERE task_no = %s
             ON CONFLICT(name) DO UPDATE SET
-        repo = EXCLUDED.repo,
-                x86_version = EXCLUDED.x86_version,
-                loong_version = EXCLUDED.loong_version
+            repo = EXCLUDED.repo,
+            flags = EXCLUDED.flags,
+            x86_version = EXCLUDED.x86_version,
+            loong_version = EXCLUDED.loong_version
         """, (error, error, record_id,))
         
-        cursor.execute("DELETE FROM build_list WHERE task_no = %s", (record_id,))
+        cursor.execute(
+                f"UPDATE build_list SET flags = %s << 16 WHERE task_no = %s", (error, record_id,)
+            )
+        
+        # cursor.execute("DELETE FROM build_list WHERE task_no = %s", (record_id,))
         conn.commit()
 
     except psycopg2.Error as e:
@@ -66,8 +76,10 @@ def delete_record(db_path: str, record_id: int, error) -> None:
         conn.close()
 
 # Execute build 
-def execute_with_retry(script_path, db, record, builder, max_retries=3):
-    attempt = 0
+def execute_with_retry(script_path, db, record, builder):
+    attempt = 0 #Retry attempts
+    max_retries=3
+
     command = [
         script_path,
         record['name'],
@@ -179,10 +191,10 @@ def main():
     conn.commit()
     cursor.close()
     conn.close()
-    
+    task_no = 1
     while True:
 
-        record = get_first_pending_record(db, table)
+        record = get_pending_task(db, table, task_no)
 
         if not record:
             print("All task completed")
@@ -191,7 +203,8 @@ def main():
         print(f"\nTask ID={record['task_no']}, name={record['name']}, version={record['x86_version']}")
 
         try:
-            success = execute_with_retry(script, db, record, builder)        
+            execute_with_retry(script, db, record, builder)  
+            task_no += 1      
 
         except Exception as e:
             print(f"Failed to run script {e}")
