@@ -30,6 +30,7 @@
   with_items:
     - backuprepo
     - createlinks
+    - mirror-sync.sh
 
 - name: Install systemd timers
   copy: src={{ item }} dest=/etc/systemd/system/{{ item }} owner=root group=root mode=0644
@@ -38,12 +39,15 @@
     - createlinks.service
     - backuprepo.timer
     - backuprepo.service
+    - mirror-sync.timer
+    - mirror-sync.service
 
 - name: Activate systemd timers
   service: name={{ item }} enabled=yes state=started
   with_items:
     - createlinks.timer
     - backuprepo.timer
+    - mirror-sync.timer
 
 - name: Install debuginfod service file
   copy:

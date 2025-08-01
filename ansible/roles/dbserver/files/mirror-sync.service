@@ -1,0 +1,11 @@
+[Unit]
+Description=Arch Linux Loong64 Mirror Sync
+After=network-online.target
+Requires=network-online.target
+
+[Service]
+Type=simple
+User=root
+ExecStart=/usr/local/bin/mirror-sync.sh
+LockPersonality=true
+Restart=no

@@ -1,0 +1,12 @@
+[Unit]
+Description=Hourly Sync for Arch Linux Loong64 Mirror
+
+[Timer]
+OnCalendar=hourly
+AccuracySec=5m
+RandomizedDelaySec=30m
+Persistent=true
+Unit=mirror-sync.service
+
+[Install]
+WantedBy=timers.target
