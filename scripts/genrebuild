@@ -317,8 +317,6 @@ if args.pkgdb:
         cursor.execute(get_table_schema)
         columns = [row[0] for row in cursor.fetchall()]
 
-        
-        print("drop table")
         cursor.execute('''DROP TABLE IF EXISTS build_list ''')
 
         columns_definition = ''
@@ -330,7 +328,8 @@ if args.pkgdb:
         CREATE TABLE build_list (
             task_no SERIAL PRIMARY KEY
             {columns_definition},
-            flags INTEGER DEFAULT 0 
+            status TEXT DEFAULT 'Pending',
+            error_type TEXT
         )
         """
         cursor.execute(create_buildlist)
@@ -339,24 +338,19 @@ if args.pkgdb:
         serial = 1
         for pkg in result:
             # Get packages' entry
-            print("get package")
             get_package = f"""SELECT * FROM {table} WHERE name = '{pkg}'"""
             cursor.execute(get_package)
             rows = cursor.fetchall()
 
             # Insert into build_list
-            print("Insert packages")
             for row in rows:
-                insert_columns = ['task_no'] + columns + ['flags']
-                placeholders = ', '.join(['%s'] * (len(columns) + 2))
+                insert_columns = ['task_no'] + columns + ['status', 'error_type']
+                placeholders = ', '.join(['%s'] * (len(columns) + 3))
                 insert_sql = f"""INSERT INTO build_list ({', '.join(insert_columns)}) VALUES ({placeholders}) """
-                params = (serial,) + tuple(row) + (0,)
+                params = (serial,) + tuple(row) + ('Pending', None)
                 cursor.execute(insert_sql, params)
                 serial += 1
 
-            print(f"Insert package success")
-
-        print("Success")
         conn.commit()
 
     except Exception as e:
