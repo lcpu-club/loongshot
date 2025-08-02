@@ -6,10 +6,12 @@ use chrono::NaiveDateTime;
 
 #[derive(Serialize, Debug, FromRow)]
 struct Package {
+    task_no: Option<i32>,
     name: String,
     base: String,
     repo: String,
-    flags: Option<i32>,
+    status: Option<String>,
+    error_type: Option<String>,
     x86_version: Option<String>,
     x86_testing_version: Option<String>,
     x86_staging_version: Option<String>,
@@ -34,7 +36,8 @@ struct PagerResponse {
 struct QueryParams {
     page: Option<u32>,
     per_page: Option<u32>,
-    search: Option<String>,
+    name: Option<String>,
+    error_type: Option<String>
 }
 
 #[derive(Serialize, Debug, FromRow)]
@@ -98,7 +101,7 @@ async fn get_tasks(pool: web::Data<sqlx::Pool<sqlx::Postgres>>,
 #[get("/api/packages/status")]
 async fn get_packages(pool: web::Data<sqlx::Pool<sqlx::Postgres>>) -> impl Responder {
     let packages: Vec<Package> = sqlx::query_as(
-        "SELECT name, base, repo, flags, x86_version, x86_testing_version, x86_staging_version, loong_version, loong_testing_version, loong_staging_version FROM packages ORDER by repo, name"
+        "SELECT name, base, repo, error_type, x86_version, x86_testing_version, x86_staging_version, loong_version, loong_testing_version, loong_staging_version FROM packages ORDER by repo, name"
     )
     .fetch_all(pool.get_ref())
     .await
@@ -110,7 +113,8 @@ async fn get_packages(pool: web::Data<sqlx::Pool<sqlx::Postgres>>) -> impl Respo
 #[get("/api/packages/building_list")]
 async fn get_building_list(pool: web::Data<sqlx::Pool<sqlx::Postgres>>) -> impl Responder {
     let packages: Vec<Package> = sqlx::query_as(
-        "SELECT name, base, repo, flags,
+        "SELECT task_no, name, base, repo, status,
+        NULL as error_type,
         NULL as x86_version,
         NULL as x86_testing_version,
         NULL as x86_staging_version,
@@ -155,54 +159,76 @@ async fn get_data(
     let per_page = query.per_page.unwrap_or(100);
     let offset = (page - 1) * per_page;
 
-    let search_query = query.search.as_deref().unwrap_or("");
-    let select_query = "SELECT name, base, repo, flags, x86_version, x86_testing_version, x86_staging_version, loong_version, loong_testing_version, loong_staging_version FROM packages";
+    let mut query_builder = sqlx::QueryBuilder::new(
+        "SELECT name, base, repo, error_type, 
+        x86_version, x86_testing_version, x86_staging_version, 
+        loong_version, loong_testing_version, loong_staging_version,
+        NULL as task_no,
+        NULL as status
+        FROM packages"
+    );
 
-    let (where_clause, order_clause, bind_values) = if search_query.starts_with(":code") {
-        (
-            "WHERE flags >> 16 = $1",
-            "ORDER BY repo, name LIMIT $2 OFFSET $3",
-            1,
-        )
-    } else if search_query.starts_with(":fail") {
-        (
-            "WHERE flags & (1 << 15) != 0",
-            "ORDER BY repo, name LIMIT $1 OFFSET $2",
-            2,
-        )
-    }else {
-        (
-            "WHERE name ILIKE $1",
-            "ORDER BY repo, name LIMIT $2 OFFSET $3",
-            3,
-        )
+    // Construct search conditions
+    let mut where_added = false;
+    if let Some(name) = &query.name {
+        query_builder.push(" WHERE name ILIKE ");
+        query_builder.push_bind(format!("%{}%", name));
+        where_added = true;
+    }
+
+    if let Some(error_type) = &query.error_type {
+        if where_added {
+            query_builder.push(" AND ");
+        } else {
+            query_builder.push(" WHERE ");
+        }
+            query_builder.push("error_type = ");
+            query_builder.push_bind(error_type);
+        
+    }
+    
+    query_builder
+    .push(" ORDER BY name, base, repo LIMIT ")
+    .push_bind(per_page as i64)
+    .push(" OFFSET ")
+    .push_bind(offset as i64);
+
+    let packages: Vec<Package> = match query_builder.build_query_as().fetch_all(pool.get_ref()).await {
+        Ok(pkgs) => pkgs,
+        Err(e) => {
+            log::error!("Query error: {}", e);
+            return HttpResponse::InternalServerError().finish();
+        }
     };
 
-    let query = format!("{} {} {}", select_query, where_clause, order_clause);
-    let mut sql_query = sqlx::query_as(&query);
-    match bind_values {
-        1 => sql_query = sql_query.bind(search_query[5..].parse().unwrap_or(0) as i64),
-        3 => sql_query = sql_query.bind(format!("%{}%", search_query)),
-        _ => (),
+    // Counts
+    let mut count_builder = sqlx::QueryBuilder::new("SELECT COUNT(*) FROM packages");
+    
+    where_added = false;
+    if let Some(name) = &query.name {
+        count_builder.push(" WHERE name ILIKE ");
+        count_builder.push_bind(format!("%{}%", name));
+        where_added = true;
     }
-    sql_query = sql_query.bind(per_page as i64).bind(offset as i64);
 
-    let packages: Vec<Package> = sql_query
-    .fetch_all(pool.get_ref())
-    .await
-    .unwrap();
-
-    let query_total = format!("{} {}", "SELECT COUNT(*) FROM packages", where_clause);
-    let mut total_query = sqlx::query_scalar::<_, i64>(&query_total);
-    match bind_values {
-        1 => total_query = total_query.bind(search_query[5..].parse().unwrap_or(0) as i64),
-        3 => total_query = total_query.bind(format!("%{}%", search_query)),
-        _ => (),
+    if let Some(error_type) = &query.error_type {
+        if where_added {
+            count_builder.push(" AND ");
+        } else {
+            count_builder.push(" WHERE ");
+        }
+        count_builder.push("error_type = ");
+        count_builder.push_bind(error_type);
     }
-    let total: i64 = total_query
-        .fetch_one(pool.get_ref())
-        .await
-        .unwrap();
+
+    let total = match count_builder.build().fetch_one(pool.get_ref()).await {
+        Ok(t) => t.get(0),
+        Err(e) => {
+            log::error!("Count error: {}", e);
+            return HttpResponse::InternalServerError().finish();
+        }
+        
+    };
 
     HttpResponse::Ok().json(PagerResponse { data: packages, total})
 }

@@ -12,9 +12,9 @@
     <div class="search-group">
       <!-- Input box-->
       <input
-        v-model="searchQuery"
+        v-model="searchQuery.name"
         placeholder="Search packages..."
-        @keyup.enter="onSearch"
+        @keyup.enter="fetchData"
         class="search-input"
       />
       <!-- Filter button -->
@@ -28,13 +28,13 @@
           <!-- Filter menu -->
           <div v-show="showFilter" class="filter-panel">
             <div 
-              v-for="option in filterOptions"
-              :key="option.value"
+              v-for="label in filterOptions"
+              :key="label" 
               class="filter-item"
-              :class="{ active: selectedStatus === option.value }"
-              @click="selectFilter(option.value)"
+              :class="{ active: searchQuery.error_type === label }"
+              @click="selectFilter(label)"
             >
-              {{ option.label }}
+              {{ label }}
             </div>
           </div>
         </div>
@@ -59,7 +59,7 @@
       </div>
       <div class="sidebar-content">
         <div v-if="activeTask" class="current-task">
-        Current building task: # {{ activeTask.name }} <!-- Cannot display task_no due to backend - database compatability -->
+        Current building task: #{{activeTask.task_no}} {{ activeTask.name }} 
         </div>
         <div v-if="loading" class="loading">Loading...</div>
         <div v-else-if="error" class="error">{{ error }}</div>
@@ -77,7 +77,7 @@
           <tr 
             v-for="(task, index) in buildingTasks" 
             :key="task.id"
-            :class="{ 'processing': task.flags === 0xFFFF }"
+            :class="{ 'processing': task.status === 'Building' }"
           >
             <td>{{ index + 1 }}</td>
             <td class="text-ellipsis">{{ task.name }}</td>
@@ -168,7 +168,7 @@
 
 <script>
 import { useRoute } from 'vue-router';
-import { ref, computed, onMounted } from 'vue';
+import { ref, reactive, computed, onMounted } from 'vue';
 import axios from 'axios';
 
 export default {
@@ -177,12 +177,30 @@ export default {
     const total = ref(0);
     const perPage = ref(20);
     const currentPage = ref(1);
-    const searchQuery = ref('');
+    const searchQuery = reactive({
+      name: null,
+      error_type: null
+    });
     const goToPage = ref(1);
     const selectedStatus = ref('');
     const route = useRoute();
+    const showFilter = ref(false);
 
     const columns = ref(['Name', 'Base', 'Repo', 'x86 Version', 'Loong Version', 'Status']);
+    const filterOptions = ref([
+    'All',
+    'Fail to apply loong\'s patch',
+    'Unknown error before build',
+    'Fail to download source',
+    'Fail to pass the validity check',
+    'Fail to pass PGP check',
+    'Could not resolve all dependencies',
+    'Failed in prepare',
+    'Failed in build',
+    'Failed in check',
+    'Failed in package',
+    'Cannot guess build type'
+    ]);
 
     function compareVersions(loongVersion, x86Version) {
       if (!loongVersion || !x86Version || loongVersion === 'missing') return false;
@@ -197,7 +215,7 @@ export default {
       let loong = item.loong_version;
       let testing = item.loong_testing_version;
       let staging = item.loong_staging_version;
-      let flags = item.flags;
+      let error_type = item.error_type;
       let status;
       const fail_reason = ['Fail to apply patch',
           'Fail before build',
@@ -222,13 +240,13 @@ export default {
       }
 
       status += '&nbsp';
-      if (flags) {
-        if (flags & 1) status += `<span><a href="https://github.com/lcpu-club/loongarch-packages/tree/master/${item.base}" style="color: lime;">🅿</a></span>`;
-        if (flags & 2) status += '<span style="color: blue;">🅲</span>';
-        if (flags & 4) status += '<span style="color: orange;">🅾</span>';
-        if (flags & 16) status += `<span><a href="log.html?url=/buildlogs/${item.base}/all.log" style="color: gold;">🅻</a></span>`;
-        if (flags & (1 << 15)) status += `<span title="${fail_reason[flags >> 16 - 1]}" style="cursor: pointer; color: red;">🅵</span>`;
-      }
+      // if (flags) {
+      //   if (flags & 1) status += `<span><a href="https://github.com/lcpu-club/loongarch-packages/tree/master/${item.base}" style="color: lime;">🅿</a></span>`;
+      //   if (flags & 2) status += '<span style="color: blue;">🅲</span>';
+      //   if (flags & 4) status += '<span style="color: orange;">🅾</span>';
+      //   if (flags & 16) status += `<span><a href="log.html?url=/buildlogs/${item.base}/all.log" style="color: gold;">🅻</a></span>`;
+      //   if (flags & (1 << 15)) status += `<span title="${fail_reason[flags >> 16 - 1]}" style="cursor: pointer; color: red;">🅵</span>`;
+      // }
       return status;
     }
 
@@ -245,7 +263,8 @@ export default {
           params: {
             page: currentPage.value,
             per_page: perPage.value,
-            search: searchQuery.value,
+            ...(searchQuery.name && { name: searchQuery.name }),
+            ...(searchQuery.error_type && { error_type: searchQuery.error_type })
           },
         });
         tableDataRaw.value = response.data.data;
@@ -290,29 +309,37 @@ export default {
     const totalPages = computed(() => Math.ceil(total.value / perPage.value));
 
     onMounted(() => {
-      if (route.query.search) {
-        searchQuery.value = route.query.search;
-      }
+      searchQuery.name = route.query.name?.trim() || null;
+      searchQuery.error_type = route.query.error_type?.trim() || null;
       fetchData();
     });
 
-    const onStatusChange = () => {
-      if (selectedStatus.value === 'All') {
-        searchQuery.value = ':fail';
-      } else {
-        searchQuery.value = `:code${selectedStatus.value}`;
-      }
-      onSearch();
-    };
+    // const onStatusChange = () => {
+    //   if (selectedStatus.value === 'All') {
+    //     searchQuery.value = ':fail';
+    //   } else {
+    //     searchQuery.value = `:code${selectedStatus.value}`;
+    //   }
+    //   onSearch();
+    // };
 
     const onSearch = () => {
       currentPage.value = 1;
-      if (!searchQuery.value.startsWith(':')) {
-        selectedStatus.value = '';
-      }
+      // if (!searchQuery.value.startsWith(':')) {
+      //   selectedStatus.value = '';
+      // }
       fetchData();
     };
+    const toggleFilter = () => {
+      console.log('Current filter state:', showFilter.value)
+      showFilter.value = !showFilter.value
+    }
 
+    const selectFilter = (label) => {
+      searchQuery.error_type = searchQuery.error_type === label ? null : label
+      showFilter.value = false
+      fetchData()
+    }
     return {
       tableData,
       columns,
@@ -325,7 +352,10 @@ export default {
       prevPage,
       goToSpecificPage,
       selectedStatus,
-      onStatusChange,
+      toggleFilter,
+      showFilter,
+      selectFilter,
+      filterOptions,
       onSearch,
     };
   },
@@ -337,21 +367,7 @@ export default {
       buildingTasks: [],
       loading: false,
       error: null,
-      showFilter: false,
-      filterOptions: [
-        { value: 'All', label: 'All' },
-        { value: '1', label: 'Patch Fail' },
-        { value: '2', label: 'Pre-Build Fail' },
-        { value: '3', label: 'Source Fail' },
-        { value: '4', label: 'Validity Check' },
-        { value: '5', label: 'PGP Check' },
-        { value: '6', label: 'Dependencies' },
-        { value: '7', label: 'Prepare Fail' },
-        { value: '8', label: 'Build Fail' },
-        { value: '9', label: 'Check Fail' },
-        { value: '10', label: 'Package Fail' },
-        { value: '11', label: 'Old Config' }
-      ],
+      activeTask:null,
       legendItems: [
       { symbol: '✅', description: 'loong\'s version matches x86\'s', style: '' },
       { symbol: '⭕', description: 'loong\'s version mis-matches', style: '' },
@@ -392,14 +408,6 @@ export default {
     updateWindowSize() {
       this.windowHeight = window.innerHeight
     },
-    toggleFilter() {
-      this.showFilter = !this.showFilter
-    },
-    selectFilter(value) {
-      this.selectedStatus = value
-      this.onStatusChange()
-      this.showFilter = false
-    },
     toggleSidebar() {
       this.isSidebarOpen = !this.isSidebarOpen;
       if (this.isSidebarOpen) {
@@ -437,7 +445,7 @@ export default {
         this.buildingTasks = tasks;
 
         this.activeTask = tasks.find(task => 
-          task.flags === 0xFFFF
+          task.status === "Building"
         ) || null;
 
       } catch (err) {
