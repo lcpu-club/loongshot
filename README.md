@@ -1,17 +1,21 @@
 # Arch Linux Loong64 Support Packages
 
-[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/lcpu-club/loongshot)
-
-This repository contains documents and tools to support building Arch Linux for Loong64.
+This repository contains tools to support building Arch Linux for Loong64.
 
 ## Status
 
 Most of the upstream(x86_64) packages has been ported to Loong64, Visit [project homepage](https://loongarchlinux.lcpu.dev) for more information.
 
+## Documents
+
+For this tool repository:
+* [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/lcpu-club/loongshot)
+
+For Arch Linux for Loong64 project:
+* [Project Wiki (Chinese)](https://github.com/lcpu-club/loongarch-packages/wiki)
+* [![Ask DeepWiki about our patch set](https://deepwiki.com/badge.svg)](https://deepwiki.com/lcpu-club/loongarch-packages)
+
 ## Contributing
 
-If you want to contribute to this project, you can help us improve our
-[scripts](scripts), write [documentation](docs),
-or provide [patches](https://github.com/lcpu-club/loongarch-packages) for
-packages that [fail to build](https://loongarchlinux.lcpu.dev/new.html?limit=fails).
-
+* Help us improve our [scripts](scripts).
+* Fix [packages failed to build] and submit your patches to our [patch set repository](https://github.com/lcpu-club/loongarch-packages/).
