@@ -95,7 +95,13 @@
   <div class="main-content">
   <!-- Package data displaying table -->
   <div class="table-container" :class="{ 'no-data': !tableData.length }">
-      <table>
+    <div class="flat-stats-bar">
+    <div class="stat-cell">
+      <span class="stat-number">{{ tableData.length }} packages found </span>
+    </div>
+  </div>
+
+    <table>      
         <colgroup>
         <col v-for="(col, index) in columnWidths" 
             :key="index" 
@@ -965,15 +971,6 @@ tr.processing td:first-child {
   color: #ffc107;
 }
 
-/* tr.processing::after {
-  content: "▶";
-  color: #ffc107;
-  position: absolute;
-  right: 8px;
-  top: 50%;
-  transform: translateY(-50%);
-} */
-
 /* Home button */
 .home-button .icon {
   transform: translateX(-2px); 
@@ -1003,6 +1000,34 @@ tr.processing td:first-child {
   font-size: 0.95em;
 }
 
+.flat-stats-bar {
+  display: flex;
+  align-items: center;
+  background: #f8f9fa;
+  border-bottom: 1px solid #dee2e6;
+  margin-bottom: -1px; /* 与表格边框衔接 */
+  width: 100%;
+  min-height: 42px;
+  overflow-x: auto;
+}
+
+.stat-cell {
+  flex: 0 0 auto;
+  padding: 8px 16px;
+  border-right: 1px #dee2e6;
+  min-width: 120px; /* 与表格列最小宽度匹配 */
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.stat-number {
+  font-size: 1.1em;
+  font-weight: 600;
+  color: #2c3e50;
+  line-height: 1.2;
+}
+
 thead {
   position: sticky;
   top: 0;
@@ -1015,7 +1040,10 @@ table {
   width: 100%;
   border-collapse: collapse;
   background: white;
+  position: relative;
+  padding-top: 40px; 
 }
+
 
 th, td {
   border: 1px solid #ddd;
