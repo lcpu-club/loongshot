@@ -18,4 +18,4 @@ For Arch Linux for Loong64 project:
 ## Contributing
 
 * Help us improve our [scripts](scripts).
-* Fix [packages failed to build] and submit your patches to our [patch set repository](https://github.com/lcpu-club/loongarch-packages/).
+* Fix [packages failed to build](https://loongarchlinux.lcpu.dev/status?search=:fail) and submit your patches to our [patch set repository](https://github.com/lcpu-club/loongarch-packages/).
