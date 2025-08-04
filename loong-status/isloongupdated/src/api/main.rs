@@ -182,7 +182,11 @@ async fn get_data(
         } else {
             query_builder.push(" WHERE ");
         }
-            query_builder.push("error_type = ");
+            query_builder.push("error_type ");
+            match query.error_type.as_deref() {
+                Some("Success") => query_builder.push("!= "), // To filterout all failed packages
+                _ => query_builder.push("= ")
+            };
             query_builder.push_bind(error_type);
         
     }
@@ -217,7 +221,11 @@ async fn get_data(
         } else {
             count_builder.push(" WHERE ");
         }
-        count_builder.push("error_type = ");
+        count_builder.push("error_type ");
+        match query.error_type.as_deref() {
+                Some("Success") => count_builder.push("!= "), // To filterout all failed packages
+                _ => count_builder.push("= ")
+            };
         count_builder.push_bind(error_type);
     }
 

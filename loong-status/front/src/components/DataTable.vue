@@ -188,7 +188,7 @@ export default {
 
     const columns = ref(['Name', 'Base', 'Repo', 'x86 Version', 'Loong Version', 'Status']);
     const filterOptions = ref([
-    'All',
+    'All failed builds',
     'Fail to apply loong\'s patch',
     'Unknown error before build',
     'Fail to download source',
@@ -229,9 +229,9 @@ export default {
           'Fail in package',
           'Old config.guess'];
 
-      if (!x86  && (loong || testing || staging )) {
+      if (x86 === 'missing') {
           status = '🗑';
-      } else if ((!loong) && (!testing) && (!staging)) {
+      } else if (loong ==='missing') {
           status = '❌';
       } else if (compareVersions(loong, x86)) {
           status = '✅';
@@ -336,6 +336,7 @@ export default {
     }
 
     const selectFilter = (label) => {
+      label = label === 'All failed builds' ? 'Success' : label
       searchQuery.error_type = searchQuery.error_type === label ? null : label
       showFilter.value = false
       fetchData()
