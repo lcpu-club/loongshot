@@ -478,12 +478,14 @@ export default {
   align-items: center;
   justify-content: space-between;
   padding: 12px 20px;
-  background: #fff;
+  background: #9b2d35;
   box-shadow: 0 2px 8px rgba(0,0,0,0.1);
   position: relative;
   z-index: 100; 
   min-height: 60px;
   gap: 20px;
+  border-radius: 8px 8px 0 0;
+
 }
 
 .main-content {
@@ -499,7 +501,7 @@ export default {
   padding: 8px;
   border: none;
   border-radius: 8px;
-  background: #f8f9fa;
+  background: #8b2830;
   cursor: pointer;
   transition: all 0.2s;
   display: flex;
@@ -508,13 +510,13 @@ export default {
 }
 
 .nav-button:hover {
-  background: #e9ecef;
+  background: #6b2024;
 }
 
 .icon {
   width: 24px;
   height: 24px;
-  fill: #666;
+  fill: white;
 }
 
 .home-button .icon {
@@ -534,7 +536,7 @@ export default {
 .search-group {
   display: flex;
   align-items: stretch;
-  background: #fff;
+  background: #8b2830;
   border-radius: 35px;
   box-shadow: 0 4px 20px rgba(0,0,0,0.1);
   transition: all 0.3s ease;
@@ -548,6 +550,7 @@ export default {
   background: transparent;
   font-size: 16px;
   border-radius: 35px 0 0 35px;
+  color: white;
 }
 
 .search-input:focus {
@@ -560,7 +563,7 @@ export default {
   width: 60px;
   height: 50px; 
   border: none;
-  background: #007bff;
+  background: #8b2830;
   border-radius: 0 35px 35px 0;
   cursor: pointer;
   transition: all 0.3s ease;
@@ -570,7 +573,7 @@ export default {
 }
 
 .search-btn:hover {
-  background: #0056b3;
+  background: #6b2024;
 }
 
 /* Filter */
@@ -582,8 +585,8 @@ export default {
 .filter-btn {
   height: 50px; 
   padding: 0 12px; 
-  background: #f8f9fa;
-  border: 1px solid #ddd;
+  background: #8b2830;
+  border: none;
   border-radius: 4px;
   display: flex;
   align-items: center;
@@ -592,7 +595,7 @@ export default {
 }
 
 .filter-btn:hover {
-  background: #e9ecef;
+  background: #6b2024;
 }
 
 .filter-icon {
@@ -624,12 +627,12 @@ export default {
 }
 
 .filter-item:hover {
-  background: #f8f9fa;
+  background: #f5e4e5;
 }
 
 .filter-item.active {
   background: #e3f2fd;
-  color: #007bff;
+  color: #6b2024;
   font-weight: 500;
 }
 
@@ -642,7 +645,7 @@ export default {
 .filter-icon {
   width: 20px;
   height: 20px;
-  fill: #666;
+  fill: white;
 }
 
 .paginator {
@@ -669,8 +672,8 @@ export default {
 }
 
 .page-arrow:hover:not(:disabled) {
-  border-color: #007bff;
-  color: #007bff;
+  border-color: #6b2024;
+  color: #6b2024;
 }
 
 .page-arrow:disabled {
@@ -812,14 +815,14 @@ export default {
 }
 
 .task-button {
-  background: #ffffff;
+  background: #8b2830;
   
   .icon {
     fill: white;
   }
   
   &:hover {
-    background: #e9ecef;
+    background: #6b2024;
   }
 }
 
@@ -844,7 +847,7 @@ export default {
 .sidebar-icon {
   width: 24px;
   height: 24px;
-  fill: #666;
+  fill: white;
 }
 
 .sidebar.active {
@@ -949,7 +952,6 @@ export default {
   text-align: center;
 }
 
-/* 当前任务提示样式 */
 .current-task {
   font-size: 0.9em;
   color: #666;
@@ -959,16 +961,15 @@ export default {
   margin-bottom: 12px;
 }
 
-/* 处理中的表格行样式 */
 tr.processing {
-  background-color: #fffbe6 !important;
-  border-left: 3px solid #ffc107;
+  background-color: #f5e4e5 !important;
+  border-left: 3px solid #9b2d35;
   position: relative;
 }
 
 tr.processing td:first-child {
   font-weight: 600;
-  color: #ffc107;
+  color: #9b2d35;
 }
 
 /* Home button */
@@ -1005,7 +1006,7 @@ tr.processing td:first-child {
   align-items: center;
   background: #f8f9fa;
   border-bottom: 1px solid #dee2e6;
-  margin-bottom: -1px; /* 与表格边框衔接 */
+  margin-bottom: -1px;
   width: 100%;
   min-height: 42px;
   overflow-x: auto;
@@ -1015,7 +1016,7 @@ tr.processing td:first-child {
   flex: 0 0 auto;
   padding: 8px 16px;
   border-right: 1px #dee2e6;
-  min-width: 120px; /* 与表格列最小宽度匹配 */
+  min-width: 120px; 
   display: flex;
   flex-direction: column;
   align-items: center;
