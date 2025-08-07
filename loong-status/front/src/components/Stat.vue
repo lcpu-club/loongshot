@@ -1,6 +1,5 @@
 <template>
   <div class="table-container">
-    <h1>Package Statistics</h1>
     <table class="table is-hoverable">
       <thead>
         <tr>
@@ -87,19 +86,20 @@ table {
   border-collapse: collapse; /* Ensures no extra spacing */
   border-left: none;
   border-right: none;
+  width: 100%; /* Make the table take full width of its container */
 }
 
 th {
   font-weight: bold;
   border-bottom: 2px solid #ddd;
   padding: 8px;
-  text-align: center;
+  text-align: center; /* This line is already correct */
 }
 
 td {
   border-bottom: 1px solid #ddd;
   padding: 8px;
-  text-align: center;
+  text-align: center; /* This line will center the table cell content */
 }
 
 tbody tr:hover {

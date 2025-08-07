@@ -9,7 +9,11 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "ansi_up": "^6.0.6",
+    "ansi-to-html": "^0.7.2",
     "axios": "^1.7.9",
+    "dompurify": "^3.2.6",
+    "element-plus": "^2.10.5",
     "vue": "^3.5.13",
     "vue-router": "^4.5.0"
   },
