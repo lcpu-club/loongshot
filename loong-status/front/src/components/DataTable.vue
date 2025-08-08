@@ -12,9 +12,9 @@
     <div class="search-group">
       <!-- Input box-->
       <input
-        v-model="searchQuery.name"
+        v-model="searchName"
         placeholder="Search packages..."
-        @keyup.enter="fetchData"
+        @keyup.enter="onSearch"
         class="search-input"
       />
       <!-- Filter button -->
@@ -31,7 +31,7 @@
               v-for="label in filterOptions"
               :key="label" 
               class="filter-item"
-              :class="{ active: searchQuery.error_type === label }"
+              :class="{ active: selectedErrorType === label }"
               @click="selectFilter(label)"
             >
               {{ label }}
@@ -152,7 +152,7 @@
     
     <div class="page-input">
       <input
-        v-model.number="goToPage"
+        v-model.number="currentPage"
         type="number"
         min="1"
         :max="totalPages"
@@ -183,11 +183,8 @@ export default {
     const total = ref(0);
     const perPage = ref(20);
     const currentPage = ref(1);
-    const searchQuery = reactive({
-      name: null,
-      error_type: null
-    });
-    const goToPage = ref(1);
+    const searchName = ref('')
+    const selectedErrorType = ref('')
     const selectedStatus = ref('');
     const route = useRoute();
     const showFilter = ref(false);
@@ -223,17 +220,6 @@ export default {
       let staging = item.loong_staging_version;
       let error_type = item.error_type;
       let status;
-      const fail_reason = ['Fail to apply patch',
-          'Fail before build',
-          'Fail to download source',
-          'Fail to pass the validity check',
-          'Fail to pass PGP check',
-          'Could not resolve all dependencies',
-          'Fail in prepare',
-          'Fail in build',
-          'Fail in check',
-          'Fail in package',
-          'Old config.guess'];
 
       if (x86 === 'missing') {
           status = '🗑';
@@ -270,20 +256,14 @@ export default {
       return merge;
     }
 
-    function getLogUrl(base, name, version) {
-      // 假设你的新 API 端点是 /api/logs
-      // 通过 URL 参数将日志信息传递给后端
-      return `/api/logs?base=${base}&name=${name}&version=${version}`;
-    }
-
     const fetchData = async () => {
       try {
         const response = await axios.get('/api/packages/data', {
           params: {
             page: currentPage.value,
             per_page: perPage.value,
-            ...(searchQuery.name && { name: searchQuery.name }),
-            ...(searchQuery.error_type && { error_type: searchQuery.error_type })
+            name: searchName.value,
+            error_type: selectedErrorType.value
           },
         });
         tableDataRaw.value = response.data.data;
@@ -305,13 +285,6 @@ export default {
       }))
     );
 
-    const nextPage = () => {
-      if (currentPage.value < totalPages.value) {
-        currentPage.value++;
-        fetchData();
-      }
-    };
-
     const prevPage = () => {
       if (currentPage.value > 1) {
         currentPage.value--;
@@ -319,18 +292,23 @@ export default {
       }
     };
 
-    const goToSpecificPage = () => {
-      if (goToPage.value >= 1 && goToPage.value <= totalPages.value) {
-        currentPage.value = goToPage.value;
+    const nextPage = () => {
+      if (currentPage.value < totalPages.value) {
+        currentPage.value++;
         fetchData();
       }
     };
 
-    const totalPages = computed(() => Math.ceil(total.value / perPage.value));
+    const goToSpecificPage = () => {
+      currentPage.value = Math.max(1, Math.min(currentPage.value, totalPages.value))
+      fetchData();
+    };
+
+    const totalPages = computed(() => Math.ceil(total.value / perPage.value)) || 1;
 
     onMounted(() => {
-      searchQuery.name = route.query.name?.trim() || null;
-      searchQuery.error_type = route.query.error_type?.trim() || null;
+      searchName.value = route.query.name?.trim() || null;
+      selectedErrorType.value = route.query.error_type?.trim() || null;
       fetchData();
     });
 
@@ -345,19 +323,16 @@ export default {
 
     const onSearch = () => {
       currentPage.value = 1;
-      // if (!searchQuery.value.startsWith(':')) {
-      //   selectedStatus.value = '';
-      // }
       fetchData();
     };
+
     const toggleFilter = () => {
-      console.log('Current filter state:', showFilter.value)
       showFilter.value = !showFilter.value
     }
 
     const selectFilter = (label) => {
       label = label === 'All failed builds' ? 'Success' : label
-      searchQuery.error_type = searchQuery.error_type === label ? null : label
+      selectedErrorType = selectedErrorType === label ? null : label
       showFilter.value = false
       fetchData()
     }
@@ -366,8 +341,8 @@ export default {
       columns,
       totalPages,
       currentPage,
-      searchQuery,
-      goToPage,
+      searchName,
+      selectedErrorType,
       total,
       fetchData,
       nextPage,
@@ -402,7 +377,7 @@ export default {
       { symbol: '🅵', description: 'build fails', style: 'color: red;' }
       ],
       columnWidths: [
-          { width: '20%' },  // 根据实际列数配置
+          { width: '20%' },  
           { width: '20%' },
           { width: '5%' },
           { width: '20%' },
@@ -435,26 +410,6 @@ export default {
       if (this.isSidebarOpen) {
         this.fetchBuildingTasks();
       }
-    },
-    prevPage() {
-    if (this.currentPage > 1) {
-      this.currentPage--;
-      this.goToPage = this.currentPage;
-      this.fetchData();
-    }
-    },
-    nextPage() {
-      if (this.currentPage < this.totalPages) {
-        this.currentPage++;
-        this.goToPage = this.currentPage;
-        this.fetchData();
-      }
-    },
-    goToSpecificPage() {
-      const page = Math.max(1, Math.min(this.goToPage, this.totalPages));
-      this.currentPage = page;
-      this.goToPage = page;
-      this.fetchData();
     },
     async fetchBuildingTasks() {
       this.loading = true;
