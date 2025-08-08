@@ -25,6 +25,11 @@ const router = createRouter({
       component: () => import('../views/TaskView.vue'),
     },
     {
+      path: '/log',
+      name: 'log',
+      component: () => import('../views/LogView.vue'),
+    },
+    {
       path: '/:pathMatch(.*)*',
       name: 'NotFound',
       component: () => import('../views/NotFound.vue'),

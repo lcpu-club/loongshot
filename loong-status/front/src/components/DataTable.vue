@@ -246,6 +246,13 @@ export default {
       }
 
       status += '&nbsp';
+      if (item.has_log === true) {
+        const encodedVersion = encodeURIComponent(item.x86_version);
+        const logUrl = `/log?base=${item.base}&name=${item.name}&version=${encodedVersion}`;
+        status += `<span><a href="${logUrl}" target="_blank" style="color: gold;">🅻</a></span>`;      
+      } else {
+        status += '<span style="color: gray;">🅻</span>';
+      }
       // if (flags) {
       //   if (flags & 1) status += `<span><a href="https://github.com/lcpu-club/loongarch-packages/tree/master/${item.base}" style="color: lime;">🅿</a></span>`;
       //   if (flags & 2) status += '<span style="color: blue;">🅲</span>';
@@ -261,6 +268,12 @@ export default {
       if (testing) merge += `\n${testing}🄣`;
       if (staging) merge += `\n${staging}🄢`;
       return merge;
+    }
+
+    function getLogUrl(base, name, version) {
+      // 假设你的新 API 端点是 /api/logs
+      // 通过 URL 参数将日志信息传递给后端
+      return `/api/logs?base=${base}&name=${name}&version=${version}`;
     }
 
     const fetchData = async () => {
@@ -285,6 +298,7 @@ export default {
         Name: item.name,
         Base: item.base,
         Repo: item.repo,
+        has_log: item.has_log,
         'x86 Version': mergeVersion(item.x86_version, item.x86_testing_version, item.x86_staging_version),
         'Loong Version': mergeVersion(item.loong_version, item.loong_testing_version, item.loong_staging_version),
         Status: compareAll(item),

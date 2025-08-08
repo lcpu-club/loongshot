@@ -3,6 +3,8 @@ use dotenv::dotenv;
 use serde::{Serialize, Deserialize};
 use sqlx::{postgres::PgPoolOptions, FromRow, Row};
 use chrono::NaiveDateTime;
+use std::fs::read_to_string;
+use std::path::Path;
 
 #[derive(Serialize, Debug, FromRow)]
 struct Package {
@@ -12,6 +14,7 @@ struct Package {
     repo: String,
     status: Option<String>,
     error_type: Option<String>,
+    has_log: Option<bool>,
     x86_version: Option<String>,
     x86_testing_version: Option<String>,
     x86_staging_version: Option<String>,
@@ -63,6 +66,13 @@ struct Task {
     build_time: Option<String>,
 }
 
+#[derive(Deserialize)]
+struct LogRequest {
+    base: String,
+    name: String,
+    version: String,
+}
+
 #[get("/api/tasks/result")]
 async fn get_tasks(pool: web::Data<sqlx::Pool<sqlx::Postgres>>,
     query: web::Query<TaskParams>) -> impl Responder {
@@ -101,7 +111,7 @@ async fn get_tasks(pool: web::Data<sqlx::Pool<sqlx::Postgres>>,
 #[get("/api/packages/status")]
 async fn get_packages(pool: web::Data<sqlx::Pool<sqlx::Postgres>>) -> impl Responder {
     let packages: Vec<Package> = sqlx::query_as(
-        "SELECT name, base, repo, error_type, x86_version, x86_testing_version, x86_staging_version, loong_version, loong_testing_version, loong_staging_version FROM packages ORDER by repo, name"
+        "SELECT name, base, repo, error_type, has_log, x86_version, x86_testing_version, x86_staging_version, loong_version, loong_testing_version, loong_staging_version FROM packages ORDER by repo, name"
     )
     .fetch_all(pool.get_ref())
     .await
@@ -115,6 +125,7 @@ async fn get_building_list(pool: web::Data<sqlx::Pool<sqlx::Postgres>>) -> impl 
     let packages: Vec<Package> = sqlx::query_as(
         "SELECT task_no, name, base, repo, status,
         NULL as error_type,
+        NULL as has_log,
         NULL as x86_version,
         NULL as x86_testing_version,
         NULL as x86_staging_version,
@@ -160,7 +171,7 @@ async fn get_data(
     let offset = (page - 1) * per_page;
 
     let mut query_builder = sqlx::QueryBuilder::new(
-        "SELECT name, base, repo, error_type, 
+        "SELECT name, base, repo, error_type, has_log,
         x86_version, x86_testing_version, x86_staging_version, 
         loong_version, loong_testing_version, loong_staging_version,
         NULL as task_no,
@@ -248,6 +259,23 @@ async fn get_last_update(pool: web::Data<sqlx::Pool<sqlx::Postgres>>) -> impl Re
     HttpResponse::Ok().json(LastUpdate { last_update })
 }
 
+#[get("/api/logs")]
+async fn get_log(info: web::Query<LogRequest>) -> impl Responder {
+    // Path of build logs 
+    let file_path = format!("/home/arch/loong-status/build_logs/{}/{}-{}.log", info.base, info.name, info.version);
+    let path = Path::new(&file_path);
+
+    match read_to_string(path) {
+        Ok(content) => HttpResponse::Ok()
+            .content_type("text/plain")
+            .body(content),
+        Err(e) => {
+            eprintln!("Failed to read log file: {}. Error: {}", file_path, e);
+            HttpResponse::NotFound().body("Log file not found.")
+        }
+    }
+}
+
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
     dotenv().ok();
@@ -268,6 +296,7 @@ async fn main() -> std::io::Result<()> {
             .service(get_stat)
             .service(get_tasks)
             .service(get_building_list)
+            .service(get_log)
     })
     .workers(2)
     .bind(("127.0.0.1", 8080))?
