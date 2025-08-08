@@ -94,10 +94,10 @@
   </div>
   <div class="main-content">
   <!-- Package data displaying table -->
-  <div class="table-container" :class="{ 'no-data': !tableData.length }">
+  <div class="table-container" :class="{ 'no-data': !total }">
     <div class="flat-stats-bar">
     <div class="stat-cell">
-      <span class="stat-number">{{ tableData.length }} packages found </span>
+      <span class="stat-number">{{ total }} packages found </span>
     </div>
   </div>
 
@@ -368,6 +368,7 @@ export default {
       currentPage,
       searchQuery,
       goToPage,
+      total,
       fetchData,
       nextPage,
       prevPage,
