@@ -1,4 +1,5 @@
 import argparse
+import compare86
 import dbinit
 import os
 import psycopg2
@@ -49,12 +50,14 @@ def delete_record(db_path: str, record_id: int, error = "Success") -> None:
         cursor.execute("BEGIN TRANSACTION")
         # If build success, update loong_version, otherwise don't
         cursor.execute("""
-            INSERT INTO packages(name, base, repo, error_type, x86_version, loong_version)
-            SELECT name, base, repo, %s, x86_version, CASE WHEN %s = 'Success' THEN x86_version ELSE loong_version END
+            INSERT INTO packages(name, base, repo, error_type, has_log, x86_version, loong_version)
+            SELECT name, base, repo, %s, TRUE, x86_version, CASE WHEN %s = 'Success' THEN x86_version ELSE loong_version END
             FROM build_list
             WHERE task_no = %s
             ON CONFLICT(name) DO UPDATE SET
+            base = EXCLUDED.base,
             repo = EXCLUDED.repo,
+            error_type = EXCLUDED.error_type,
             x86_version = EXCLUDED.x86_version,
             loong_version = EXCLUDED.loong_version
         """, (error, error, record_id,))
@@ -77,11 +80,30 @@ def execute_with_retry(script_path, db, record, builder):
     attempt = 0 #Retry attempts
     max_retries=3
 
+    x86_version = record['x86_version']
+    loong_version = record['loong_version']
+    x86_pkgver = x86_version.split('-')[0]
+    loong_pkgver = loong_version.split('-')[0]
+
+    # If the package is already in loong repo with same version as x86, we need to increment pkgrel
+    if x86_pkgver == loong_pkgver:
+        base_version, pkgrel = x86_version.rsplit('-', 1)
+        current_pkgrel = float(pkgrel)
+
+        # Increment point pkgrel if same version is already built        
+        new_pkgrel = current_pkgrel + 0.1
+        loong_version = base_version + "-" + str(new_pkgrel)
+    # Or update to x86 version
+    else:
+        loong_version = x86_version
+
+    print(f"Building {record['name']} with x86 version {x86_version} and loong version {loong_version}")
+
     command = [
         script_path,
         record['name'],
         "--ver",
-        record['x86_version'],
+        loong_version,
         "--repo",
         record['repo'],
         "--builder",
@@ -94,8 +116,6 @@ def execute_with_retry(script_path, db, record, builder):
             command,
             text=True
         )
-        # An error mask, 0 stands for no error
-        mask = 0
         
         # A success build
         if process.returncode == 0:
@@ -105,7 +125,7 @@ def execute_with_retry(script_path, db, record, builder):
         # When build fails
         need_retry = False
         error = ""
-        with open(f"{record['name']}-{record['x86_version']}.log", 'r') as f:
+        with open(f"{record['name']}-{loong_version}.log", 'r') as f:
             lines = f.readlines()[-100:]
 
             # Error handler: Look for retry opportunities
@@ -173,6 +193,7 @@ def main():
         base TEXT,
         repo TEXT,
         error_type TEXT,
+        has_log BOOL,
         x86_version TEXT,
         x86_testing_version TEXT,
         x86_staging_version TEXT,
