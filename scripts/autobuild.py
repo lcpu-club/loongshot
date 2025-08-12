@@ -42,7 +42,7 @@ def get_pending_task(db_path, table, task_no):
         conn.close()
 
 # Remove completed build task
-def delete_record(db_path: str, record_id: int, error = "Success") -> None:
+def delete_record(db_path: str, record_id: int, new_loong_version, error = "Success") -> None:
     conn = dbinit.get_conn(db_path)
     cursor = conn.cursor()
 
@@ -51,7 +51,7 @@ def delete_record(db_path: str, record_id: int, error = "Success") -> None:
         # If build success, update loong_version, otherwise don't
         cursor.execute("""
             INSERT INTO packages(name, base, repo, error_type, has_log, x86_version, loong_version)
-            SELECT name, base, repo, %s, TRUE, x86_version, CASE WHEN %s = 'Success' THEN x86_version ELSE loong_version END
+            SELECT name, base, repo, %s, TRUE, x86_version, CASE WHEN %s = 'Success' THEN %s ELSE loong_version END
             FROM build_list
             WHERE task_no = %s
             ON CONFLICT(name) DO UPDATE SET
@@ -60,7 +60,7 @@ def delete_record(db_path: str, record_id: int, error = "Success") -> None:
             error_type = EXCLUDED.error_type,
             x86_version = EXCLUDED.x86_version,
             loong_version = EXCLUDED.loong_version
-        """, (error, error, record_id,))
+        """, (error, error, new_loong_version, record_id,))
         
         cursor.execute(
                 f"UPDATE build_list SET status = %s WHERE task_no = %s", (error, record_id,)
@@ -119,7 +119,7 @@ def execute_with_retry(script_path, db, record, builder):
         
         # A success build
         if process.returncode == 0:
-            delete_record(db, record['task_no'])
+            delete_record(db, record['task_no'], loong_version)
             return        
 
         # When build fails
@@ -154,7 +154,8 @@ def execute_with_retry(script_path, db, record, builder):
         else:
             print("Failed to build... Now removing task")
             # Error code starts with 1, not 0
-            delete_record(db, record['task_no'], error)
+            # If the build succeeds, new loong_version will be used, which might not be the same as the x86_version
+            delete_record(db, record['task_no'], loong_version, error)
             return
 
 

@@ -233,7 +233,7 @@ export default {
 
       status += '&nbsp';
       if (item.has_log === true) {
-        const encodedVersion = encodeURIComponent(item.x86_version);
+        const encodedVersion = encodeURIComponent(item.loong_version);
         const logUrl = `/log?base=${item.base}&name=${item.name}&version=${encodedVersion}`;
         status += `<span><a href="${logUrl}" target="_blank" style="color: gold;">🅻</a></span>`;      
       } else {
