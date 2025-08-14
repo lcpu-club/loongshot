@@ -24,17 +24,26 @@ error_type = {
 }
 
 # Fetch one task from build list
-def get_pending_task(db_path, table, task_no):
+def get_pending_task(db_path, table):
     conn = dbinit.get_conn(db_path)
     try:
         with conn.cursor(cursor_factory=extras.DictCursor) as cursor:
             cursor.execute(
-                f"SELECT * FROM {table} WHERE task_no = %s", (task_no,)
+                f"""
+                UPDATE {table} 
+                SET status = 'Building' 
+                WHERE task_no = (
+                    SELECT task_no 
+                    FROM {table} 
+                    WHERE status = 'Pending' 
+                    ORDER BY task_no ASC 
+                    LIMIT 1 
+                    FOR UPDATE SKIP LOCKED
+                )
+                RETURNING *;
+                """
             )
             record = cursor.fetchone()
-            cursor.execute(
-                f"UPDATE {table} SET status = 'Building' WHERE task_no = %s", (task_no,)
-            )
             conn.commit()
 
             return dict(record) if record else None
@@ -153,12 +162,26 @@ def execute_with_retry(script_path, db, record, builder):
             time.sleep(attempt * 5)  
         else:
             print("Failed to build... Now removing task")
-            # Error code starts with 1, not 0
             # If the build succeeds, new loong_version will be used, which might not be the same as the x86_version
             delete_record(db, record['task_no'], loong_version, error)
             return
 
-
+def check_black_list(db):
+    conn = dbinit.get_conn(db)
+    cursor = conn.cursor()
+    
+    try:
+        cursor.execute("""
+            DELETE FROM build_list
+            WHERE name IN (SELECT name FROM black_list)
+            """)
+        conn.commit()
+        cursor.close()
+        conn.close()
+    except:
+        conn.rollback()
+        raise RuntimeError(f"Failed to apply black list")
+    
 def main():
     parser = argparse.ArgumentParser(description='Constantly fetch tasks from build list and run 0build')
 
@@ -186,30 +209,32 @@ def main():
     
     print(f"Database: {db}\nBuild List: {table}\nBuild script: {script}")
     # Create the resulting packages table
-    conn = dbinit.get_conn(db)
-    cursor = conn.cursor()
-    cursor.execute(f'''
-        CREATE TABLE IF NOT EXISTS packages (
-        name TEXT PRIMARY KEY,
-        base TEXT,
-        repo TEXT,
-        error_type TEXT,
-        has_log BOOL,
-        x86_version TEXT,
-        x86_testing_version TEXT,
-        x86_staging_version TEXT,
-        loong_version TEXT,
-        loong_testing_version TEXT,
-        loong_staging_version TEXT
-        )
-    ''')
-    conn.commit()
-    cursor.close()
-    conn.close()
-    task_no = 1
+    # conn = dbinit.get_conn(db)
+    # cursor = conn.cursor()
+    # cursor.execute(f'''
+    #     CREATE TABLE IF NOT EXISTS packages (
+    #     name TEXT PRIMARY KEY,
+    #     base TEXT,
+    #     repo TEXT,
+    #     error_type TEXT,
+    #     has_log BOOL,
+    #     x86_version TEXT,
+    #     x86_testing_version TEXT,
+    #     x86_staging_version TEXT,
+    #     loong_version TEXT,
+    #     loong_testing_version TEXT,
+    #     loong_staging_version TEXT
+    #     )
+    # ''')
+    # conn.commit()
+    # cursor.close()
+    # conn.close()
+    
+    # Remove packages that are already in black list
+    check_black_list(db)
     while True:
 
-        record = get_pending_task(db, table, task_no)
+        record = get_pending_task(db, table)
 
         if not record:
             print("All task completed")
@@ -219,7 +244,6 @@ def main():
 
         try:
             execute_with_retry(script, db, record, builder)  
-            task_no += 1      
 
         except Exception as e:
             print(f"Failed to run script {e}")
