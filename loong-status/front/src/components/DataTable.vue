@@ -852,15 +852,16 @@ export default {
 .sidebar-content {
   padding: 1rem;
   height: calc(100% - 60px);
-  overflow-y: auto;
+  overflow-y: hidden;
 }
 
 .sidebar-table {
   width: 100%;
+  height: 100%;
   table-layout: auto;
   min-width: 380px;
   border-collapse: collapse;
-  overflow-x: auto;
+  overflow: visible;
   display: block; 
   scroll-behavior: smooth;
   th, td {
@@ -880,7 +881,8 @@ export default {
 }
 
 .sidebar-table thead {
-  display: block;
+  display: table;
+  width: 100%;
   position: sticky;
   top: 0;
   z-index: 10;
