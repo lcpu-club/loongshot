@@ -165,6 +165,10 @@ def execute_with_retry(script_path, db, record, builder):
             # If the build succeeds, new loong_version will be used, which might not be the same as the x86_version
             delete_record(db, record['task_no'], loong_version, error)
             return
+        
+    # If all retries failed, delete the record
+    print("Failed after retries... Now removing task")
+    delete_record(db, record['task_no'], loong_version, error)
 
 def check_black_list(db):
     conn = dbinit.get_conn(db)
