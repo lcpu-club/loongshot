@@ -332,7 +332,7 @@ export default {
 
     const selectFilter = (label) => {
       label = label === 'All failed builds' ? 'Success' : label
-      selectedErrorType = selectedErrorType === label ? null : label
+      selectedErrorType.value = selectedErrorType.value === label ? null : label
       showFilter.value = false
       fetchData()
     }
