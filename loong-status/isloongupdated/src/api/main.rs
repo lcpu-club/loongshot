@@ -42,7 +42,8 @@ struct QueryParams {
     page: Option<u32>,
     per_page: Option<u32>,
     name: Option<String>,
-    error_type: Option<String>
+    error_type: Option<String>,
+    repo: Option<String>,
 }
 
 #[derive(Serialize, Debug, FromRow)]
@@ -195,6 +196,7 @@ async fn get_data(
             query_builder.push(" AND ");
         } else {
             query_builder.push(" WHERE ");
+            where_added = true;
         }
             query_builder.push("error_type ");
             match query.error_type.as_deref() {
@@ -203,6 +205,16 @@ async fn get_data(
             };
             query_builder.push_bind(error_type);
         
+    }
+
+    if let Some(repo) = &query.repo {
+        if where_added {
+            query_builder.push(" AND ");
+        } else {
+            query_builder.push(" WHERE ");
+        }
+        query_builder.push("repo = ");
+        query_builder.push_bind(repo);
     }
     
     query_builder
@@ -234,6 +246,7 @@ async fn get_data(
             count_builder.push(" AND ");
         } else {
             count_builder.push(" WHERE ");
+            where_added = true;
         }
         count_builder.push("error_type ");
         match query.error_type.as_deref() {
@@ -241,6 +254,16 @@ async fn get_data(
                 _ => count_builder.push("= ")
             };
         count_builder.push_bind(error_type);
+    }
+
+    if let Some(repo) = &query.repo {
+        if where_added {
+            count_builder.push(" AND ");
+        } else {
+            count_builder.push(" WHERE ");
+        }
+        count_builder.push("repo = ");
+        count_builder.push_bind(repo);
     }
 
     let total = match count_builder.build().fetch_one(pool.get_ref()).await {

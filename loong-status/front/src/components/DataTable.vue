@@ -110,8 +110,18 @@
         <thead>
           <tr>
             <th v-for="column in columns" :key="column">
-              <div class="column-header">
+              <div class="column-header"
+              @click="column === 'Repo' ? toggleRepoFilter() : null"
+               :class="{ 'clickable': column === 'Repo' }"
+              >
                 {{ column }}
+                <span v-if="column === 'Repo'" class="repo-filter-dropdown" v-show="showRepoFilter">
+                    <ul>
+                      <li @click.stop="filterRepo('')">All</li>
+                    <li @click.stop="filterRepo('extra')">Extra</li>
+                    <li @click.stop="filterRepo('core')">Core</li>
+                    </ul>
+                </span>
                 <!-- Status Legend -->
                 <span v-if="column === 'Status'" class="help-tooltip">
                   [?]
@@ -185,7 +195,9 @@ export default {
     const currentPage = ref(1);
     const searchName = ref('')
     const selectedErrorType = ref('')
-    const selectedStatus = ref('');
+    // const selectedStatus = ref('');
+    const showRepoFilter = ref(false);
+    const selectedRepo = ref('');
     const route = useRoute();
     const showFilter = ref(false);
 
@@ -267,7 +279,8 @@ export default {
             page: currentPage.value,
             per_page: perPage.value,
             name: searchName.value,
-            error_type: selectedErrorType.value
+            error_type: selectedErrorType.value,
+            repo: selectedRepo.value
           },
         });
         tableDataRaw.value = response.data.data;
@@ -314,6 +327,7 @@ export default {
     onMounted(() => {
       searchName.value = route.query.name?.trim() || null;
       selectedErrorType.value = route.query.error_type?.trim() || null;
+      selectedRepo.value = route.query.repo?.trim() || null;
       fetchData();
     });
 
@@ -335,12 +349,23 @@ export default {
       showFilter.value = !showFilter.value
     }
 
+    const toggleRepoFilter = () => {
+      showRepoFilter.value = !showRepoFilter.value;
+    };
+
     const selectFilter = (label) => {
       label = label === 'All failed builds' ? 'Success' : label
       selectedErrorType.value = selectedErrorType.value === label ? null : label
       showFilter.value = false
       fetchData()
     }
+
+    const filterRepo = (repo) => {
+      selectedRepo.value = repo?.trim() || null;
+      showRepoFilter.value = !showRepoFilter.value;
+      fetchData();
+    };
+
     return {
       tableData,
       columns,
@@ -353,11 +378,13 @@ export default {
       nextPage,
       prevPage,
       goToSpecificPage,
-      selectedStatus,
       toggleFilter,
       showFilter,
       selectFilter,
       filterOptions,
+      filterRepo,
+      showRepoFilter,
+      toggleRepoFilter,
       onSearch,
     };
   },
@@ -1023,7 +1050,6 @@ table {
   padding-top: 40px; 
 }
 
-
 th, td {
   border: 1px solid #ddd;
   white-space: pre-line;
@@ -1044,6 +1070,32 @@ th {
 
 tr:hover {
   background: var(--color-background-mute);
+}
+
+.repo-filter-dropdown {
+  position: absolute; /* 或者其他合适的定位方式 */
+  background: white; /* 下拉菜单背景 */
+  top: 100%; /* 使下拉菜单在表头下方 */
+  left: 0;
+  border-radius: 4px;
+  border: 1px solid #ccc; /* 边框 */
+  z-index: 1000; /* 确保在其他元素之上 */
+}
+.repo-filter-dropdown ul {
+  list-style: none; /* 去掉默认的列表样式 */
+  padding: 0; /* 去掉内边距 */
+  margin: 0; /* 去掉外边距 */
+}
+.repo-filter-dropdown li {
+  padding: 8px 12px; /* 添加内边距 */
+  cursor: pointer; /* 鼠标悬停时显示为手指 */
+}
+.repo-filter-dropdown li:hover {
+  background: #f0f0f0; /* 悬停时的背景颜色 */
+}
+
+.clickable {
+  cursor: pointer; /* 鼠标悬停时显示为可点击 */
 }
 
 input {
