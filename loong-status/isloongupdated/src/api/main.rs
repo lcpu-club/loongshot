@@ -16,6 +16,7 @@ struct Package {
     status: Option<String>,
     error_type: Option<String>,
     has_log: Option<bool>,
+    is_blacklisted: Option<bool>,
     x86_version: Option<String>,
     x86_testing_version: Option<String>,
     x86_staging_version: Option<String>,
@@ -127,6 +128,7 @@ async fn get_building_list(pool: web::Data<sqlx::Pool<sqlx::Postgres>>) -> impl 
         "SELECT task_no, name, base, repo, status,
         NULL as error_type,
         NULL as has_log,
+        NULL as is_blacklisted,
         NULL as x86_version,
         NULL as x86_testing_version,
         NULL as x86_staging_version,
@@ -147,10 +149,10 @@ async fn get_stat(pool: web::Data<sqlx::Pool<sqlx::Postgres>>) -> impl Responder
     let counts = sqlx::query_as::<_, CountResponse>(
         r#"
         SELECT
-            COUNT(*) FILTER (WHERE repo = 'core' AND x86_version = regexp_replace(loong_version, '(-\w+)\.\w+$', '\1')) AS core_match,
-            COUNT(*) FILTER (WHERE repo = 'extra' AND x86_version = regexp_replace(loong_version, '(-\w+)\.\w+$', '\1')) AS extra_match,
-            COUNT(*) FILTER (WHERE repo = 'core' AND x86_version != regexp_replace(loong_version, '(-\w+)\.\w+$', '\1')) AS core_mismatch,
-            COUNT(*) FILTER (WHERE repo = 'extra' AND x86_version != regexp_replace(loong_version, '(-\w+)\.\w+$', '\1')) AS extra_mismatch,
+            COUNT(*) FILTER (WHERE repo = 'core' AND x86_version = loong_version) AS core_match,
+            COUNT(*) FILTER (WHERE repo = 'extra' AND x86_version = loong_version) AS extra_match,
+            COUNT(*) FILTER (WHERE repo = 'core' AND x86_version != loong_version AND x86_version != 'missing' AND loong_version != 'missing') AS core_mismatch,
+            COUNT(*) FILTER (WHERE repo = 'extra' AND x86_version != loong_version AND x86_version != 'missing' AND loong_version != 'missing') AS extra_mismatch,
             COUNT(*) FILTER (WHERE repo='core' AND NOT x86_version is NULL) as core_total,
             COUNT(*) FILTER (WHERE repo='extra' AND NOT x86_version is NULL) as extra_total
         FROM packages
@@ -172,7 +174,7 @@ async fn get_data(
     let offset = (page - 1) * per_page;
 
     let mut query_builder = sqlx::QueryBuilder::new(
-        "SELECT name, base, repo, error_type, has_log,
+        "SELECT name, base, repo, error_type, has_log, is_blacklisted,
         x86_version, x86_testing_version, x86_staging_version, 
         loong_version, loong_testing_version, loong_staging_version,
         NULL as task_no,

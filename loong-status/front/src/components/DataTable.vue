@@ -239,6 +239,10 @@ export default {
       } else {
         status += '<span style="color: gray;">🅻</span>';
       }
+
+      if (item.is_blacklisted === true) {
+        status += '<span style="color: black;">🅱︎</span>';
+      }
       // if (flags) {
       //   if (flags & 1) status += `<span><a href="https://github.com/lcpu-club/loongarch-packages/tree/master/${item.base}" style="color: lime;">🅿</a></span>`;
       //   if (flags & 2) status += '<span style="color: blue;">🅲</span>';
@@ -279,6 +283,7 @@ export default {
         Base: item.base,
         Repo: item.repo,
         has_log: item.has_log,
+        is_blacklisted: item.is_blacklisted,
         'x86 Version': mergeVersion(item.x86_version, item.x86_testing_version, item.x86_staging_version),
         'Loong Version': mergeVersion(item.loong_version, item.loong_testing_version, item.loong_staging_version),
         Status: compareAll(item),
@@ -374,7 +379,8 @@ export default {
       { symbol: '🅻', description: 'has build log on server', style: 'color: gold;' },
       { symbol: '🅲', description: 'build with nocheck', style: 'color: blue;' },
       { symbol: '🅾', description: 'config.sub is too old', style: 'color: orange;' },
-      { symbol: '🅵', description: 'build fails', style: 'color: red;' }
+      { symbol: '🅵', description: 'build fails', style: 'color: red;' },
+      { symbol: '🅱︎', description: 'in blacklist', style: 'color: black;' }
       ],
       columnWidths: [
           { width: '20%' },  
