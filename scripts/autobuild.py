@@ -63,7 +63,7 @@ def delete_record(db_path: str, record_id: int, new_loong_version, error = "Succ
             SELECT name, base, repo, %s, TRUE, x86_version, CASE WHEN %s = 'Success' THEN %s ELSE loong_version END
             FROM build_list
             WHERE task_no = %s
-            ON CONFLICT(name) DO UPDATE SET
+            ON CONFLICT(name, repo) DO UPDATE SET
             base = EXCLUDED.base,
             repo = EXCLUDED.repo,
             error_type = EXCLUDED.error_type,
@@ -212,28 +212,7 @@ def main():
         builder = args.builder
     
     print(f"Database: {db}\nBuild List: {table}\nBuild script: {script}")
-    # Create the resulting packages table
-    # conn = dbinit.get_conn(db)
-    # cursor = conn.cursor()
-    # cursor.execute(f'''
-    #     CREATE TABLE IF NOT EXISTS packages (
-    #     name TEXT PRIMARY KEY,
-    #     base TEXT,
-    #     repo TEXT,
-    #     error_type TEXT,
-    #     has_log BOOL,
-    #     x86_version TEXT,
-    #     x86_testing_version TEXT,
-    #     x86_staging_version TEXT,
-    #     loong_version TEXT,
-    #     loong_testing_version TEXT,
-    #     loong_staging_version TEXT
-    #     )
-    # ''')
-    # conn.commit()
-    # cursor.close()
-    # conn.close()
-    
+        
     # Remove packages that are already in black list
     check_black_list(db)
     while True:
