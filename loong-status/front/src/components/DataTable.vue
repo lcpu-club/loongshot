@@ -184,7 +184,7 @@
 
 <script>
 import { useRoute } from 'vue-router';
-import { ref, reactive, computed, onMounted } from 'vue';
+import { ref, computed, onMounted, onBeforeUnmount } from 'vue';
 import axios from 'axios';
 
 export default {
@@ -324,11 +324,41 @@ export default {
 
     const totalPages = computed(() => Math.ceil(total.value / perPage.value)) || 1;
 
+    // Close dropdown when clicking outside
+    const handleClickOutside = (event) => {
+      const filterPanel = document.querySelector('.filter-panel');
+      const filterBtn = document.querySelector('.filter-btn');
+      const repoDropdown = document.querySelector('.repo-filter-dropdown');
+      const repoBtn = document.querySelector('.clickable'); 
+
+      const clickedOutside = (box, btn) => {
+      const target = event.target;
+      // Not in the filter panel or button
+      return box && !box.contains(target) && (!btn || !btn.contains(target));
+      };
+
+      if (showFilter.value && clickedOutside(filterPanel, filterBtn)) {
+      showFilter.value = false; 
+      console.log('Close filter');
+      }
+
+      if (showRepoFilter.value && clickedOutside(repoDropdown, repoBtn)) {
+      showRepoFilter.value = false; 
+      console.log('Close repo filter');
+      }
+      };
+
+
     onMounted(() => {
+      document.addEventListener('click', handleClickOutside);
       searchName.value = route.query.name?.trim() || null;
       selectedErrorType.value = route.query.error_type?.trim() || null;
       selectedRepo.value = route.query.repo?.trim() || null;
       fetchData();
+    });
+
+    onBeforeUnmount(() => {
+      document.removeEventListener('click', handleClickOutside);
     });
 
     // const onStatusChange = () => {
@@ -1073,29 +1103,29 @@ tr:hover {
 }
 
 .repo-filter-dropdown {
-  position: absolute; /* 或者其他合适的定位方式 */
-  background: white; /* 下拉菜单背景 */
-  top: 100%; /* 使下拉菜单在表头下方 */
+  position: absolute; 
+  background: white;
+  top: 100%; 
   left: 0;
   border-radius: 4px;
-  border: 1px solid #ccc; /* 边框 */
-  z-index: 1000; /* 确保在其他元素之上 */
+  border: 1px solid #ccc; 
+  z-index: 1000; 
 }
 .repo-filter-dropdown ul {
-  list-style: none; /* 去掉默认的列表样式 */
-  padding: 0; /* 去掉内边距 */
-  margin: 0; /* 去掉外边距 */
+  list-style: none; 
+  padding: 0; 
+  margin: 0; 
 }
 .repo-filter-dropdown li {
-  padding: 8px 12px; /* 添加内边距 */
-  cursor: pointer; /* 鼠标悬停时显示为手指 */
+  padding: 8px 12px; 
+  cursor: pointer; 
 }
 .repo-filter-dropdown li:hover {
-  background: #f0f0f0; /* 悬停时的背景颜色 */
+  background: #6b2024; 
 }
 
 .clickable {
-  cursor: pointer; /* 鼠标悬停时显示为可点击 */
+  cursor: pointer;
 }
 
 input {
