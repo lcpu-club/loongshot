@@ -67,6 +67,7 @@ def delete_record(db_path: str, record_id: int, new_loong_version, error = "Succ
             base = EXCLUDED.base,
             repo = EXCLUDED.repo,
             error_type = EXCLUDED.error_type,
+            has_log = EXCLUDED.has_log,
             x86_version = EXCLUDED.x86_version,
             loong_version = EXCLUDED.loong_version
         """, (error, error, new_loong_version, record_id,))

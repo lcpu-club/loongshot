@@ -36,7 +36,7 @@ def create_tables(db):
         base TEXT,
         repo TEXT,
         error_type TEXT,
-        has_log BOOL,
+        has_log BOOL DEFAULT FALSE,
         is_blacklisted BOOL DEFAULT FALSE,
         x86_version TEXT,
         x86_testing_version TEXT,
