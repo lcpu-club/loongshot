@@ -150,12 +150,12 @@ async fn get_stat(pool: web::Data<sqlx::Pool<sqlx::Postgres>>) -> impl Responder
     let counts = sqlx::query_as::<_, CountResponse>(
         r#"
         SELECT
-            COUNT(*) FILTER (WHERE repo = 'core' AND x86_version = loong_version) AS core_match,
-            COUNT(*) FILTER (WHERE repo = 'extra' AND x86_version = loong_version) AS extra_match,
-            COUNT(*) FILTER (WHERE repo = 'core' AND x86_version != loong_version AND x86_version != 'missing' AND loong_version != 'missing') AS core_mismatch,
-            COUNT(*) FILTER (WHERE repo = 'extra' AND x86_version != loong_version AND x86_version != 'missing' AND loong_version != 'missing') AS extra_mismatch,
-            COUNT(*) FILTER (WHERE repo='core' AND NOT x86_version is NULL) as core_total,
-            COUNT(*) FILTER (WHERE repo='extra' AND NOT x86_version is NULL) as extra_total
+            COUNT(*) FILTER (WHERE repo = 'core' AND split_part(x86_version, '-', 1) = split_part(loong_version, '-', 1)) AS core_match,
+            COUNT(*) FILTER (WHERE repo = 'extra' AND split_part(x86_version, '-', 1) = split_part(loong_version, '-', 1)) AS extra_match,
+            COUNT(*) FILTER (WHERE repo = 'core' AND split_part(x86_version, '-', 1) != split_part(loong_version, '-', 1) AND x86_version != 'missing' AND loong_version != 'missing') AS core_mismatch,
+            COUNT(*) FILTER (WHERE repo = 'extra' AND split_part(x86_version, '-', 1) != split_part(loong_version, '-', 1) AND x86_version != 'missing' AND loong_version != 'missing') AS extra_mismatch,
+            COUNT(*) FILTER (WHERE repo = 'core' AND x86_version != 'missing') as core_total,
+            COUNT(*) FILTER (WHERE repo = 'extra' AND x86_version != 'missing') as extra_total
         FROM packages
         "#
     )
