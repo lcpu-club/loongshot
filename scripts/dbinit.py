@@ -1,10 +1,17 @@
 import argparse
-import compare86
 import json
 import os
 import psycopg2
+import pyalpm
+import requests
+from pydantic import BaseModel
 
-compare_methods=['core_pkg', 'extra_pkg', 'all_pkg', 'build_pkg']
+class PackageMetadata(BaseModel):
+    name: str = "missing"
+    base: str = "missing"
+    x86_version: str = "missing"
+    loong64_version: str = "missing"
+    repo:str = "missing"
 
 def load_config(config_file):
     try:
@@ -32,7 +39,7 @@ def create_tables(db):
 
     cursor.execute(f'''
         CREATE TABLE IF NOT EXISTS packages (
-        name TEXT,
+        name TEXT PRIMARY KEY,
         base TEXT,
         repo TEXT,
         error_type TEXT,
@@ -43,8 +50,7 @@ def create_tables(db):
         x86_staging_version TEXT,
         loong_version TEXT,
         loong_testing_version TEXT,
-        loong_staging_version TEXT,
-        PRIMARY KEY (name, repo)
+        loong_staging_version TEXT
         )
     ''')
 
@@ -75,19 +81,102 @@ def load_black_list(db, bl_file):
     cursor.close()
     conn.close()
 
+# Download repo db from mirrors.
+def download_file(source, dest):
+    headers = {"User-Agent": "Mozilla/5.0", }
+    repo_path = os.path.dirname(dest)
+    if not os.path.exists(repo_path):
+        os.makedirs(repo_path)
+    try:
+        # Download the file and save it to dest_path
+        response = requests.get(source, headers=headers)
+        response.raise_for_status()
+        with open(dest, 'wb') as out_file:
+            out_file.write(response.content)
+    except Exception as e:
+        print(f"Error downloading file: {e}")
+
+def update_repo(cache_dir, mirror_x86, x86_repo_path, mirror_loong64, loong64_repo_path):
+    for mirror, repo_path in [(mirror_x86, x86_repo_path), (mirror_loong64, loong64_repo_path)]:
+        for repo in ["core", "extra"]:
+            download_file(f"{mirror}{repo}/os/{repo_path}/{repo}.db",
+                        f"{cache_dir}/{repo_path}/sync/{repo}.db")
+        
+# Load the repository database
+def load_repo(repo_path, repo):
+    handle = pyalpm.Handle("/", repo_path)
+    try:
+        db = handle.register_syncdb(repo, 0)
+        return db
+    except pyalpm.error as e:
+        print(f"Failed to load repo {repo_path}: {e}")
+        return None
+
 # Fetch all packages from x86 and loong, and insert into database
+# compare_all in compare86.py only compares package base, but here we need all built packages
+def compare_all(cache_dir, x86_repo_path, loong64_repo_path):
+    pkglist = []
+
+    for repo in ['core', 'extra']:
+        x86 = {}
+        loong = {}
+        
+        x86_db = load_repo(os.path.join(cache_dir, x86_repo_path), repo)
+        x86_pkg = {pkg.name: [pkg.base, pkg.version] for pkg in x86_db.pkgcache}
+        x86 = {**x86, **x86_pkg}
+    
+        loong_db = load_repo(os.path.join(cache_dir, loong64_repo_path), repo)
+        loong_pkg = {pkg.name: [pkg.base, pkg.version] for pkg in loong_db.pkgcache}
+        loong = {**loong, **loong_pkg}
+
+        allpkg = {**loong, **x86}
+        for pkg_name in allpkg:
+            if pkg_name in x86:
+                pkg_base = x86[pkg_name][0]
+                x86_version = x86[pkg_name][1]
+            else:
+                x86_version = 'missing'
+            if pkg_name in loong:
+                pkg_base = loong[pkg_name][0]
+                loong64_version = loong[pkg_name][1]
+            else:
+                loong64_version = 'missing'
+            p = PackageMetadata(
+                name=f'{pkg_name}',
+                base=f'{pkg_base}',
+                x86_version=f'{x86_version}',
+                loong64_version=f'{loong64_version}',
+                repo=repo
+            )
+            pkglist.append(p)
+    return pkglist
+
 def fetch_all_packges(db):
-    pkglist = compare86.compare_all()
+    home_dir = os.path.expanduser("~")
+    cache_dir = os.path.join(home_dir, ".cache", "loongpkgs")
+    mirror_x86 = "https://mirrors.pku.edu.cn/archlinux/"
+    mirror_loong64 = "https://loongarchlinux.lcpu.dev/loongarch/archlinux/"
+
+    # Define repo file paths
+    x86_repo_path = "x86_64"
+    loong64_repo_path = "loong64"
+    update_repo(cache_dir, mirror_x86, x86_repo_path, mirror_loong64, loong64_repo_path)
+    pkglist = compare_all(cache_dir, x86_repo_path, loong64_repo_path)
     conn = get_conn(db)
     
     cursor = conn.cursor()
 
+    # If a package is moved from a repo to another, we accept the new one and remove the old one
     cursor.executemany(f'''
-    INSERT INTO packages (name, base, x86_version, loong_version, repo)
-    VALUES (%s, %s, %s, %s, %s)
-    ON CONFLICT (name, repo) DO UPDATE
-    SET x86_version = EXCLUDED.x86_version,
-        loong_version = EXCLUDED.loong_version
+        INSERT INTO packages (name, base, x86_version, loong_version, repo)
+        VALUES (%s, %s, %s, %s, %s)
+        ON CONFLICT (name) DO UPDATE
+        SET x86_version = CASE 
+                            WHEN EXCLUDED.x86_version = 'missing' THEN packages.x86_version
+                            ELSE EXCLUDED.x86_version 
+                        END,
+            loong_version = EXCLUDED.loong_version
+        WHERE packages.x86_version <> 'missing' OR EXCLUDED.x86_version <> 'missing';
     ''', [(pkg.name, pkg.base, pkg.x86_version, pkg.loong64_version, pkg.repo) for pkg in pkglist])
     
     conn.commit()
