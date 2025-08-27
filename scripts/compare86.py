@@ -312,15 +312,15 @@ def write_to_json(data, file):
 
     
 # Write packages to database
-def write_to_database(data, db, compare_method):
+def write_to_database(data, db):
 
     conn = dbinit.get_conn(db)
     
     cursor = conn.cursor()
-    cursor.execute(f'''DROP TABLE IF EXISTS {compare_method} ''')
-    # Create a table for each compare method
+    cursor.execute(f'''DROP TABLE IF EXISTS prebuild_list ''')
+    # Create a table to store packages to be built
     cursor.execute(f'''
-    CREATE TABLE {compare_method} (
+    CREATE TABLE prebuild_list (
         name TEXT PRIMARY KEY,
         base TEXT,
         repo TEXT,
@@ -334,8 +334,15 @@ def write_to_database(data, db, compare_method):
     ''')
 
     cursor.executemany(f'''
-    INSERT INTO {compare_method} (name, base, x86_version, loong_version, repo)
-    VALUES (%s, %s, %s, %s, %s)
+        INSERT INTO prebuild_list (name, base, x86_version, loong_version, repo)
+        VALUES (%s, %s, %s, %s, %s)
+        ON CONFLICT (name) DO UPDATE
+        SET x86_version = CASE 
+                            WHEN EXCLUDED.x86_version = 'missing' THEN prebuild_list.x86_version
+                            ELSE EXCLUDED.x86_version 
+                        END,
+            loong_version = EXCLUDED.loong_version
+        WHERE prebuild_list.x86_version <> 'missing' OR EXCLUDED.x86_version <> 'missing';
     ''', [(pkg.name, pkg.base, pkg.x86_version, pkg.loong64_version, pkg.repo) for pkg in data])
     
     conn.commit()
@@ -455,14 +462,7 @@ def main():
     if args.output:
         write_to_json(pkglist, Path(args.output))
     elif args.db:
-        if args.core:
-            write_to_database(pkglist, Path(args.db), 'core_pkg')
-        elif args.extra:
-            write_to_database(pkglist, Path(args.db), 'extra_pkg')
-        elif args.all:
-            write_to_database(pkglist, Path(args.db), 'all_pkg')
-        elif args.build:
-            write_to_database(pkglist, Path(args.db), 'build_pkg')
+            write_to_database(pkglist, Path(args.db))
 
     print_to_screen(pkglist)
     

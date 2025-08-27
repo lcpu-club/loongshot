@@ -63,7 +63,7 @@ def delete_record(db_path: str, record_id: int, new_loong_version, error = "Succ
             SELECT name, base, repo, %s, TRUE, x86_version, CASE WHEN %s = 'Success' THEN %s ELSE loong_version END
             FROM build_list
             WHERE task_no = %s
-            ON CONFLICT(name, repo) DO UPDATE SET
+            ON CONFLICT (name) DO UPDATE SET
             base = EXCLUDED.base,
             repo = EXCLUDED.repo,
             error_type = EXCLUDED.error_type,
