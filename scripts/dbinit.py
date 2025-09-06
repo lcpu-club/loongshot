@@ -33,12 +33,15 @@ def get_conn(config):
     return conn
 
 # Write packages to database
-def create_tables(db):
-    conn = get_conn(db)
+def create_tables(conn):
     cursor = conn.cursor()
 
+    cursor.execute("DROP TABLE IF EXISTS black_list;")
+    cursor.execute("DROP TABLE IF EXISTS prebuild_list;")
+    cursor.execute("DROP TABLE IF EXISTS build_list;")
+
     cursor.execute(f'''
-        CREATE TABLE IF NOT EXISTS packages (
+        CREATE TABLE IF NOT EXISIS packages (
         name TEXT PRIMARY KEY,
         base TEXT,
         repo TEXT,
@@ -54,20 +57,15 @@ def create_tables(db):
         )
     ''')
 
-    cursor.execute("DROP TABLE IF EXISTS black_list;")
-
     cursor.execute(f'''
         CREATE TABLE black_list (
         name TEXT PRIMARY KEY
         )
     ''')
 
-    conn.commit()
     cursor.close()
-    conn.close()
 
-def load_black_list(db, bl_file):
-    conn = get_conn(db)
+def load_black_list(conn, bl_file):
     cursor = conn.cursor()
     
     with open(bl_file, 'r') as f:
@@ -77,9 +75,7 @@ def load_black_list(db, bl_file):
                 cursor.execute('INSERT INTO black_list (name) VALUES (%s) ON CONFLICT (name) DO NOTHING', (name,))
     
     cursor.execute("UPDATE packages SET is_blacklisted = TRUE WHERE name IN (SELECT name FROM black_list);")
-    conn.commit()
     cursor.close()
-    conn.close()
 
 # Download repo db from mirrors.
 def download_file(source, dest):
@@ -151,7 +147,7 @@ def compare_all(cache_dir, x86_repo_path, loong64_repo_path):
             pkglist.append(p)
     return pkglist
 
-def fetch_all_packges(db):
+def fetch_all_packges(conn):
     home_dir = os.path.expanduser("~")
     cache_dir = os.path.join(home_dir, ".cache", "loongpkgs")
     mirror_x86 = "https://mirrors.pku.edu.cn/archlinux/"
@@ -162,8 +158,7 @@ def fetch_all_packges(db):
     loong64_repo_path = "loong64"
     update_repo(cache_dir, mirror_x86, x86_repo_path, mirror_loong64, loong64_repo_path)
     pkglist = compare_all(cache_dir, x86_repo_path, loong64_repo_path)
-    conn = get_conn(db)
-    
+
     cursor = conn.cursor()
 
     # If a package is moved from a repo to another, we accept the new one and remove the old one
@@ -179,9 +174,7 @@ def fetch_all_packges(db):
         WHERE packages.x86_version <> 'missing' OR EXCLUDED.x86_version <> 'missing';
     ''', [(pkg.name, pkg.base, pkg.x86_version, pkg.loong64_version, pkg.repo) for pkg in pkglist])
     
-    conn.commit()
     cursor.close()
-    conn.close()
 
 def main():
     parser = argparse.ArgumentParser(description="Compare packages between x86 and loong.")
@@ -192,10 +185,22 @@ def main():
     if args.db is None:
         print("Must provide database name!")
         return
-    create_tables(args.db)
-    fetch_all_packges(args.db)
-    if args.bl:
-        load_black_list(args.db, args.bl)
+    
+    conn = get_conn(args.db)
+    try:
+        conn.autocommit = False
+
+        create_tables(conn)
+        fetch_all_packges(conn)
+        if args.bl:
+            load_black_list(conn, args.bl)
+        conn.commit()
+    except Exception as e:
+        print(f"Error during database operations: {e}")
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
         
 if __name__ == "__main__":
     main()
