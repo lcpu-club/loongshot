@@ -313,39 +313,43 @@ def write_to_json(data, file):
 def write_to_database(data, db):
 
     conn = dbinit.get_conn(db)
-    
-    cursor = conn.cursor()
-    cursor.execute(f'''DROP TABLE IF EXISTS prebuild_list ''')
-    # Create a table to store packages to be built
-    cursor.execute(f'''
-    CREATE TABLE prebuild_list (
-        name TEXT PRIMARY KEY,
-        base TEXT,
-        repo TEXT,
-        x86_version TEXT,
-        x86_testing_version TEXT,
-        x86_staging_version TEXT,
-        loong_version TEXT,
-        loong_testing_version TEXT,
-        loong_staging_version TEXT
-    )
-    ''')
+    try:
+        cursor = conn.cursor()
+        cursor.execute(f'''DROP TABLE IF EXISTS prebuild_list ''')
+        # Create a table to store packages to be built
+        cursor.execute(f'''
+        CREATE TABLE prebuild_list (
+            name TEXT PRIMARY KEY,
+            base TEXT,
+            repo TEXT,
+            x86_version TEXT,
+            x86_testing_version TEXT,
+            x86_staging_version TEXT,
+            loong_version TEXT,
+            loong_testing_version TEXT,
+            loong_staging_version TEXT
+        )
+        ''')
 
-    cursor.executemany(f'''
-        INSERT INTO prebuild_list (name, base, x86_version, loong_version, repo)
-        VALUES (%s, %s, %s, %s, %s)
-        ON CONFLICT (name) DO UPDATE
-        SET x86_version = CASE 
-                            WHEN EXCLUDED.x86_version = 'missing' THEN prebuild_list.x86_version
-                            ELSE EXCLUDED.x86_version 
-                        END,
-            loong_version = EXCLUDED.loong_version
-        WHERE prebuild_list.x86_version <> 'missing' OR EXCLUDED.x86_version <> 'missing';
-    ''', [(pkg.name, pkg.base, pkg.x86_version, pkg.loong64_version, pkg.repo) for pkg in data])
-    
-    conn.commit()
-    cursor.close()
-    conn.close()
+        cursor.executemany(f'''
+            INSERT INTO prebuild_list (name, base, x86_version, loong_version, repo)
+            VALUES (%s, %s, %s, %s, %s)
+            ON CONFLICT (name) DO UPDATE
+            SET x86_version = CASE 
+                                WHEN EXCLUDED.x86_version = 'missing' THEN prebuild_list.x86_version
+                                ELSE EXCLUDED.x86_version 
+                            END,
+                loong_version = EXCLUDED.loong_version
+            WHERE prebuild_list.x86_version <> 'missing' OR EXCLUDED.x86_version <> 'missing';
+        ''', [(pkg.name, pkg.base, pkg.x86_version, pkg.loong64_version, pkg.repo) for pkg in data])
+        cursor.close()
+        conn.commit()
+    except Exception as e:
+        conn.rollback()
+        print(f"Failed to write to database: {str(e)}")
+        raise
+    finally:
+        conn.close()
 
 # Print packages to screen
 def print_to_screen(data):
