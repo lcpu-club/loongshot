@@ -19,8 +19,6 @@ cache_dir = os.path.join(home_dir, ".cache", "compare86")
 # Define the repo file paths
 x86_repo_path = "x86"
 loong64_repo_path = "loong"
-mirror_x86 = "https://mirrors.pku.edu.cn/archlinux/"
-mirror_loong64 = "https://loongarchlinux.lcpu.dev/loongarch/archlinux/"
 source_repos = ['core', 'extra']
 
 pkgtime = {}
@@ -60,7 +58,7 @@ def get_builddate():
             pkgtime[pkg.base] = pkg.builddate
 
 
-def update_repo():
+def update_repo(mirror_x86, mirror_loong64):
     for repo in source_repos:
         download_file(f"{mirror_x86}{repo}/os/x86_64/{repo}.db",
                       f"{cache_dir}/{x86_repo_path}/sync/{repo}.db")
@@ -376,8 +374,18 @@ def main():
     parser.add_argument("-d", "--depend", type=str, help="List reverse depends.")
     parser.add_argument("-o", "--output", type=str, help="Save output to file.")
     parser.add_argument( "--db", type=str, help="Save output to database.")
+    parser.add_argument( "--mirror_x86", type=str, help="Mirror of x86.")
+    parser.add_argument( "--mirror_loong", type=str, help="Mirror of loong.")
     
     args = parser.parse_args()
+
+    mirror_x86 = "https://mirrors.pku.edu.cn/archlinux/"
+    mirror_loong64 = "https://loongarchlinux.lcpu.dev/loongarch/archlinux/"
+
+    if args.mirror_x86:
+        mirror_x86 = args.mirror_x86
+    if args.mirror_loong:
+        mirror_loong64 = args.mirror_loong
 
     required_for_output = [
         args.core, args.extra, args.all, args.build
@@ -403,7 +411,7 @@ def main():
     if args.sync:
         if args.stag and args.test:
             source_repos = ["core", "extra", "core-staging", "extra-staging", "core-testing", "extra-testing"]
-        update_repo()
+        update_repo(mirror_x86, mirror_loong64)
 
     if args.build:
         safe_tobuild()
