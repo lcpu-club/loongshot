@@ -47,6 +47,9 @@ def get_pending_task(db_path, table):
             conn.commit()
 
             return dict(record) if record else None
+    except psycopg2.Error as e:
+        conn.rollback()
+        raise RuntimeError(f"Database error: {e}") from e
     finally:
         conn.close()
 
