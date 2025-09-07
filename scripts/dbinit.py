@@ -162,17 +162,28 @@ def fetch_all_packges(conn):
     cursor = conn.cursor()
 
     # If a package is moved from a repo to another, we accept the new one and remove the old one
+    # Keep track of the log! If a package has log, it should keep the log unless the new x86_version is not missing and different from loong_version
     cursor.executemany(f'''
-        INSERT INTO packages (name, base, x86_version, loong_version, repo)
-        VALUES (%s, %s, %s, %s, %s)
+        INSERT INTO packages (name, base, x86_version, loong_version, repo, has_log)
+        VALUES (%s, %s, %s, %s, %s, 
+                CASE WHEN %s <> 'missing' AND %s <> %s THEN FALSE ELSE FALSE END)
         ON CONFLICT (name) DO UPDATE
         SET x86_version = CASE 
                             WHEN EXCLUDED.x86_version = 'missing' THEN packages.x86_version
                             ELSE EXCLUDED.x86_version 
                         END,
-            loong_version = EXCLUDED.loong_version
+            loong_version = EXCLUDED.loong_version,
+            repo = EXCLUDED.repo,
+            base = EXCLUDED.base,
+            has_log = CASE
+                        WHEN COALESCE(NULLIF(EXCLUDED.x86_version, 'missing'), packages.x86_version) <> 'missing'
+                        AND COALESCE(NULLIF(EXCLUDED.x86_version, 'missing'), packages.x86_version) <> EXCLUDED.loong_version
+                        THEN FALSE
+                        ELSE packages.has_log
+                    END
         WHERE packages.x86_version <> 'missing' OR EXCLUDED.x86_version <> 'missing';
-    ''', [(pkg.name, pkg.base, pkg.x86_version, pkg.loong64_version, pkg.repo) for pkg in pkglist])
+    ''', [(pkg.name, pkg.base, pkg.x86_version, pkg.loong64_version, pkg.repo,
+        pkg.x86_version, pkg.x86_version, pkg.loong64_version) for pkg in pkglist])
     
     cursor.close()
 
