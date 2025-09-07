@@ -41,7 +41,7 @@ def create_tables(conn):
     cursor.execute("DROP TABLE IF EXISTS build_list;")
 
     cursor.execute(f'''
-        CREATE TABLE IF NOT EXISIS packages (
+        CREATE TABLE IF NOT EXISTS packages (
         name TEXT PRIMARY KEY,
         base TEXT,
         repo TEXT,
