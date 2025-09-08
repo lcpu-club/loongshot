@@ -4,6 +4,8 @@ import os
 import psycopg2
 import pyalpm
 import requests
+import subprocess
+
 from pydantic import BaseModel
 
 class PackageMetadata(BaseModel):
@@ -74,7 +76,33 @@ def load_black_list(conn, bl_file):
             if name:
                 cursor.execute('INSERT INTO black_list (name) VALUES (%s) ON CONFLICT (name) DO NOTHING', (name,))
     
-    cursor.execute("UPDATE packages SET is_blacklisted = TRUE WHERE name IN (SELECT name FROM black_list);")
+    cursor.execute("""
+        SELECT name, x86_version, loong_version 
+        FROM packages 
+        WHERE name IN (SELECT name FROM black_list);
+    """)
+    
+    packages_to_check = cursor.fetchall()
+    
+    for name, x86_version, loong_version in packages_to_check:
+        # Use vercmp to compare versions
+        try:
+            result = subprocess.run(
+                ['vercmp', x86_version, loong_version],
+                capture_output=True,
+                text=True,
+                check=True
+            )
+            # If x86_version > loong_version, blacklist the package
+            if result.stdout.strip() == '1':
+                cursor.execute("""
+                    UPDATE packages 
+                    SET is_blacklisted = TRUE 
+                    WHERE name = %s;
+                """, (name,))
+        except subprocess.CalledProcessError:
+            print(f"Error comparing versions for {name}: {x86_version} vs {loong_version}")
+
     cursor.close()
 
 # Download repo db from mirrors.
