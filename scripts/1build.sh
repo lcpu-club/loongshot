@@ -104,7 +104,7 @@ done
 EXTRAARG="$@"
 
 build_package() {
-    # packages beloong only to loong
+    # packages belong only to loong
     if [[ -f $LOONGREPO/$PKGBASE/PKGBUILD ]]; then
         cp $LOONGREPO/$PKGBASE $WORKDIR/ -a
         cd $WORKDIR/$PKGBASE
@@ -196,7 +196,8 @@ build_package() {
     
     # Start to build package
     echo "Sending build command"
-    ssh -t $BUILDER "cd $BUILDPATH/$PKGBASE; PACKAGER=\"$PACKAGER\" extra$TESTING-loong64-build $CLEAN -- -- -A -L $EXTRAARG" 2>/dev/null
+    ssh $BUILDER "cd $BUILDPATH/$PKGBASE; PACKAGER=\"$PACKAGER\" extra$TESTING-loong64-build $CLEAN -- -- -A -L $EXTRAARG"
+    # 2>/dev/null
     EXITCODE=$?
 
     ENDTIME=$SECONDS
@@ -210,16 +211,9 @@ build_package() {
         else
             ARCH="loong64"
         fi
-        # cd $LOCALREPO/temp-$BUILDREPO$TESTING/os/loong64
+
         mkdir -p $LOCALREPO/debug-pool
-        # Remove old files
-        if [[ -f $LOCALREPO/$PKGBASE ]]; then
-            rm -rf $LOCALREPO/$PKGBASE
-        fi
-        mkdir -p $LOCALREPO/$PKGBASE
-	    cd $LOCALREPO/$PKGBASE
-        # for pkg in ${pkgname[@]}; do
-        # FILENAME=$pkg-$PKGVERREL-$ARCH.pkg.tar.zst
+        cd $LOCALREPO
 
         # All packages
     	FILENAME="*.pkg.tar.zst"
@@ -263,6 +257,9 @@ mkdir -p $LOGPATH/$PKGBASE
 build_package | tee $PKGBASE-$PKGVERREL.log
 EXITCODE=${PIPESTATUS[0]}
 
+if [[ -f $LOGPATH/$PKGBASE/$PKGBASE-$PKGVERREL.log ]]; then
+    rm $LOGPATH/$PKGBASE/$PKGBASE-$PKGVERREL.log
+fi
 cp $PKGBASE-$PKGVERREL.log $LOGPATH/$PKGBASE/$PKGBASE-$PKGVERREL.log
 
 if [[ "$EXITCODE" -ne 0 ]]; then
