@@ -15,29 +15,33 @@ error_type = {
     "Fail to pass the validity check":["Fail to pass the validity check"],
     "Fail to pass PGP check" : ["One or more PGP signatures could not be verified"],
     "Could not resolve all dependencies": ["Could not resolve all dependencies"],
-    "A failure occurred in prepare": ["A failure occurred in prepare"],
-    "A failure occurred in build": ["A failure occurred in build"],
-    "A failure occurred in check": ["A failure occurred in check"],
-    "A failure occurred in package": ["A failure occurred in package"],
+    "Failed in prepare": ["A failure occurred in prepare"],
+    "Failed in build": ["A failure occurred in build"],
+    "Failed in check": ["A failure occurred in check"],
+    "Failed in package": ["A failure occurred in package"],
     "Cannot guess build type": ["configure: error: cannot guess build type"]
 }
-bit_mapping = {key: idx for idx, key in enumerate(error_type.keys())}
 
 # Fetch one task from build list
-def get_first_pending_record(db_path, table):
+def get_pending_task(db_path, table, task_no):
     conn = dbinit.get_conn(db_path)
     try:
         with conn.cursor(cursor_factory=extras.DictCursor) as cursor:
             cursor.execute(
-                f"SELECT * FROM {table} WHERE flags = 0 ORDER BY task_no LIMIT 1"
+                f"SELECT * FROM {table} WHERE task_no = %s", (task_no,)
             )
             record = cursor.fetchone()
+            cursor.execute(
+                f"UPDATE {table} SET status = 'Building' WHERE task_no = %s", (task_no,)
+            )
+            conn.commit()
+
             return dict(record) if record else None
     finally:
         conn.close()
 
 # Remove completed build task
-def delete_record(db_path: str, record_id: int, error) -> None:
+def delete_record(db_path: str, record_id: int, error = "Success") -> None:
     conn = dbinit.get_conn(db_path)
     cursor = conn.cursor()
 
@@ -45,17 +49,20 @@ def delete_record(db_path: str, record_id: int, error) -> None:
         cursor.execute("BEGIN TRANSACTION")
         # If build success, update loong_version, otherwise don't
         cursor.execute("""
-            INSERT INTO packages(name, base, repo, flags, x86_version, loong_version)
-            SELECT name, base, repo, flags & 0xFFFF | (%s << 16), x86_version, CASE WHEN %s = 0 THEN x86_version ELSE loong_version END
+            INSERT INTO packages(name, base, repo, error_type, x86_version, loong_version)
+            SELECT name, base, repo, %s, x86_version, CASE WHEN %s = 'Success' THEN x86_version ELSE loong_version END
             FROM build_list
             WHERE task_no = %s
             ON CONFLICT(name) DO UPDATE SET
-        repo = EXCLUDED.repo,
-                x86_version = EXCLUDED.x86_version,
-                loong_version = EXCLUDED.loong_version
+            repo = EXCLUDED.repo,
+            x86_version = EXCLUDED.x86_version,
+            loong_version = EXCLUDED.loong_version
         """, (error, error, record_id,))
         
-        cursor.execute("DELETE FROM build_list WHERE task_no = %s", (record_id,))
+        cursor.execute(
+                f"UPDATE build_list SET status = %s WHERE task_no = %s", (error, record_id,)
+            )
+        
         conn.commit()
 
     except psycopg2.Error as e:
@@ -66,8 +73,10 @@ def delete_record(db_path: str, record_id: int, error) -> None:
         conn.close()
 
 # Execute build 
-def execute_with_retry(script_path, db, record, builder, max_retries=3):
-    attempt = 0
+def execute_with_retry(script_path, db, record, builder):
+    attempt = 0 #Retry attempts
+    max_retries=3
+
     command = [
         script_path,
         record['name'],
@@ -90,7 +99,7 @@ def execute_with_retry(script_path, db, record, builder, max_retries=3):
         
         # A success build
         if process.returncode == 0:
-            delete_record(db, record['task_no'], mask)
+            delete_record(db, record['task_no'])
             return        
 
         # When build fails
@@ -123,13 +132,9 @@ def execute_with_retry(script_path, db, record, builder, max_retries=3):
             print(f"Retry attempt {attempt} ...")
             time.sleep(attempt * 5)  
         else:
-            # Error type to bit
             print("Failed to build... Now removing task")
-            if error not in bit_mapping:
-                print(f"Unmapped error type: {error}")
-
             # Error code starts with 1, not 0
-            delete_record(db, record['task_no'], bit_mapping[error] + 1)
+            delete_record(db, record['task_no'], error)
             return
 
 
@@ -167,7 +172,7 @@ def main():
         name TEXT PRIMARY KEY,
         base TEXT,
         repo TEXT,
-        flags INTEGER,
+        error_type TEXT,
         x86_version TEXT,
         x86_testing_version TEXT,
         x86_staging_version TEXT,
@@ -179,10 +184,10 @@ def main():
     conn.commit()
     cursor.close()
     conn.close()
-    
+    task_no = 1
     while True:
 
-        record = get_first_pending_record(db, table)
+        record = get_pending_task(db, table, task_no)
 
         if not record:
             print("All task completed")
@@ -191,7 +196,8 @@ def main():
         print(f"\nTask ID={record['task_no']}, name={record['name']}, version={record['x86_version']}")
 
         try:
-            success = execute_with_retry(script, db, record, builder)        
+            execute_with_retry(script, db, record, builder)  
+            task_no += 1      
 
         except Exception as e:
             print(f"Failed to run script {e}")
