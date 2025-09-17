@@ -175,7 +175,7 @@ def compare_all(cache_dir, x86_repo_path, loong64_repo_path):
             pkglist.append(p)
     return pkglist
 
-def fetch_all_packges(conn):
+def fetch_all_packages(conn):
     home_dir = os.path.expanduser("~")
     cache_dir = os.path.join(home_dir, ".cache", "loongpkgs")
     mirror_x86 = "https://mirrors.pku.edu.cn/archlinux/"
@@ -230,7 +230,7 @@ def main():
         conn.autocommit = False
 
         create_tables(conn)
-        fetch_all_packges(conn)
+        fetch_all_packages(conn)
         if args.bl:
             load_black_list(conn, args.bl)
         conn.commit()
