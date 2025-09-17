@@ -92,64 +92,66 @@
     <!-- Sidebar overlay -->
     <div v-if="isSidebarOpen" class="sidebar-overlay" @click="toggleSidebar"></div>
   </div>
-  <div class="main-content">
-  <!-- Package data displaying table -->
-  <div class="table-container" :class="{ 'no-data': !total }">
-    <div class="flat-stats-bar">
-    <div class="stat-cell">
-      <span class="stat-number">{{ total }} packages found </span>
-    </div>
-  </div>
+    <div class="main-content">
+      <!-- Package data displaying table -->
+      <div class="table-container" ref="tableContainer" :class="{ 'no-data': !total }">
+        <div class="flat-stats-bar">
+          <div class="stat-cell">
+            <span class="stat-number">{{ total }} packages found </span>
+          </div>
+        </div>
 
-    <table>      
-        <colgroup>
-        <col v-for="(col, index) in columnWidths" 
-            :key="index" 
-            :style="{ width: col.width }">
-      </colgroup>
-        <thead>
-          <tr>
-            <th v-for="column in columns" :key="column">
-              <div class="column-header"
-              @click="column === 'Repo' ? toggleRepoFilter() : null"
-               :class="{ 'clickable': column === 'Repo' }"
-              >
-                {{ column }}
-                <span v-if="column === 'Repo'" class="repo-filter-dropdown" v-show="showRepoFilter">
-                    <ul>
-                      <li @click.stop="filterRepo('')">All</li>
-                    <li @click.stop="filterRepo('extra')">Extra</li>
-                    <li @click.stop="filterRepo('core')">Core</li>
-                    </ul>
-                </span>
-                <!-- Status Legend -->
-                <span v-if="column === 'Status'" class="help-tooltip">
-                  [?]
-                  <div class="tooltip-content">
-                    <div v-for="item in legendItems" :key="item.symbol">
-                      <span :style="item.style">{{ item.symbol }}</span>: {{ item.description }}
-                    </div>
+        <div class="table-scroll-container" :style="{ maxHeight: tableHeight + 'px' }">
+          <table>      
+            <colgroup>
+              <col v-for="(col, index) in columnWidths" 
+                   :key="index" 
+                   :style="{ width: col.width }">
+            </colgroup>
+            <thead>
+              <tr>
+                <th v-for="column in columns" :key="column">
+                  <div class="column-header"
+                       @click="column === 'Repo' ? toggleRepoFilter() : null"
+                       :class="{ 'clickable': column === 'Repo' }">
+                    {{ column }}
+                    <span v-if="column === 'Repo'" class="repo-filter-dropdown" v-show="showRepoFilter">
+                      <ul>
+                        <li @click.stop="filterRepo('')">All</li>
+                        <li @click.stop="filterRepo('extra')">Extra</li>
+                        <li @click.stop="filterRepo('core')">Core</li>
+                      </ul>
+                    </span>
+                    <!-- Status Legend -->
+                    <span v-if="column === 'Status'" class="help-tooltip">
+                      [?]
+                      <div class="tooltip-content">
+                        <div v-for="item in legendItems" :key="item.symbol">
+                          <span :style="item.style">{{ item.symbol }}</span>: {{ item.description }}
+                        </div>
+                      </div>
+                    </span>
                   </div>
-                </span>
-              </div>
-            </th>
-          </tr>
-        </thead>
-        <tbody v-if="tableData.length">
-          <tr v-for="row in tableData" :key="row.id">
-            <td v-for="column in columns" :key="column" v-html="row[column]"></td>
-          </tr>
-        </tbody>
-        <tbody v-else>
-          <tr class="empty-row">
-            <td :colspan="columns.length">
-              <div class="empty-message">No packages found</div>
-            </td>
-          </tr>
-        </tbody>
-      </table>
+                </th>
+              </tr>
+            </thead>
+            <tbody v-if="tableData.length">
+              <tr v-for="row in tableData" :key="row.id">
+                <td v-for="column in columns" :key="column" v-html="row[column]"></td>
+              </tr>
+            </tbody>
+            <tbody v-else>
+              <tr class="empty-row">
+                <td :colspan="columns.length">
+                  <div class="empty-message">No packages found</div>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
     </div>
-  </div>
+
     <!-- Page button -->
     <div class="paginator">
       <button 
@@ -184,7 +186,7 @@
 
 <script>
 import { useRoute } from 'vue-router';
-import { ref, computed, onMounted, onBeforeUnmount } from 'vue';
+import { ref, computed, onMounted, onBeforeUnmount, nextTick } from 'vue';
 import axios from 'axios';
 
 export default {
@@ -195,11 +197,15 @@ export default {
     const currentPage = ref(1);
     const searchName = ref('')
     const selectedErrorType = ref('')
-    // const selectedStatus = ref('');
     const showRepoFilter = ref(false);
     const selectedRepo = ref('');
     const route = useRoute();
     const showFilter = ref(false);
+
+    // Auto adjust table size
+    const tableContainer = ref(null);
+    const tableHeight = ref(600);
+    const autoPageSize = ref(50);
 
     const columns = ref(['Name', 'Base', 'Repo', 'x86 Version', 'Loong Version', 'Status']);
     const filterOptions = ref([
@@ -245,6 +251,7 @@ export default {
 
       status += '&nbsp';
       if (item.has_log === true) {
+        // Use loong version to generate log link, we always assume the package is built succesfully
         const encodedVersion = encodeURIComponent(item.loong_version);
         const logUrl = `/log?base=${item.base}&name=${item.name}&version=${encodedVersion}`;
         status += `<span><a href="${logUrl}" target="_blank" style="color: gold;">🅻</a></span>`;      
@@ -303,6 +310,44 @@ export default {
       }))
     );
 
+    // Auto page size calculation
+    const calculateAutoPageSize = () => {
+      if (tableContainer.value) {
+        const containerRect = tableContainer.value.getBoundingClientRect();
+        
+        const paginator = document.querySelector('.paginator');
+        const paginatorHeight = paginator ? paginator.getBoundingClientRect().height : 60;
+        const bottomMargin = 20;
+        
+        const availableHeight = window.innerHeight - containerRect.top - paginatorHeight - bottomMargin;
+        
+        // Table container height
+        const statsBarHeight = 43;
+        tableHeight.value = Math.max(400, availableHeight - statsBarHeight);
+        
+        const rowHeight = 45; // From CSS estimation
+        const headerHeight = 50; // From CSS estimation
+        
+        const usableHeight = tableHeight.value - headerHeight;
+        const visibleRows = Math.floor(usableHeight / rowHeight);
+        
+        autoPageSize.value = Math.max(10, Math.min(100, visibleRows));
+    }
+    };
+
+    // Handle page size change
+    const handlePageSizeChange = () => {
+      currentPage.value = 1;
+      fetchData();
+    };
+
+    // Handle window resize
+    const handleResize = () => {
+      calculateAutoPageSize();
+      perPage.value = autoPageSize.value;
+      fetchData();
+    };
+
     const prevPage = () => {
       if (currentPage.value > 1) {
         currentPage.value--;
@@ -351,24 +396,23 @@ export default {
 
     onMounted(() => {
       document.addEventListener('click', handleClickOutside);
+      window.addEventListener('resize', handleResize);
+
       searchName.value = route.query.name?.trim() || null;
       selectedErrorType.value = route.query.error_type?.trim() || null;
       selectedRepo.value = route.query.repo?.trim() || null;
-      fetchData();
+
+      // Initial page size calculation
+      nextTick().then(() => {
+        calculateAutoPageSize();
+        perPage.value = autoPageSize.value;
+        fetchData();
+      });
     });
 
     onBeforeUnmount(() => {
       document.removeEventListener('click', handleClickOutside);
     });
-
-    // const onStatusChange = () => {
-    //   if (selectedStatus.value === 'All') {
-    //     searchQuery.value = ':fail';
-    //   } else {
-    //     searchQuery.value = `:code${selectedStatus.value}`;
-    //   }
-    //   onSearch();
-    // };
 
     const onSearch = () => {
       currentPage.value = 1;
@@ -404,10 +448,15 @@ export default {
       searchName,
       selectedErrorType,
       total,
+      perPage,
+      autoPageSize,
+      tableHeight,
+      tableContainer,
       fetchData,
       nextPage,
       prevPage,
       goToSpecificPage,
+      handlePageSizeChange,
       toggleFilter,
       showFilter,
       selectFilter,
@@ -421,7 +470,6 @@ export default {
   data() {
     return {
       windowHeight: 0,
-      rowHeight: 40,
       isSidebarOpen: false,
       buildingTasks: [],
       loading: false,
@@ -450,24 +498,7 @@ export default {
     };
     
   },
-  computed: {
-    visibleData() {
-      const availableHeight = this.windowHeight - 200
-      const visibleRows = Math.floor(availableHeight / this.rowHeight)
-      return this.tableData.slice(0, visibleRows)
-    }
-  },
-  mounted() {
-    this.updateWindowSize()
-    window.addEventListener('resize', this.updateWindowSize)
-  },
-  beforeDestroy() {
-    window.removeEventListener('resize', this.updateWindowSize)
-  },
   methods: {
-    updateWindowSize() {
-      this.windowHeight = window.innerHeight
-    },
     toggleSidebar() {
       this.isSidebarOpen = !this.isSidebarOpen;
       if (this.isSidebarOpen) {
@@ -1012,6 +1043,13 @@ tr.processing td:first-child {
   transform: translateX(-2px); 
 }
 
+.table-scroll-container {
+  overflow-y: auto;
+  overflow-x: auto;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+}
+
 .table-container {
   min-height: 200px; 
   border: 1px solid var(--border-color);
@@ -1023,6 +1061,16 @@ tr.processing td:first-child {
 
 .table-container.no-data {
   overflow: hidden; 
+}
+
+.page-size-select {
+  padding: 2px 8px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  background: white;
+  cursor: pointer;
+  font-size: 0.9em;
+  margin-left: 8px;
 }
 
 .empty-row td {
@@ -1045,6 +1093,7 @@ tr.processing td:first-child {
   width: 100%;
   min-height: 42px;
   overflow-x: auto;
+  flex-shrink: 0;
 }
 
 .stat-cell {

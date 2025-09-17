@@ -22,7 +22,7 @@
         </transition>
       </router-view>
 
-      <!-- 统计表格 -->
+      <!-- Stats -->
       <div class="stats-container">
         <h2 class="stats-title">Package Statistics</h2>
         <Stat />
