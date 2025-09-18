@@ -7,6 +7,9 @@ def main():
     parser = argparse.ArgumentParser(description='Auto issue creation for build errors')
     parser.add_argument('--db', nargs=2, metavar=('DATABASE', 'TABLE'), required=True,
                        help='Database path')
+    parser.add_argument('-t', '--token',
+                   default=os.getenv('GITHUB_TOKEN'),
+                   help='GitHub token')
     parser.add_argument('-r', '--repo', required=True,
                        help='Github repo')
     args = parser.parse_args()
@@ -21,12 +24,7 @@ def main():
         records = cursor.fetchall()
 
         # Connect to GitHub repo
-        github_token = os.getenv('GITHUB_TOKEN')
-        if github_token is None:
-            print("Error: GITHUB_TOKEN environment variable must be set.")
-            return
-
-        g = Github(github_token)
+        g = Github(args.token)
         github_repo = g.get_repo(args.repo)
 
         # Create issues for each record
