@@ -9,7 +9,7 @@
 
 <script>
 import axios from 'axios';
-import * as ansi_up from 'ansi_up'; // 或 import AnsiUp from 'ansi_up';
+import * as ansi_up from 'ansi_up';
 import DOMPurify from 'dompurify';
 
 export default {
@@ -28,18 +28,17 @@ export default {
     async fetchLog() {
       this.loading = true;
       this.error = null;
-      const { base, name, version } = this.$route.query;
+      const { base, log_name } = this.$route.query;
 
       try {
         const response = await axios.get(`/api/logs`, {
-          params: { base, name, version }
+          params: { base, log_name }
         });
         this.logContent = response.data;
         
-        // 初始化转换器
         const converter = new ansi_up.AnsiUp();
         
-        // 转换并添加行号
+        // Add line numbers
         this.parsedLogContent = this.logContent
           .split('\n')
           .map((line, index) => {
@@ -49,7 +48,6 @@ export default {
           })
           .join('\n');
         
-        // this.parsedLogContent = withLineNumbers;
       } catch (err) {
         console.error("Failed to fetch log:", err);
         this.error = "Failed to load log. Please check the URL or try again later.";
@@ -65,7 +63,7 @@ export default {
 .log-container {
   background-color: #282c34;
   color: #abb2bf;
-  font-family: 'Fira Code', 'Courier New', monospace; /* 更好的等宽字体 */
+  font-family: 'Fira Code', 'Courier New', monospace; 
   padding: 1rem;
   border-radius: 6px;
 }

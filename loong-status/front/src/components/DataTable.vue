@@ -250,10 +250,10 @@ export default {
       }
 
       status += '&nbsp';
-      if (item.has_log === true) {
+      if (item.has_log !== null) {
         // Use loong version to generate log link, we always assume the package is built succesfully
-        const encodedVersion = encodeURIComponent(item.loong_version);
-        const logUrl = `/log?base=${item.base}&name=${item.name}&version=${encodedVersion}`;
+        const encodedLogname = encodeURIComponent(item.has_log);
+        const logUrl = `/log?base=${item.base}&log_name=${encodedLogname}`;
         status += `<span><a href="${logUrl}" target="_blank" style="color: gold;">🅻</a></span>`;      
       } else {
         status += '<span style="color: gray;">🅻</span>';
