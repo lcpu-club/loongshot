@@ -72,17 +72,30 @@ do_move(){
                 if [[ $NEWPATH != $NEWREPO ]]; then
                     ln -sf ../../../pool/packages/${ALLZST[$i]}{,.sig} $NEWREPO
                 fi
+                # Check if the copy was successful
+                if [[ ! -f $NEWREPO/${ALLZST[$i]} ]]; then
+                    echo "Error: Failed to copy ${ALLZST[$i]} to $NEWREPO"
+                    exit 1
+                fi
             else
                 error "${ALLZST[$i]} already there, ignore it."
                 unset 'ALLZST[$i]'
             fi
         fi
     done
+
+    if [[ ${#ALLZST[@]} -eq 0 ]]; then
+        echo "No files to add to the repository."
+        exit 0
+    fi
+
     repo-add --include-sigs -R $NEWREPO/$TO.db.tar.gz "${ALLZST[@]}" | tee add.log
     exit_code=${PIPESTATUS[0]}
     if [[ ! $exit_code -eq 0 ]]; then
+        echo "Error: Failed to update the repository database."
         exit 2
     fi
+    
     about_to_delete=()
     for pkg in $(grep -oP "Removing old package file '\K[^']*(?=')" add.log); do
         about_to_delete+=($pkg)
