@@ -197,7 +197,6 @@ build_package() {
     # Start to build package
     echo "Sending build command"
     ssh $BUILDER "cd $BUILDPATH/$PKGBASE; PACKAGER=\"$PACKAGER\" extra$TESTING-loong64-build $CLEAN -- -- -A -L $EXTRAARG"
-    # 2>/dev/null
     EXITCODE=$?
 
     ENDTIME=$SECONDS
@@ -212,8 +211,8 @@ build_package() {
             ARCH="loong64"
         fi
 
-        mkdir -p $LOCALREPO/debug-pool
-        cd $LOCALREPO
+        mkdir -p $LOCALREPO/$BUILDREPO/debug-pool
+        cd $LOCALREPO/$BUILDREPO
 
         # All packages
     	FILENAME="*.pkg.tar.zst"
@@ -240,8 +239,8 @@ build_package() {
             ssh -t loong1 "rm /tmp/$FILENAME{,.sig} -f"
         fi
         chmod 664 $FILENAME{,.sig}
-	    mv $DEBUGPKG{,.sig} $LOCALREPO/debug-pool
-        repo-add -R $LOCALREPO/temp-$BUILDREPO$TESTING.db.tar.gz $FILENAME
+	    mv $DEBUGPKG{,.sig} $LOCALREPO/$BUILDREPO/debug-pool
+        repo-add -R $LOCALREPO/$BUILDREPO/temp-$BUILDREPO$TESTING.db.tar.gz $FILENAME
     	)
 
         msg "$PKGBASE-$PKGVERREL built on $BUILDER, time cost: $TIMECOST"
