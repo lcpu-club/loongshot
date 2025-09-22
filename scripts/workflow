@@ -1,0 +1,74 @@
+#!/bin/bash
+
+set -e
+
+COMPARE_METHOD="core"
+CM="build"
+DATABASE_NAME="database.json"
+BUILDER="localhost"
+BUILD_LIST="build_pkg"
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --method|--compare-method)
+            COMPARE_METHOD="$2"
+            shift 2
+            ;;
+        --db|--database)
+            DATABASE_NAME="$2"
+            shift 2
+            ;;
+        --builder)
+            BUILDER="$2"
+            shift 2
+            ;;
+        *)
+            echo "Unknown parameter: $1"
+            exit 1
+            ;;
+    esac
+done
+
+case $COMPARE_METHOD in
+    "all")
+	CM="A"
+	echo "Try to build ALL packages"
+	;;
+    "build")
+	CM="B"
+	echo "Try to build SAFE TO BUILD packages"
+	;;
+    "core")
+	CM="C"
+	echo "Try to build CORE packages"
+	;;
+    "extra")
+	CM="E"
+	echo "Try to build EXTRA packages"
+	;;
+    *)
+	echo "Unknwon compare method"
+	exit 1
+	;;
+esac
+	
+# Initialize database
+echo "Stage 1: Initialize database $DATABASE_NAME"
+python3 dbinit.py --db $DATABASE_NAME --bl black.lst
+# Fetch packages that need to be built
+echo "Stage 2: Compare packages and generate rebuild list"
+python3 compare86.py -S -$CM --db $DATABASE_NAME -S
+# Check for soname rebuilds
+echo "Stage 3: Check for soname rebuilds"
+python3 checksoname.py --db $DATABASE_NAME
+# Generate build list
+echo "Stage 4: Generate rebuild list"
+python3 genrebuild --pkgdb $DATABASE_NAME --dbpath /home/arch/.cache/compare86/x86
+# Clean up previous build repo
+echo "Stage 5: Clean up previous build repo"
+rm -rf /var/tmp/build-repo/
+# Build packages
+echo "Stage 6: Build packages using builder $BUILDER"
+python3 autobuild.py --db $DATABASE_NAME build_list --script ./1build.sh --builder $BUILDER
+# Clean up
+rm *.log
