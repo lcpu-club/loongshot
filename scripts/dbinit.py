@@ -201,8 +201,7 @@ def fetch_all_packages(conn):
                         END,
             loong_version = EXCLUDED.loong_version,
             repo = EXCLUDED.repo,
-            base = EXCLUDED.base,
-            has_log = NULL 
+            base = EXCLUDED.base
         WHERE packages.x86_version <> 'missing' OR EXCLUDED.x86_version <> 'missing';
     ''', [(pkg.name, pkg.base, pkg.x86_version, pkg.loong64_version, pkg.repo) for pkg in pkglist])
 
