@@ -110,8 +110,18 @@
         <thead>
           <tr>
             <th v-for="column in columns" :key="column">
-              <div class="column-header">
+              <div class="column-header"
+              @click="column === 'Repo' ? toggleRepoFilter() : null"
+               :class="{ 'clickable': column === 'Repo' }"
+              >
                 {{ column }}
+                <span v-if="column === 'Repo'" class="repo-filter-dropdown" v-show="showRepoFilter">
+                    <ul>
+                      <li @click.stop="filterRepo('')">All</li>
+                    <li @click.stop="filterRepo('extra')">Extra</li>
+                    <li @click.stop="filterRepo('core')">Core</li>
+                    </ul>
+                </span>
                 <!-- Status Legend -->
                 <span v-if="column === 'Status'" class="help-tooltip">
                   [?]
@@ -174,7 +184,7 @@
 
 <script>
 import { useRoute } from 'vue-router';
-import { ref, reactive, computed, onMounted } from 'vue';
+import { ref, computed, onMounted, onBeforeUnmount } from 'vue';
 import axios from 'axios';
 
 export default {
@@ -185,7 +195,9 @@ export default {
     const currentPage = ref(1);
     const searchName = ref('')
     const selectedErrorType = ref('')
-    const selectedStatus = ref('');
+    // const selectedStatus = ref('');
+    const showRepoFilter = ref(false);
+    const selectedRepo = ref('');
     const route = useRoute();
     const showFilter = ref(false);
 
@@ -239,6 +251,10 @@ export default {
       } else {
         status += '<span style="color: gray;">🅻</span>';
       }
+
+      if (item.is_blacklisted === true) {
+        status += '<span style="color: black;">🅱︎</span>';
+      }
       // if (flags) {
       //   if (flags & 1) status += `<span><a href="https://github.com/lcpu-club/loongarch-packages/tree/master/${item.base}" style="color: lime;">🅿</a></span>`;
       //   if (flags & 2) status += '<span style="color: blue;">🅲</span>';
@@ -263,7 +279,8 @@ export default {
             page: currentPage.value,
             per_page: perPage.value,
             name: searchName.value,
-            error_type: selectedErrorType.value
+            error_type: selectedErrorType.value,
+            repo: selectedRepo.value
           },
         });
         tableDataRaw.value = response.data.data;
@@ -279,6 +296,7 @@ export default {
         Base: item.base,
         Repo: item.repo,
         has_log: item.has_log,
+        is_blacklisted: item.is_blacklisted,
         'x86 Version': mergeVersion(item.x86_version, item.x86_testing_version, item.x86_staging_version),
         'Loong Version': mergeVersion(item.loong_version, item.loong_testing_version, item.loong_staging_version),
         Status: compareAll(item),
@@ -306,10 +324,41 @@ export default {
 
     const totalPages = computed(() => Math.ceil(total.value / perPage.value)) || 1;
 
+    // Close dropdown when clicking outside
+    const handleClickOutside = (event) => {
+      const filterPanel = document.querySelector('.filter-panel');
+      const filterBtn = document.querySelector('.filter-btn');
+      const repoDropdown = document.querySelector('.repo-filter-dropdown');
+      const repoBtn = document.querySelector('.clickable'); 
+
+      const clickedOutside = (box, btn) => {
+      const target = event.target;
+      // Not in the filter panel or button
+      return box && !box.contains(target) && (!btn || !btn.contains(target));
+      };
+
+      if (showFilter.value && clickedOutside(filterPanel, filterBtn)) {
+      showFilter.value = false; 
+      console.log('Close filter');
+      }
+
+      if (showRepoFilter.value && clickedOutside(repoDropdown, repoBtn)) {
+      showRepoFilter.value = false; 
+      console.log('Close repo filter');
+      }
+      };
+
+
     onMounted(() => {
+      document.addEventListener('click', handleClickOutside);
       searchName.value = route.query.name?.trim() || null;
       selectedErrorType.value = route.query.error_type?.trim() || null;
+      selectedRepo.value = route.query.repo?.trim() || null;
       fetchData();
+    });
+
+    onBeforeUnmount(() => {
+      document.removeEventListener('click', handleClickOutside);
     });
 
     // const onStatusChange = () => {
@@ -330,12 +379,23 @@ export default {
       showFilter.value = !showFilter.value
     }
 
+    const toggleRepoFilter = () => {
+      showRepoFilter.value = !showRepoFilter.value;
+    };
+
     const selectFilter = (label) => {
       label = label === 'All failed builds' ? 'Success' : label
-      selectedErrorType = selectedErrorType === label ? null : label
+      selectedErrorType.value = selectedErrorType.value === label ? null : label
       showFilter.value = false
       fetchData()
     }
+
+    const filterRepo = (repo) => {
+      selectedRepo.value = repo?.trim() || null;
+      showRepoFilter.value = !showRepoFilter.value;
+      fetchData();
+    };
+
     return {
       tableData,
       columns,
@@ -348,11 +408,13 @@ export default {
       nextPage,
       prevPage,
       goToSpecificPage,
-      selectedStatus,
       toggleFilter,
       showFilter,
       selectFilter,
       filterOptions,
+      filterRepo,
+      showRepoFilter,
+      toggleRepoFilter,
       onSearch,
     };
   },
@@ -374,7 +436,8 @@ export default {
       { symbol: '🅻', description: 'has build log on server', style: 'color: gold;' },
       { symbol: '🅲', description: 'build with nocheck', style: 'color: blue;' },
       { symbol: '🅾', description: 'config.sub is too old', style: 'color: orange;' },
-      { symbol: '🅵', description: 'build fails', style: 'color: red;' }
+      { symbol: '🅵', description: 'build fails', style: 'color: red;' },
+      { symbol: '🅱︎', description: 'in blacklist', style: 'color: black;' }
       ],
       columnWidths: [
           { width: '20%' },  
@@ -1017,7 +1080,6 @@ table {
   padding-top: 40px; 
 }
 
-
 th, td {
   border: 1px solid #ddd;
   white-space: pre-line;
@@ -1038,6 +1100,32 @@ th {
 
 tr:hover {
   background: var(--color-background-mute);
+}
+
+.repo-filter-dropdown {
+  position: absolute; 
+  background: white;
+  top: 100%; 
+  left: 0;
+  border-radius: 4px;
+  border: 1px solid #ccc; 
+  z-index: 1000; 
+}
+.repo-filter-dropdown ul {
+  list-style: none; 
+  padding: 0; 
+  margin: 0; 
+}
+.repo-filter-dropdown li {
+  padding: 8px 12px; 
+  cursor: pointer; 
+}
+.repo-filter-dropdown li:hover {
+  background: #6b2024; 
+}
+
+.clickable {
+  cursor: pointer;
 }
 
 input {

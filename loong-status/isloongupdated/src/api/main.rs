@@ -16,6 +16,7 @@ struct Package {
     status: Option<String>,
     error_type: Option<String>,
     has_log: Option<bool>,
+    is_blacklisted: Option<bool>,
     x86_version: Option<String>,
     x86_testing_version: Option<String>,
     x86_staging_version: Option<String>,
@@ -41,7 +42,8 @@ struct QueryParams {
     page: Option<u32>,
     per_page: Option<u32>,
     name: Option<String>,
-    error_type: Option<String>
+    error_type: Option<String>,
+    repo: Option<String>,
 }
 
 #[derive(Serialize, Debug, FromRow)]
@@ -127,6 +129,7 @@ async fn get_building_list(pool: web::Data<sqlx::Pool<sqlx::Postgres>>) -> impl 
         "SELECT task_no, name, base, repo, status,
         NULL as error_type,
         NULL as has_log,
+        NULL as is_blacklisted,
         NULL as x86_version,
         NULL as x86_testing_version,
         NULL as x86_staging_version,
@@ -147,12 +150,12 @@ async fn get_stat(pool: web::Data<sqlx::Pool<sqlx::Postgres>>) -> impl Responder
     let counts = sqlx::query_as::<_, CountResponse>(
         r#"
         SELECT
-            COUNT(*) FILTER (WHERE repo = 'core' AND x86_version = regexp_replace(loong_version, '(-\w+)\.\w+$', '\1')) AS core_match,
-            COUNT(*) FILTER (WHERE repo = 'extra' AND x86_version = regexp_replace(loong_version, '(-\w+)\.\w+$', '\1')) AS extra_match,
-            COUNT(*) FILTER (WHERE repo = 'core' AND x86_version != regexp_replace(loong_version, '(-\w+)\.\w+$', '\1')) AS core_mismatch,
-            COUNT(*) FILTER (WHERE repo = 'extra' AND x86_version != regexp_replace(loong_version, '(-\w+)\.\w+$', '\1')) AS extra_mismatch,
-            COUNT(*) FILTER (WHERE repo='core' AND NOT x86_version is NULL) as core_total,
-            COUNT(*) FILTER (WHERE repo='extra' AND NOT x86_version is NULL) as extra_total
+            COUNT(*) FILTER (WHERE repo = 'core' AND split_part(x86_version, '-', 1) = split_part(loong_version, '-', 1)) AS core_match,
+            COUNT(*) FILTER (WHERE repo = 'extra' AND split_part(x86_version, '-', 1) = split_part(loong_version, '-', 1)) AS extra_match,
+            COUNT(*) FILTER (WHERE repo = 'core' AND split_part(x86_version, '-', 1) != split_part(loong_version, '-', 1) AND x86_version != 'missing' AND loong_version != 'missing') AS core_mismatch,
+            COUNT(*) FILTER (WHERE repo = 'extra' AND split_part(x86_version, '-', 1) != split_part(loong_version, '-', 1) AND x86_version != 'missing' AND loong_version != 'missing') AS extra_mismatch,
+            COUNT(*) FILTER (WHERE repo = 'core' AND x86_version != 'missing') as core_total,
+            COUNT(*) FILTER (WHERE repo = 'extra' AND x86_version != 'missing') as extra_total
         FROM packages
         "#
     )
@@ -172,7 +175,7 @@ async fn get_data(
     let offset = (page - 1) * per_page;
 
     let mut query_builder = sqlx::QueryBuilder::new(
-        "SELECT name, base, repo, error_type, has_log,
+        "SELECT name, base, repo, error_type, has_log, is_blacklisted,
         x86_version, x86_testing_version, x86_staging_version, 
         loong_version, loong_testing_version, loong_staging_version,
         NULL as task_no,
@@ -193,6 +196,7 @@ async fn get_data(
             query_builder.push(" AND ");
         } else {
             query_builder.push(" WHERE ");
+            where_added = true;
         }
             query_builder.push("error_type ");
             match query.error_type.as_deref() {
@@ -201,6 +205,16 @@ async fn get_data(
             };
             query_builder.push_bind(error_type);
         
+    }
+
+    if let Some(repo) = &query.repo {
+        if where_added {
+            query_builder.push(" AND ");
+        } else {
+            query_builder.push(" WHERE ");
+        }
+        query_builder.push("repo = ");
+        query_builder.push_bind(repo);
     }
     
     query_builder
@@ -232,6 +246,7 @@ async fn get_data(
             count_builder.push(" AND ");
         } else {
             count_builder.push(" WHERE ");
+            where_added = true;
         }
         count_builder.push("error_type ");
         match query.error_type.as_deref() {
@@ -239,6 +254,16 @@ async fn get_data(
                 _ => count_builder.push("= ")
             };
         count_builder.push_bind(error_type);
+    }
+
+    if let Some(repo) = &query.repo {
+        if where_added {
+            count_builder.push(" AND ");
+        } else {
+            count_builder.push(" WHERE ");
+        }
+        count_builder.push("repo = ");
+        count_builder.push_bind(repo);
     }
 
     let total = match count_builder.build().fetch_one(pool.get_ref()).await {

@@ -1,13 +1,15 @@
 import argparse
 import dbinit
+import os
 from github import Github
 
 def main():
     parser = argparse.ArgumentParser(description='Auto issue creation for build errors')
     parser.add_argument('--db', nargs=2, metavar=('DATABASE', 'TABLE'), required=True,
                        help='Database path')
-    parser.add_argument('-t', '--token',  required=True,
-                       help='Github token')
+    parser.add_argument('-t', '--token',
+                   default=os.getenv('GITHUB_TOKEN'),
+                   help='GitHub token')
     parser.add_argument('-r', '--repo', required=True,
                        help='Github repo')
     args = parser.parse_args()

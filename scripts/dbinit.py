@@ -36,7 +36,8 @@ def create_tables(db):
         base TEXT,
         repo TEXT,
         error_type TEXT,
-        has_log BOOL,
+        has_log BOOL DEFAULT FALSE,
+        is_blacklisted BOOL DEFAULT FALSE,
         x86_version TEXT,
         x86_testing_version TEXT,
         x86_staging_version TEXT,
@@ -69,6 +70,7 @@ def load_black_list(db, bl_file):
             if name:
                 cursor.execute('INSERT INTO black_list (name) VALUES (%s) ON CONFLICT (name) DO NOTHING', (name,))
     
+    cursor.execute("UPDATE packages SET is_blacklisted = TRUE WHERE name IN (SELECT name FROM black_list);")
     conn.commit()
     cursor.close()
     conn.close()
@@ -102,10 +104,9 @@ def main():
         print("Must provide database name!")
         return
     create_tables(args.db)
+    fetch_all_packges(args.db)
     if args.bl:
         load_black_list(args.db, args.bl)
         
-    fetch_all_packges(args.db)
-
 if __name__ == "__main__":
     main()
