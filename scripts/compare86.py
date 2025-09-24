@@ -19,8 +19,6 @@ cache_dir = os.path.join(home_dir, ".cache", "compare86")
 # Define the repo file paths
 x86_repo_path = "x86"
 loong64_repo_path = "loong"
-mirror_x86 = "https://mirrors.pku.edu.cn/archlinux/"
-mirror_loong64 = "https://loongarchlinux.lcpu.dev/loongarch/archlinux/"
 source_repos = ['core', 'extra']
 
 pkgtime = {}
@@ -60,7 +58,7 @@ def get_builddate():
             pkgtime[pkg.base] = pkg.builddate
 
 
-def update_repo():
+def update_repo(mirror_x86, mirror_loong64):
     for repo in source_repos:
         download_file(f"{mirror_x86}{repo}/os/x86_64/{repo}.db",
                       f"{cache_dir}/{x86_repo_path}/sync/{repo}.db")
@@ -312,35 +310,46 @@ def write_to_json(data, file):
 
     
 # Write packages to database
-def write_to_database(data, db, compare_method):
+def write_to_database(data, db):
 
     conn = dbinit.get_conn(db)
-    
-    cursor = conn.cursor()
-    cursor.execute(f'''DROP TABLE IF EXISTS {compare_method} ''')
-    # Create a table for each compare method
-    cursor.execute(f'''
-    CREATE TABLE {compare_method} (
-        name TEXT PRIMARY KEY,
-        base TEXT,
-        repo TEXT,
-        x86_version TEXT,
-        x86_testing_version TEXT,
-        x86_staging_version TEXT,
-        loong_version TEXT,
-        loong_testing_version TEXT,
-        loong_staging_version TEXT
-    )
-    ''')
+    try:
+        cursor = conn.cursor()
+        cursor.execute(f'''DROP TABLE IF EXISTS prebuild_list ''')
+        # Create a table to store packages to be built
+        cursor.execute(f'''
+        CREATE TABLE prebuild_list (
+            name TEXT PRIMARY KEY,
+            base TEXT,
+            repo TEXT,
+            x86_version TEXT,
+            x86_testing_version TEXT,
+            x86_staging_version TEXT,
+            loong_version TEXT,
+            loong_testing_version TEXT,
+            loong_staging_version TEXT
+        )
+        ''')
 
-    cursor.executemany(f'''
-    INSERT INTO {compare_method} (name, base, x86_version, loong_version, repo)
-    VALUES (%s, %s, %s, %s, %s)
-    ''', [(pkg.name, pkg.base, pkg.x86_version, pkg.loong64_version, pkg.repo) for pkg in data])
-    
-    conn.commit()
-    cursor.close()
-    conn.close()
+        cursor.executemany(f'''
+            INSERT INTO prebuild_list (name, base, x86_version, loong_version, repo)
+            VALUES (%s, %s, %s, %s, %s)
+            ON CONFLICT (name) DO UPDATE
+            SET x86_version = CASE 
+                                WHEN EXCLUDED.x86_version = 'missing' THEN prebuild_list.x86_version
+                                ELSE EXCLUDED.x86_version 
+                            END,
+                loong_version = EXCLUDED.loong_version
+            WHERE prebuild_list.x86_version <> 'missing' OR EXCLUDED.x86_version <> 'missing';
+        ''', [(pkg.name, pkg.base, pkg.x86_version, pkg.loong64_version, pkg.repo) for pkg in data])
+        cursor.close()
+        conn.commit()
+    except Exception as e:
+        conn.rollback()
+        print(f"Failed to write to database: {str(e)}")
+        raise
+    finally:
+        conn.close()
 
 # Print packages to screen
 def print_to_screen(data):
@@ -369,8 +378,18 @@ def main():
     parser.add_argument("-d", "--depend", type=str, help="List reverse depends.")
     parser.add_argument("-o", "--output", type=str, help="Save output to file.")
     parser.add_argument( "--db", type=str, help="Save output to database.")
+    parser.add_argument( "--mirror_x86", type=str, help="Mirror of x86.")
+    parser.add_argument( "--mirror_loong", type=str, help="Mirror of loong.")
     
     args = parser.parse_args()
+
+    mirror_x86 = "https://mirrors.pku.edu.cn/archlinux/"
+    mirror_loong64 = "https://loongarchlinux.lcpu.dev/loongarch/archlinux/"
+
+    if args.mirror_x86:
+        mirror_x86 = args.mirror_x86
+    if args.mirror_loong:
+        mirror_loong64 = args.mirror_loong
 
     required_for_output = [
         args.core, args.extra, args.all, args.build
@@ -396,7 +415,7 @@ def main():
     if args.sync:
         if args.stag and args.test:
             source_repos = ["core", "extra", "core-staging", "extra-staging", "core-testing", "extra-testing"]
-        update_repo()
+        update_repo(mirror_x86, mirror_loong64)
 
     if args.build:
         safe_tobuild()
@@ -455,14 +474,7 @@ def main():
     if args.output:
         write_to_json(pkglist, Path(args.output))
     elif args.db:
-        if args.core:
-            write_to_database(pkglist, Path(args.db), 'core_pkg')
-        elif args.extra:
-            write_to_database(pkglist, Path(args.db), 'extra_pkg')
-        elif args.all:
-            write_to_database(pkglist, Path(args.db), 'all_pkg')
-        elif args.build:
-            write_to_database(pkglist, Path(args.db), 'build_pkg')
+            write_to_database(pkglist, Path(args.db))
 
     print_to_screen(pkglist)
     

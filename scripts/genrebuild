@@ -51,7 +51,7 @@ parser.add_argument('--dbpath', nargs='?', default="/var/lib/pacman",
 # Either packages or a database that contains packages must be provided
 group = parser.add_mutually_exclusive_group()
 group.add_argument('package', nargs='*', help='Packages to rebuild')
-group.add_argument('--pkgdb', nargs=2, metavar=('DB_PATH', 'TABLE_NAME'), help='Packages to rebuild from a database')
+group.add_argument('--pkgdb', nargs=1, help='Packages to rebuild from a database')
 
 args = parser.parse_args()
 
@@ -78,10 +78,9 @@ rebuild_list = set()
 
 if args.pkgdb:
     db = args.pkgdb[0]
-    table = args.pkgdb[1]
     conn = dbinit.get_conn(Path(db))
     cursor = conn.cursor()
-    select_name = f'''SELECT name FROM {table} WHERE x86_version != 'missing'; '''
+    select_name = f'''SELECT name FROM prebuild_list WHERE x86_version != 'missing'; '''
     cursor.execute(select_name)
     
     rebuild_list = {row[0] for row in cursor.fetchall()}
@@ -307,13 +306,11 @@ for pkg in nx.topological_sort(G):
 # Write back to database
 if args.pkgdb:
     db = args.pkgdb[0]
-    table = args.pkgdb[1]
     conn = dbinit.get_conn(Path(db))
     cursor = conn.cursor()
 
     try:
-        get_table_schema = f"""SELECT column_name FROM information_schema.columns WHERE table_name = '{table}' ORDER BY ordinal_position"""
-        print(get_table_schema)
+        get_table_schema = f"""SELECT column_name FROM information_schema.columns WHERE table_name = 'prebuild_list' ORDER BY ordinal_position"""
         cursor.execute(get_table_schema)
         columns = [row[0] for row in cursor.fetchall()]
 
@@ -338,7 +335,7 @@ if args.pkgdb:
         serial = 1
         for pkg in result:
             # Get packages' entry
-            get_package = f"""SELECT * FROM {table} WHERE name = '{pkg}'"""
+            get_package = f"""SELECT * FROM prebuild_list WHERE name = '{pkg}'"""
             cursor.execute(get_package)
             rows = cursor.fetchall()
 

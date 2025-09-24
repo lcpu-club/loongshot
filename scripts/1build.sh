@@ -104,7 +104,7 @@ done
 EXTRAARG="$@"
 
 build_package() {
-    # packages beloong only to loong
+    # packages belong only to loong
     if [[ -f $LOONGREPO/$PKGBASE/PKGBUILD ]]; then
         cp $LOONGREPO/$PKGBASE $WORKDIR/ -a
         cd $WORKDIR/$PKGBASE
@@ -122,23 +122,13 @@ build_package() {
             cd $PKGBASE
         fi
 
-        # PKGNAME=$(. PKGBUILD; echo $pkgname)
-        # if [[ -z "$PKGVER" ]]; then
-        #     # get the release tag from x86_64's repo
-        #     if [[ ! -z "$TESTING" ]]; then
-        #         REPOSWITCH=-${TESTING%ing}
-        #     fi
-        #     PKGVER=`$SCRIPTSPATH/compare86.py $REPOSWITCH -p $PKGNAME |grep x86_64|awk -F= '{print $2}'`
-        # fi
-
         # switch to the current release tag
         PKGVER=$(echo "$PKGVERREL" | sed 's/^\(.*-[0-9]\+\)\..*$/\1/')
 
         if [[ ! -z "$PKGVERREL" ]]; then
             if ! pkgctl repo switch $PKGVER; then
                 msg "Release tag could not be found."
-                EXITCODE=1
-                return
+                return 1
             fi
         fi
         # if [[ ! -z "$PKGVER" ]]; then
@@ -151,8 +141,7 @@ build_package() {
         if [[ -d "$LOONGREPO/$PKGBASE" ]]; then
             if ! patch -Np1 -i $LOONGREPO/$PKGBASE/loong.patch; then
                 msg "Fail to apply loong's patch."
-                EXITCODE=1
-                return
+                return 1
             fi
             # copy additional files
             find $LOONGREPO/$PKGBASE -type f -name "*" ! -name "loong.patch" -exec cp {} . \;
@@ -160,50 +149,12 @@ build_package() {
         fi
     fi
 
-    # TODO: How to handle this? package may not in arch's repo
-    # if [[ -z "$PKGVER" ]]; then
-    #     PKGVERREL=$(source PKGBUILD; echo $epoch${epoch:+:}$pkgver-$pkgrel)
-    # else
-    #     PKGVERREL=$PKGVER
-    # fi
-
-    # if [[ -z "$BUILDREPO" ]]; then
-    #     BUILDREPO=$($SCRIPTSPATH/compare86.py $REPOSWITCH -p $PKGNAME | awk '{print $5}' | tail -1)
-    #     BUILDREPO=${BUILDREPO%-staging}
-    #     BUILDREPO=${BUILDREPO%-testing}
-    # fi
     echo "Checking package repo"
     if [[ -z "$BUILDREPO" ]]; then
         # BUILDREPO="extra"  # default to extra
         echo "Build repo not specified!"
-        EXITCODE=1
-	    return 
+	    return 1
     fi
-
-    # if grep -qFx "$PKGBASE" $SCRIPTSPATH/trueany.lst; then
-    #     MIRRORSITE=https://mirrors.pku.edu.cn/archlinux
-    #     cd $LOCALREPO/temp-$BUILDREPO$TESTING/os/loong64
-    #     (source $WORKDIR/$PKGBASE/PKGBUILD;
-    #     for pkg in ${pkgname[@]}; do
-    #         FILENAME=$pkg-$PKGVERREL-any.pkg.tar.zst
-    #         wget $MIRRORSITE/$BUILDREPO$TESTING/os/x86_64/$FILENAME
-    #         wget $MIRRORSITE/$BUILDREPO$TESTING/os/x86_64/$FILENAME.sig
-    #         chmod 644 $FILENAME
-    #         chmod 644 $FILENAME.sig
-    #         repo-add -R temp-$BUILDREPO$TESTING.db.tar.gz $FILENAME
-    #     done)
-    #     return 2
-    # fi
-
-    # Try to find the pkgver from tier0 server
-    # _PKGVER=$($SCRIPTSPATH/compare86.py -sTp $PKGNAME | grep "$BUILDREPO$TESTING of loong64 with ver=$PKGVERREL" | awk -F= '{print $2}')
-    # if [[ ! -z "$_PKGVER" ]]; then
-    #     # Same package found in server. Incrementing point pkgrel...
-    #     PKGREL=${_PKGVER#*-}
-    #     PKGREL=$(echo $PKGREL + .1 | bc)
-    #     sed -i "s/^pkgrel=.*/pkgrel=$PKGREL/" PKGBUILD
-    #     PKGVERREL=${PKGVERREL%-*}-$PKGREL
-    # fi
 
     echo "Running pre-built fix"
 
@@ -240,13 +191,13 @@ build_package() {
     rsync -avzP --mkpath $WORKDIR/$PKGBASE/ $BUILDER:$BUILDPATH/$PKGBASE/ $NOKEEP --exclude=.*
     if [[ ! $? -eq 0 ]]; then
         msg "Can't copy PKGBUILD to builder."
-        EXITCODE=2
-        return
+        return 1
     fi
     
     # Start to build package
     echo "Sending build command"
-    ssh -t $BUILDER "cd $BUILDPATH/$PKGBASE; PACKAGER=\"$PACKAGER\" extra$TESTING-loong64-build $CLEAN -- -- -A -L $EXTRAARG" 2>/dev/null
+    ssh $BUILDER "cd $BUILDPATH/$PKGBASE; PACKAGER=\"$PACKAGER\" extra$TESTING-loong64-build $CLEAN -- -- -A -L $EXTRAARG"
+    # 2>/dev/null
     EXITCODE=$?
 
     ENDTIME=$SECONDS
@@ -260,15 +211,12 @@ build_package() {
         else
             ARCH="loong64"
         fi
-        # cd $LOCALREPO/temp-$BUILDREPO$TESTING/os/loong64
+
         mkdir -p $LOCALREPO/debug-pool
-        mkdir -p $LOCALREPO/$PKGBASE
-	    cd $LOCALREPO/$PKGBASE
-        # for pkg in ${pkgname[@]}; do
-        # FILENAME=$pkg-$PKGVERREL-$ARCH.pkg.tar.zst
+        cd $LOCALREPO
 
         # All packages
-    	FILENAME=*.pkg.tar.zst
+    	FILENAME="*.pkg.tar.zst"
         # Only debug packages
         DEBUGPKG=$PKGBASE-debug-$PKGVERREL-loong64.pkg.tar.zst
 	    if [ "$BUILDER" = "loong1" ]; then
@@ -276,17 +224,17 @@ build_package() {
             ssh -t $BUILDER "cd $BUILDPATH/$PKGBASE && \
                 for file in *.pkg.tar.zst; do \
                     rm -f \"\$file.sig\"; \
-                    gpg --detach-sign \"\$file\"; \
+                    gpg --detach-sign \"\$file\" && echo \"\$file.sig created\" || echo \"\$file signing failed\"; \
                 done"            
             scp loong1:/tmp/"$FILENAME" loong1:/tmp/"${FILENAME}.sig" .
         else # Only loong1 has the signing key
             echo "Sending package to loong1 for signing"
-            scp "$BUILDER:$BUILDPATH/$PKGBASE/$FILENAME" .
-            scp $FILENAME "loong1:/tmp/"
+            scp "$BUILDER:$BUILDPATH/$PKGBASE/$FILENAME" . || echo "File copy failed";
+            scp $FILENAME "loong1:/tmp/" || echo "File copy failed to loong1";
             ssh -t loong1 "cd /tmp && \
             for file in *.pkg.tar.zst; do \
                 rm -f \"\$file.sig\"; \
-                gpg --detach-sign \"\$file\"; \
+                gpg --detach-sign \"\$file\" && echo \"\$file.sig created\" || echo \"\$file signing failed\"; \
             done"
             scp loong1:/tmp/"${FILENAME}.sig" .
             ssh -t loong1 "rm /tmp/$FILENAME{,.sig} -f"
@@ -294,22 +242,8 @@ build_package() {
         chmod 664 $FILENAME{,.sig}
 	    mv $DEBUGPKG{,.sig} $LOCALREPO/debug-pool
         repo-add -R $LOCALREPO/temp-$BUILDREPO$TESTING.db.tar.gz $FILENAME
-        # done)
     	)
-        # DEBUGPKG=$PKGBASE-debug-$PKGVERREL-loong64.pkg.tar.zst
-        # echo $DEBUGPKG
-        # if ssh -t $BUILDER "cd $BUILDPATH/$PKGBASE; if [ -f $DEBUGPKG ]; then rm -f $DEBUGPKG.sig; gpg --detach-sign $DEBUGPKG; fi; [ -f $BUILDPATH/$PKGBASE/$DEBUGPKG ]" 2>/dev/null; then
-        #     if [ "$BUILDER" = "loong1" ]; then
-        #         scp $BUILDER:$BUILDPATH/$PKGBASE/$DEBUGPKG{,.sig} $LOCALREPO/debug-pool
-        #     else # Only loong1 has the signing key
-        #         scp $BUILDER:$BUILDPATH/$PKGBASE/$DEBUGPKG $LOCALREPO/debug-pool
-        #         scp "$LOCALREPO/debug-pool/$DEBUGPKG" "loong1:/mnt/repos/"
-        #         ssh -t loong1 "cd /mnt/repos; gpg --detach-sign $DEBUGPKG"
-        #         scp loong1:/mnt/repos/$DEBUGPKG.sig $LOCALREPO/debug-pool
-        #         ssh -t loong1 "cd /mnt/repos; rm $DEBUGPKG{,.sig} -f"
-        #     fi
-        #     chmod 664 $LOCALREPO/debug-pool/$DEBUGPKG{,.sig}
-        # fi
+
         msg "$PKGBASE-$PKGVERREL built on $BUILDER, time cost: $TIMECOST"
 	else
         msg "$PKGBASE-$PKGVERREL failed on $BUILDER, time cost: $TIMECOST, exit code: $EXITCODE"
@@ -323,6 +257,9 @@ mkdir -p $LOGPATH/$PKGBASE
 build_package | tee $PKGBASE-$PKGVERREL.log
 EXITCODE=${PIPESTATUS[0]}
 
+if [[ -f $LOGPATH/$PKGBASE/$PKGBASE-$PKGVERREL.log ]]; then
+    rm $LOGPATH/$PKGBASE/$PKGBASE-$PKGVERREL.log
+fi
 cp $PKGBASE-$PKGVERREL.log $LOGPATH/$PKGBASE/$PKGBASE-$PKGVERREL.log
 
 if [[ "$EXITCODE" -ne 0 ]]; then

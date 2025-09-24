@@ -3,7 +3,10 @@ import compare86
 import dbinit
 import os
 import psycopg2
+import signal
 import subprocess
+import sys
+import termios
 import time
 from pathlib import Path
 from psycopg2 import extras
@@ -11,9 +14,9 @@ from psycopg2 import extras
 # Define retry triggers
 error_type = {
     "Fail to apply loong's patch": ["Fail to apply loong's patch"],
-    "Unknown error before build": ["Unknown error before build"],
+    "Unknown error before build": ["Unknown error before build", "Could not download sources"],
     "Fail to download source": ["Failure while downloading", "TLS connect error"],
-    "Fail to pass the validity check":["Fail to pass the validity check"],
+    "Fail to pass the validity check":["Fail to pass the validity check", "One or more files did not pass the validity check"],
     "Fail to pass PGP check" : ["One or more PGP signatures could not be verified"],
     "Could not resolve all dependencies": ["Could not resolve all dependencies"],
     "Failed in prepare": ["A failure occurred in prepare"],
@@ -22,6 +25,35 @@ error_type = {
     "Failed in package": ["A failure occurred in package"],
     "Cannot guess build type": ["configure: error: cannot guess build type"]
 }
+
+class BuildControl:
+    """
+    Handle Ctrl+C to show a simple menu for user to choose action
+    """
+    def __init__(self):
+        self.interrupted = False
+        self.action = None
+
+        # Register signal handler
+        signal.signal(signal.SIGINT, self._handle_interrupt)
+    
+    def _handle_interrupt(self, signum, frame):
+        """Ctrl+C = 显示菜单"""
+        self.interrupted = True
+        print("\n\n[s]kip | [q]uit | [Enter]=retry: ", end='', flush=True)
+        
+        # Set terminal to raw mode to capture single character input
+        try:
+            choice = input().strip().lower()
+            if choice == 's':
+                self.action = 'skip'
+            elif choice == 'q':
+                print("Exiting...")
+                self.action = 'quit'
+            else:
+                self.action = 'retry'
+        except EOFError:
+            sys.exit(0)
 
 # Fetch one task from build list
 def get_pending_task(db_path, table):
@@ -47,6 +79,9 @@ def get_pending_task(db_path, table):
             conn.commit()
 
             return dict(record) if record else None
+    except psycopg2.Error as e:
+        conn.rollback()
+        raise RuntimeError(f"Database error: {e}") from e
     finally:
         conn.close()
 
@@ -63,7 +98,7 @@ def delete_record(db_path: str, record_id: int, new_loong_version, error = "Succ
             SELECT name, base, repo, %s, TRUE, x86_version, CASE WHEN %s = 'Success' THEN %s ELSE loong_version END
             FROM build_list
             WHERE task_no = %s
-            ON CONFLICT(name, repo) DO UPDATE SET
+            ON CONFLICT (name) DO UPDATE SET
             base = EXCLUDED.base,
             repo = EXCLUDED.repo,
             error_type = EXCLUDED.error_type,
@@ -87,8 +122,9 @@ def delete_record(db_path: str, record_id: int, new_loong_version, error = "Succ
 
 # Execute build 
 def execute_with_retry(script_path, db, record, builder):
-    attempt = 0 #Retry attempts
-    max_retries=3
+    control = BuildControl()
+    attempt = 0 # Retry attempts
+    max_retries = 3
 
     x86_version = record['x86_version']
     loong_version = record['loong_version']
@@ -108,8 +144,15 @@ def execute_with_retry(script_path, db, record, builder):
         loong_version = x86_version
 
     print(f"Building {record['name']} with x86 version {x86_version} and loong version {loong_version}")
-
-    command = [
+    
+    systemd_cmd = [
+        "systemd-run",
+        "--user",
+        "--scope",
+        "--collect"
+    ]
+    unit = f"--unit=loongshot-{record['name']}-{time.time()}"
+    script_cmd = [
         script_path,
         record['name'],
         "--ver",
@@ -120,20 +163,53 @@ def execute_with_retry(script_path, db, record, builder):
         builder
     ]
 
+    command = systemd_cmd + [unit] + script_cmd
+
+    process = None
     while attempt < max_retries:
+        # Reset control state
+        control.interrupted = False
+        control.action = None
+        need_retry = False
+
         # Start running script
-        process = subprocess.run(
-            command,
-            text=True
-        )
+        process = subprocess.Popen(command, text=True)
         
-        # A success build
-        if process.returncode == 0:
+        while process.poll() is None:
+            # If interrupted, handle action
+            if control.interrupted and control.action:
+                # Stop the systemd service
+                subprocess.run(["systemctl", "--user", "stop", unit], 
+                                capture_output=True, timeout=60)
+                try:
+                    process.wait(timeout=10)
+                except subprocess.TimeoutExpired:
+                    process.kill()
+                    process.wait()
+                
+                if control.action == 'skip':
+                    delete_record(db, record['task_no'], loong_version, "skipped")
+                    return True
+                elif control.action == 'quit':
+                    delete_record(db, record['task_no'], loong_version, "QUIT by user")
+                    return False 
+                else:
+                    need_retry = True
+                    break
+            # Reset control state
+            control.interrupted = False  
+            control.action = None
+   
+        time.sleep(1)
+                
+        # Process finished, check return code
+        returncode = process.wait()
+        if returncode == 0:
+            print("✓ Build successful!")
             delete_record(db, record['task_no'], loong_version)
             return        
 
         # When build fails
-        need_retry = False
         error = ""
         with open(f"{record['name']}-{loong_version}.log", 'r') as f:
             lines = f.readlines()[-100:]
@@ -166,11 +242,12 @@ def execute_with_retry(script_path, db, record, builder):
             # If the build succeeds, new loong_version will be used, which might not be the same as the x86_version
             delete_record(db, record['task_no'], loong_version, error)
             return
-        
+
+
     # If all retries failed, delete the record
     print("Failed after retries... Now removing task")
     delete_record(db, record['task_no'], loong_version, error)
-
+    
 def check_black_list(db):
     conn = dbinit.get_conn(db)
     cursor = conn.cursor()
@@ -216,6 +293,7 @@ def main():
         
     # Remove packages that are already in black list
     check_black_list(db)
+
     while True:
 
         record = get_pending_task(db, table)
@@ -227,8 +305,10 @@ def main():
         print(f"\nTask ID={record['task_no']}, name={record['name']}, version={record['x86_version']}")
 
         try:
-            execute_with_retry(script, db, record, builder)  
-
+            success = execute_with_retry(script, db, record, builder)  
+            if success is False:
+                print("Exiting program as per user request.")
+                break
         except Exception as e:
             print(f"Failed to run script {e}")
             break
