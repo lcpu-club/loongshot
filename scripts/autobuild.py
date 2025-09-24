@@ -1,4 +1,5 @@
 import argparse
+import compare86
 import dbinit
 import os
 import psycopg2
@@ -23,17 +24,26 @@ error_type = {
 }
 
 # Fetch one task from build list
-def get_pending_task(db_path, table, task_no):
+def get_pending_task(db_path, table):
     conn = dbinit.get_conn(db_path)
     try:
         with conn.cursor(cursor_factory=extras.DictCursor) as cursor:
             cursor.execute(
-                f"SELECT * FROM {table} WHERE task_no = %s", (task_no,)
+                f"""
+                UPDATE {table} 
+                SET status = 'Building' 
+                WHERE task_no = (
+                    SELECT task_no 
+                    FROM {table} 
+                    WHERE status = 'Pending' 
+                    ORDER BY task_no ASC 
+                    LIMIT 1 
+                    FOR UPDATE SKIP LOCKED
+                )
+                RETURNING *;
+                """
             )
             record = cursor.fetchone()
-            cursor.execute(
-                f"UPDATE {table} SET status = 'Building' WHERE task_no = %s", (task_no,)
-            )
             conn.commit()
 
             return dict(record) if record else None
@@ -41,7 +51,7 @@ def get_pending_task(db_path, table, task_no):
         conn.close()
 
 # Remove completed build task
-def delete_record(db_path: str, record_id: int, error = "Success") -> None:
+def delete_record(db_path: str, record_id: int, new_loong_version, error = "Success") -> None:
     conn = dbinit.get_conn(db_path)
     cursor = conn.cursor()
 
@@ -49,15 +59,17 @@ def delete_record(db_path: str, record_id: int, error = "Success") -> None:
         cursor.execute("BEGIN TRANSACTION")
         # If build success, update loong_version, otherwise don't
         cursor.execute("""
-            INSERT INTO packages(name, base, repo, error_type, x86_version, loong_version)
-            SELECT name, base, repo, %s, x86_version, CASE WHEN %s = 'Success' THEN x86_version ELSE loong_version END
+            INSERT INTO packages(name, base, repo, error_type, has_log, x86_version, loong_version)
+            SELECT name, base, repo, %s, TRUE, x86_version, CASE WHEN %s = 'Success' THEN %s ELSE loong_version END
             FROM build_list
             WHERE task_no = %s
-            ON CONFLICT(name) DO UPDATE SET
+            ON CONFLICT(name, repo) DO UPDATE SET
+            base = EXCLUDED.base,
             repo = EXCLUDED.repo,
+            error_type = EXCLUDED.error_type,
             x86_version = EXCLUDED.x86_version,
             loong_version = EXCLUDED.loong_version
-        """, (error, error, record_id,))
+        """, (error, error, new_loong_version, record_id,))
         
         cursor.execute(
                 f"UPDATE build_list SET status = %s WHERE task_no = %s", (error, record_id,)
@@ -77,11 +89,30 @@ def execute_with_retry(script_path, db, record, builder):
     attempt = 0 #Retry attempts
     max_retries=3
 
+    x86_version = record['x86_version']
+    loong_version = record['loong_version']
+    x86_pkgver = x86_version.split('-')[0]
+    loong_pkgver = loong_version.split('-')[0]
+
+    # If the package is already in loong repo with same version as x86, we need to increment pkgrel
+    if x86_pkgver == loong_pkgver:
+        base_version, pkgrel = x86_version.rsplit('-', 1)
+        current_pkgrel = float(pkgrel)
+
+        # Increment point pkgrel if same version is already built        
+        new_pkgrel = current_pkgrel + 0.1
+        loong_version = base_version + "-" + str(new_pkgrel)
+    # Or update to x86 version
+    else:
+        loong_version = x86_version
+
+    print(f"Building {record['name']} with x86 version {x86_version} and loong version {loong_version}")
+
     command = [
         script_path,
         record['name'],
         "--ver",
-        record['x86_version'],
+        loong_version,
         "--repo",
         record['repo'],
         "--builder",
@@ -94,18 +125,16 @@ def execute_with_retry(script_path, db, record, builder):
             command,
             text=True
         )
-        # An error mask, 0 stands for no error
-        mask = 0
         
         # A success build
         if process.returncode == 0:
-            delete_record(db, record['task_no'])
+            delete_record(db, record['task_no'], loong_version)
             return        
 
         # When build fails
         need_retry = False
         error = ""
-        with open(f"{record['name']}-{record['x86_version']}.log", 'r') as f:
+        with open(f"{record['name']}-{loong_version}.log", 'r') as f:
             lines = f.readlines()[-100:]
 
             # Error handler: Look for retry opportunities
@@ -133,11 +162,30 @@ def execute_with_retry(script_path, db, record, builder):
             time.sleep(attempt * 5)  
         else:
             print("Failed to build... Now removing task")
-            # Error code starts with 1, not 0
-            delete_record(db, record['task_no'], error)
+            # If the build succeeds, new loong_version will be used, which might not be the same as the x86_version
+            delete_record(db, record['task_no'], loong_version, error)
             return
+        
+    # If all retries failed, delete the record
+    print("Failed after retries... Now removing task")
+    delete_record(db, record['task_no'], loong_version, error)
 
-
+def check_black_list(db):
+    conn = dbinit.get_conn(db)
+    cursor = conn.cursor()
+    
+    try:
+        cursor.execute("""
+            DELETE FROM build_list
+            WHERE name IN (SELECT name FROM black_list)
+            """)
+        conn.commit()
+        cursor.close()
+        conn.close()
+    except:
+        conn.rollback()
+        raise RuntimeError(f"Failed to apply black list")
+    
 def main():
     parser = argparse.ArgumentParser(description='Constantly fetch tasks from build list and run 0build')
 
@@ -164,30 +212,12 @@ def main():
         builder = args.builder
     
     print(f"Database: {db}\nBuild List: {table}\nBuild script: {script}")
-    # Create the resulting packages table
-    conn = dbinit.get_conn(db)
-    cursor = conn.cursor()
-    cursor.execute(f'''
-        CREATE TABLE IF NOT EXISTS packages (
-        name TEXT PRIMARY KEY,
-        base TEXT,
-        repo TEXT,
-        error_type TEXT,
-        x86_version TEXT,
-        x86_testing_version TEXT,
-        x86_staging_version TEXT,
-        loong_version TEXT,
-        loong_testing_version TEXT,
-        loong_staging_version TEXT
-        )
-    ''')
-    conn.commit()
-    cursor.close()
-    conn.close()
-    task_no = 1
+        
+    # Remove packages that are already in black list
+    check_black_list(db)
     while True:
 
-        record = get_pending_task(db, table, task_no)
+        record = get_pending_task(db, table)
 
         if not record:
             print("All task completed")
@@ -197,7 +227,6 @@ def main():
 
         try:
             execute_with_retry(script, db, record, builder)  
-            task_no += 1      
 
         except Exception as e:
             print(f"Failed to run script {e}")

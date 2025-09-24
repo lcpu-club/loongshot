@@ -233,7 +233,7 @@ export default {
 
       status += '&nbsp';
       if (item.has_log === true) {
-        const encodedVersion = encodeURIComponent(item.x86_version);
+        const encodedVersion = encodeURIComponent(item.loong_version);
         const logUrl = `/log?base=${item.base}&name=${item.name}&version=${encodedVersion}`;
         status += `<span><a href="${logUrl}" target="_blank" style="color: gold;">🅻</a></span>`;      
       } else {
@@ -852,15 +852,16 @@ export default {
 .sidebar-content {
   padding: 1rem;
   height: calc(100% - 60px);
-  overflow-y: auto;
+  overflow-y: hidden;
 }
 
 .sidebar-table {
   width: 100%;
+  height: 100%;
   table-layout: auto;
   min-width: 380px;
   border-collapse: collapse;
-  overflow-x: auto;
+  overflow: visible;
   display: block; 
   scroll-behavior: smooth;
   th, td {
@@ -880,7 +881,8 @@ export default {
 }
 
 .sidebar-table thead {
-  display: block;
+  display: table;
+  width: 100%;
   position: sticky;
   top: 0;
   z-index: 10;

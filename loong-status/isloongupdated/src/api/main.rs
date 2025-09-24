@@ -5,6 +5,7 @@ use sqlx::{postgres::PgPoolOptions, FromRow, Row};
 use chrono::NaiveDateTime;
 use std::fs::read_to_string;
 use std::path::Path;
+use log;
 
 #[derive(Serialize, Debug, FromRow)]
 struct Package {

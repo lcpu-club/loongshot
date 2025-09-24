@@ -178,6 +178,7 @@ def compare_all():
                 repo=repo
             )
             pkglist.append(p)
+    return pkglist
 
 def show_reverse_depends(depend):
     queue = deque()
