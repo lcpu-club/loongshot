@@ -15,7 +15,7 @@ struct Package {
     repo: String,
     status: Option<String>,
     error_type: Option<String>,
-    has_log: Option<bool>,
+    has_log: Option<String>,
     is_blacklisted: Option<bool>,
     x86_version: Option<String>,
     x86_testing_version: Option<String>,
@@ -72,8 +72,7 @@ struct Task {
 #[derive(Deserialize)]
 struct LogRequest {
     base: String,
-    name: String,
-    version: String,
+    log_name: String
 }
 
 #[get("/api/tasks/result")]
@@ -288,7 +287,7 @@ async fn get_last_update(pool: web::Data<sqlx::Pool<sqlx::Postgres>>) -> impl Re
 #[get("/api/logs")]
 async fn get_log(info: web::Query<LogRequest>) -> impl Responder {
     // Path of build logs 
-    let file_path = format!("/home/arch/loong-status/build_logs/{}/{}-{}.log", info.base, info.name, info.version);
+    let file_path = format!("/home/arch/loong-status/build_logs/{}/{}.log", info.base, info.log_name);
     let path = Path::new(&file_path);
 
     match read_to_string(path) {

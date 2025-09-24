@@ -48,7 +48,7 @@ def create_tables(conn):
         base TEXT,
         repo TEXT,
         error_type TEXT,
-        has_log BOOL DEFAULT FALSE,
+        has_log TEXT,
         is_blacklisted BOOL DEFAULT FALSE,
         x86_version TEXT,
         x86_testing_version TEXT,
@@ -193,8 +193,7 @@ def fetch_all_packages(conn):
     # Keep track of the log! If a package has log, it should keep the log unless the new x86_version is not missing and different from loong_version
     cursor.executemany(f'''
         INSERT INTO packages (name, base, x86_version, loong_version, repo, has_log)
-        VALUES (%s, %s, %s, %s, %s, 
-                CASE WHEN %s <> 'missing' AND %s <> %s THEN FALSE ELSE FALSE END)
+        VALUES (%s, %s, %s, %s, %s, NULL) 
         ON CONFLICT (name) DO UPDATE
         SET x86_version = CASE 
                             WHEN EXCLUDED.x86_version = 'missing' THEN packages.x86_version
@@ -202,17 +201,63 @@ def fetch_all_packages(conn):
                         END,
             loong_version = EXCLUDED.loong_version,
             repo = EXCLUDED.repo,
-            base = EXCLUDED.base,
-            has_log = CASE
-                        WHEN COALESCE(NULLIF(EXCLUDED.x86_version, 'missing'), packages.x86_version) <> 'missing'
-                        AND COALESCE(NULLIF(EXCLUDED.x86_version, 'missing'), packages.x86_version) <> EXCLUDED.loong_version
-                        THEN FALSE
-                        ELSE packages.has_log
-                    END
+            base = EXCLUDED.base
         WHERE packages.x86_version <> 'missing' OR EXCLUDED.x86_version <> 'missing';
-    ''', [(pkg.name, pkg.base, pkg.x86_version, pkg.loong64_version, pkg.repo,
-        pkg.x86_version, pkg.x86_version, pkg.loong64_version) for pkg in pkglist])
+    ''', [(pkg.name, pkg.base, pkg.x86_version, pkg.loong64_version, pkg.repo) for pkg in pkglist])
+
     
+    cursor.close()
+
+# Check if log file exists for each package
+def log_check(conn):
+    cursor = conn.cursor()
+
+    base_dir = '/home/arch/loong-status/build_logs'
+    
+    # Fetch all packages with has_log not NULL
+    # The basic idea is to check if the log file exists, if not, set has_log to NULL
+    # We assume that there is always a log file for a package
+    # The log file should has a name identical to value of has_log field
+    # If has_log is NULL, we try to use the format {name}-{loong_version}.log to find the log file
+    # If the log file is not found, set has_log to NULL
+    cursor.execute("SELECT name, loong_version, has_log from packages")
+    packages = cursor.fetchall()
+
+    for package in packages:
+        name, loong_version, has_log = package
+        folder_path = os.path.join(base_dir, name)
+
+        # If the directory does not exist, set has_log to NULL
+        if not os.path.isdir(folder_path):
+            cursor.execute("""
+                UPDATE packages
+                SET has_log = NULL
+                WHERE name = %s
+            """, (name,))
+            continue  
+
+        # Check for the specific log file
+        log_file_name = f"{name}-{loong_version}"
+        # Use has_log value if possible
+        if has_log is not None:
+            log_file_name = f"{has_log}"
+        log_file_path = os.path.join(folder_path, log_file_name + ".log")
+
+        if os.path.isfile(log_file_path):
+            # If the log file exists, do nothing
+            cursor.execute("""
+                UPDATE packages
+                SET has_log = %s
+                WHERE name = %s
+            """, (log_file_name, name,))
+        else:
+            # If the log file does not exist, set has_log to NULL
+            cursor.execute("""
+                UPDATE packages
+                SET has_log = NULL
+                WHERE name = %s
+            """, (name,))
+
     cursor.close()
 
 def main():
@@ -229,10 +274,18 @@ def main():
     try:
         conn.autocommit = False
 
+        # Step 1: Create tables
         create_tables(conn)
+        # Step 2: Fetch all packages and insert into database
         fetch_all_packages(conn)
+        # Step 3: Load black list and update is_blacklisted field
         if args.bl:
             load_black_list(conn, args.bl)
+        # Commit all changes
+        conn.commit()
+
+        # Step 4: Check for log files and update has_log field
+        log_check(conn)
         conn.commit()
     except Exception as e:
         print(f"Error during database operations: {e}")

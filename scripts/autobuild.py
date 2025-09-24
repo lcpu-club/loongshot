@@ -14,8 +14,8 @@ from psycopg2 import extras
 # Define retry triggers
 error_type = {
     "Fail to apply loong's patch": ["Fail to apply loong's patch"],
-    "Unknown error before build": ["Unknown error before build", "Could not download sources"],
-    "Fail to download source": ["Failure while downloading", "TLS connect error"],
+    "Unknown error before build": ["Unknown error before build"],
+    "Fail to download source": ["Failure while downloading", "TLS connect error", "Could not download sources"],
     "Fail to pass the validity check":["Fail to pass the validity check", "One or more files did not pass the validity check"],
     "Fail to pass PGP check" : ["One or more PGP signatures could not be verified"],
     "Could not resolve all dependencies": ["Could not resolve all dependencies"],
@@ -86,16 +86,20 @@ def get_pending_task(db_path, table):
         conn.close()
 
 # Remove completed build task
-def delete_record(db_path: str, record_id: int, new_loong_version, error = "Success") -> None:
+def delete_record(db_path: str, name, record_id: int, new_loong_version, error = "Success") -> None:
     conn = dbinit.get_conn(db_path)
     cursor = conn.cursor()
 
     try:
         cursor.execute("BEGIN TRANSACTION")
+        # Calculate new loong_version and has_log value
         # If build success, update loong_version, otherwise don't
+        loong_version_value = new_loong_version if error == "Success" else None
+        has_log_value = f"{name}-{loong_version_value}" if loong_version_value else None
+
         cursor.execute("""
             INSERT INTO packages(name, base, repo, error_type, has_log, x86_version, loong_version)
-            SELECT name, base, repo, %s, TRUE, x86_version, CASE WHEN %s = 'Success' THEN %s ELSE loong_version END
+            SELECT name, base, repo, %s, %s, x86_version, %s
             FROM build_list
             WHERE task_no = %s
             ON CONFLICT (name) DO UPDATE SET
@@ -105,7 +109,7 @@ def delete_record(db_path: str, record_id: int, new_loong_version, error = "Succ
             has_log = EXCLUDED.has_log,
             x86_version = EXCLUDED.x86_version,
             loong_version = EXCLUDED.loong_version
-        """, (error, error, new_loong_version, record_id,))
+        """, (error, has_log_value, loong_version_value, record_id,))
         
         cursor.execute(
                 f"UPDATE build_list SET status = %s WHERE task_no = %s", (error, record_id,)
@@ -160,7 +164,8 @@ def execute_with_retry(script_path, db, record, builder):
         "--repo",
         record['repo'],
         "--builder",
-        builder
+        builder,
+        "--clean"
     ]
 
     command = systemd_cmd + [unit] + script_cmd
@@ -188,10 +193,10 @@ def execute_with_retry(script_path, db, record, builder):
                     process.wait()
                 
                 if control.action == 'skip':
-                    delete_record(db, record['task_no'], loong_version, "skipped")
+                    delete_record(db, record['name'], record['task_no'], loong_version, "skipped")
                     return True
                 elif control.action == 'quit':
-                    delete_record(db, record['task_no'], loong_version, "QUIT by user")
+                    delete_record(db, record['name'], loong_version, "QUIT by user")
                     return False 
                 else:
                     need_retry = True
@@ -206,7 +211,7 @@ def execute_with_retry(script_path, db, record, builder):
         returncode = process.wait()
         if returncode == 0:
             print("✓ Build successful!")
-            delete_record(db, record['task_no'], loong_version)
+            delete_record(db, record['name'], record['task_no'], loong_version)
             return        
 
         # When build fails
@@ -240,13 +245,13 @@ def execute_with_retry(script_path, db, record, builder):
         else:
             print("Failed to build... Now removing task")
             # If the build succeeds, new loong_version will be used, which might not be the same as the x86_version
-            delete_record(db, record['task_no'], loong_version, error)
+            delete_record(db, record['name'], record['task_no'], loong_version, error)
             return
 
 
     # If all retries failed, delete the record
     print("Failed after retries... Now removing task")
-    delete_record(db, record['task_no'], loong_version, error)
+    delete_record(db, record['name'], record['task_no'], loong_version, error)
     
 def check_black_list(db):
     conn = dbinit.get_conn(db)
