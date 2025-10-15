@@ -117,7 +117,7 @@ build_package() {
             git pull 2>&1 || return
         else
             cd $WORKDIR 2>&1 || return
-	    get-loong64-pkg $PKGBASE
+            get-loong64-pkg $PKGBASE
             # pkgctl repo clone --protocol=https $PKGBASE 2>&1 || return
             cd $PKGBASE
         fi
@@ -153,7 +153,7 @@ build_package() {
     if [[ -z "$BUILDREPO" ]]; then
         # BUILDREPO="extra"  # default to extra
         echo "Build repo not specified!"
-	    return 1
+        return 1
     fi
 
     echo "Running pre-built fix"
@@ -193,7 +193,7 @@ build_package() {
         msg "Can't copy PKGBUILD to builder."
         return 1
     fi
-    
+
     # Start to build package
     echo "Sending build command"
     ssh $BUILDER "cd $BUILDPATH/$PKGBASE; PACKAGER=\"$PACKAGER\" extra$TESTING-loong64-build $CLEAN -- -- -A -L $EXTRAARG"
@@ -215,16 +215,16 @@ build_package() {
         cd $LOCALREPO/$BUILDREPO
 
         # All packages
-    	FILENAME="*.pkg.tar.zst"
+        FILENAME="*.pkg.tar.zst"
         # Only debug packages
         DEBUGPKG=$PKGBASE-debug-$PKGVERREL-loong64.pkg.tar.zst
-	    if [ "$BUILDER" = "loong1" ]; then
+        if [ "$BUILDER" = "loong1" ]; then
             echo "Signing package on loong1"
             ssh -t $BUILDER "cd $BUILDPATH/$PKGBASE && \
                 for file in *.pkg.tar.zst; do \
                     rm -f \"\$file.sig\"; \
                     gpg --detach-sign \"\$file\" && echo \"\$file.sig created\" || echo \"\$file signing failed\"; \
-                done"            
+                done"
             scp loong1:/tmp/"$FILENAME" loong1:/tmp/"${FILENAME}.sig" .
         else # Only loong1 has the signing key
             echo "Sending package to loong1 for signing"
@@ -239,12 +239,12 @@ build_package() {
             ssh -t loong1 "rm /tmp/$FILENAME{,.sig} -f"
         fi
         chmod 664 $FILENAME{,.sig}
-	    mv $DEBUGPKG{,.sig} $LOCALREPO/$BUILDREPO/debug-pool
+        mv $DEBUGPKG{,.sig} $LOCALREPO/$BUILDREPO/debug-pool
         repo-add -R $LOCALREPO/$BUILDREPO/temp-$BUILDREPO$TESTING.db.tar.gz $FILENAME
-    	)
+        )
 
         msg "$PKGBASE-$PKGVERREL built on $BUILDER, time cost: $TIMECOST"
-	else
+    else
         msg "$PKGBASE-$PKGVERREL failed on $BUILDER, time cost: $TIMECOST, exit code: $EXITCODE"
     fi
     return $EXITCODE

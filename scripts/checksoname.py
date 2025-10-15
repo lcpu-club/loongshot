@@ -81,21 +81,21 @@ def main():
     os.makedirs(files_dir)
     download_file(f"{mirror_loong64}core/os/loong64/core.files.tar.gz",
                   f"{temp_dir.name}/core.files.tar.gz")
-    print(f"core.files.tar.gz has downloaded.")
+    print("core.files.tar.gz has downloaded.")
     extract_tar_gz(f"{temp_dir.name}/core.files.tar.gz", files_dir)
-    download_file(f"{mirror_loong64}extra/os/loong64/extra.files.tar.gz",   
+    download_file(f"{mirror_loong64}extra/os/loong64/extra.files.tar.gz",
                   f"{temp_dir.name}/extra.files.tar.gz")
-    print(f"extra.files.tar.gz has downloaded.")
+    print("extra.files.tar.gz has downloaded.")
     extract_tar_gz(f"{temp_dir.name}/extra.files.tar.gz", files_dir)
 
     download_file(f"{mirror_loong64}core/os/loong64/core.links.tar.gz",
                   f"{temp_dir.name}/core.links.tar.gz")
-    print(f"core.links.tar.gz has downloaded.")
+    print("core.links.tar.gz has downloaded.")
     extract_tar_gz(f"{temp_dir.name}/core.links.tar.gz", links_dir)
 
     download_file(f"{mirror_loong64}extra/os/loong64/extra.links.tar.gz",
                   f"{temp_dir.name}/extra.links.tar.gz")
-    print(f"extra.links.tar.gz has downloaded.")
+    print("extra.links.tar.gz has downloaded.")
     extract_tar_gz(f"{temp_dir.name}/extra.links.tar.gz", links_dir)
 
     links_libs = scan_directory_for_libs(links_dir, 'links')
@@ -123,6 +123,7 @@ def main():
             raise
         finally:
             conn.close()
+
 
 if __name__ == "__main__":
     main()

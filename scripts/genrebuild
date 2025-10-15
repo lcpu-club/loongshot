@@ -36,18 +36,18 @@ HASKELL_REAL_MAKEDEPEND = {
 
 parser = argparse.ArgumentParser(description='Rebuild generator and orderer, generates all haskell reverse deps too')
 parser.add_argument('-H', '--haskell-check', action="store_true",
-                                             help='Filter results for haskell-only rebuilds, also implies --expand, --expand-make, --expand-check')
+                    help='Filter results for haskell-only rebuilds, also implies --expand, --expand-make, --expand-check')
 parser.add_argument('-e', '--expand', action="store_true",
-                                      help='Expand all reverse deps')
+                    help='Expand all reverse deps')
 parser.add_argument('-m', '--expand-make', action="store_true",
-                                           help='Expand all reverse make deps')
+                    help='Expand all reverse make deps')
 parser.add_argument('-c', '--expand-check', action="store_true",
-                                            help='Expand all reverse check deps')
+                    help='Expand all reverse check deps')
 parser.add_argument('--ignore', nargs='?', default="", help='Ignore packages, separated by comma')
 parser.add_argument('-d', '--db', nargs='*', default=["core", "extra", "community", "multilib"],
-                                             help='Pacman sync db to consider. Defaulting to all stable dbs.')
+                    help='Pacman sync db to consider. Defaulting to all stable dbs.')
 parser.add_argument('--dbpath', nargs='?', default="/var/lib/pacman",
-                                           help='Pacman sync db location. Default: /var/lib/pacman')
+                    help='Pacman sync db location. Default: /var/lib/pacman')
 # Either packages or a database that contains packages must be provided
 group = parser.add_mutually_exclusive_group()
 group.add_argument('package', nargs='*', help='Packages to rebuild')
@@ -82,7 +82,7 @@ if args.pkgdb:
     cursor = conn.cursor()
     select_name = f'''SELECT name FROM prebuild_list WHERE x86_version != 'missing'; '''
     cursor.execute(select_name)
-    
+
     rebuild_list = {row[0] for row in cursor.fetchall()}
     cursor.close()
     conn.close()
@@ -288,6 +288,7 @@ def pass2(NG, nocheck_pkg):
     logger.debug("Cycle Solver pass2: " + " ".join(best_pass2))
     return best_pass2
 
+
 result = []
 for pkg in nx.topological_sort(G):
     if isinstance(pkg, str):
@@ -310,7 +311,7 @@ if args.pkgdb:
     cursor = conn.cursor()
 
     try:
-        get_table_schema = f"""SELECT column_name FROM information_schema.columns WHERE table_name = 'prebuild_list' ORDER BY ordinal_position"""
+        get_table_schema = """SELECT column_name FROM information_schema.columns WHERE table_name = 'prebuild_list' ORDER BY ordinal_position"""
         cursor.execute(get_table_schema)
         columns = [row[0] for row in cursor.fetchall()]
 
@@ -319,7 +320,7 @@ if args.pkgdb:
         columns_definition = ''
         if columns:
             columns_definition = ', ' + ', '.join([f'"{col}" TEXT' for col in columns])
-        
+
         # Create a new build_list table
         create_buildlist = f"""
         CREATE TABLE build_list (
@@ -330,7 +331,6 @@ if args.pkgdb:
         )
         """
         cursor.execute(create_buildlist)
-
 
         serial = 1
         for pkg in result:

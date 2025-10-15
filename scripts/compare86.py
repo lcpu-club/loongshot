@@ -96,7 +96,7 @@ def safe_tobuild():
                 repo=repo
             )
             # f"{pkg.version:24} {repo}"
-            
+
     loong = {}
     for repo in source_repos:
         loong_db = load_repo(os.path.join(cache_dir, loong64_repo_path), repo)
@@ -127,7 +127,6 @@ def safe_tobuild():
             pkglist.append(p)
 
 
-
 # Check repo for errors
 def loong_lint():
     loong = {}
@@ -148,11 +147,11 @@ def compare_all():
     for repo in source_repos:
         x86 = {}
         loong = {}
-        
+
         x86_db = load_repo(os.path.join(cache_dir, x86_repo_path), repo)
         x86_pkg = {pkg.base: pkg.version for pkg in x86_db.pkgcache}
         x86 = {**x86, **x86_pkg}
-    
+
         loong_db = load_repo(os.path.join(cache_dir, loong64_repo_path), repo)
         loong_pkg = {pkg.base: pkg.version for pkg in loong_db.pkgcache}
         loong = {**loong, **loong_pkg}
@@ -203,7 +202,7 @@ def move_repos(ignore_version=False):
     for repo in source_repos:
         x86_db = load_repo(os.path.join(cache_dir, x86_repo_path), repo)
         for pkg in x86_db.pkgcache:
-            if pkg.name not in x86: # Use pkgname this time
+            if pkg.name not in x86:  # Use pkgname this time
                 x86[pkg.name] = {}
             x86[pkg.name][repo] = pkg.version  # Add the repo and version to the pkg.base entry
 
@@ -239,7 +238,7 @@ def compare_repos(x86_db, loong64_db, showtime, show_newer=False, repo='missing'
         x86_version = x86_pkg[pkg_name]
         loong64_version = loong64_pkg[pkg_name]
         if pyalpm.vercmp(loong64_version, x86_version) >= 0 and (not show_newer):
-            continue # loong64's version > x86's version: not outdated
+            continue  # loong64's version > x86's version: not outdated
         if x86_version == loong64_version:
             continue
         x86_pkgver, x86_relver = x86_version.split('-')
@@ -261,7 +260,6 @@ def compare_repos(x86_db, loong64_db, showtime, show_newer=False, repo='missing'
                 repo=repo
             )
         pkglist.append(p)
-
 
 
 # compare one package
@@ -292,7 +290,7 @@ def show_group(group, repo):
 # Write packages to a json file
 def write_to_json(data, file):
     serializable = [pkg.dict() for pkg in data]
-    
+
     try:
         with file.open('w', encoding='utf-8') as f:
             json.dump(
@@ -303,21 +301,21 @@ def write_to_json(data, file):
                 separators=(',', ': ')
             )
             f.write('\n')
-        
+
     except (IOError, json.JSONDecodeError) as e:
         print(f"Failed to save: {str(e)}")
         raise
 
-    
+
 # Write packages to database
 def write_to_database(data, db):
 
     conn = dbinit.get_conn(db)
     try:
         cursor = conn.cursor()
-        cursor.execute(f'''DROP TABLE IF EXISTS prebuild_list ''')
+        cursor.execute('''DROP TABLE IF EXISTS prebuild_list ''')
         # Create a table to store packages to be built
-        cursor.execute(f'''
+        cursor.execute('''
         CREATE TABLE prebuild_list (
             name TEXT PRIMARY KEY,
             base TEXT,
@@ -331,13 +329,13 @@ def write_to_database(data, db):
         )
         ''')
 
-        cursor.executemany(f'''
+        cursor.executemany('''
             INSERT INTO prebuild_list (name, base, x86_version, loong_version, repo)
             VALUES (%s, %s, %s, %s, %s)
             ON CONFLICT (name) DO UPDATE
-            SET x86_version = CASE 
+            SET x86_version = CASE
                                 WHEN EXCLUDED.x86_version = 'missing' THEN prebuild_list.x86_version
-                                ELSE EXCLUDED.x86_version 
+                                ELSE EXCLUDED.x86_version
                             END,
                 loong_version = EXCLUDED.loong_version
             WHERE prebuild_list.x86_version <> 'missing' OR EXCLUDED.x86_version <> 'missing';
@@ -355,7 +353,7 @@ def write_to_database(data, db):
 def print_to_screen(data):
     for d in data:
         print(f'{d.name:34} {d.x86_version:24} {d.loong64_version:24}')
-    
+
 def main():
     global source_repos
 
@@ -377,10 +375,10 @@ def main():
     parser.add_argument("-l", "--lint", action="store_true", help="Check for db errors.")
     parser.add_argument("-d", "--depend", type=str, help="List reverse depends.")
     parser.add_argument("-o", "--output", type=str, help="Save output to file.")
-    parser.add_argument( "--db", type=str, help="Save output to database.")
-    parser.add_argument( "--mirror_x86", type=str, help="Mirror of x86.")
-    parser.add_argument( "--mirror_loong", type=str, help="Mirror of loong.")
-    
+    parser.add_argument("--db", type=str, help="Save output to database.")
+    parser.add_argument("--mirror_x86", type=str, help="Mirror of x86.")
+    parser.add_argument("--mirror_loong", type=str, help="Mirror of loong.")
+
     args = parser.parse_args()
 
     mirror_x86 = "https://mirrors.pku.edu.cn/archlinux/"
@@ -399,7 +397,7 @@ def main():
 
     if args.db and not any(required_for_output):
         parser.error("The --db option can only be used with other specific options")
-        
+
     if args.time is None:
         args.time = False
 
@@ -444,7 +442,7 @@ def main():
         compare_repos(x86_db, loong64_db, args.time, args.newer, repo)
 
     if args.group:
-        #for r in source_repos:
+        # for r in source_repos:
         r = source_repos[1]
         repo = load_repo(os.path.join(cache_dir, x86_repo_path), r)
         show_group(args.group, repo)
@@ -474,10 +472,10 @@ def main():
     if args.output:
         write_to_json(pkglist, Path(args.output))
     elif args.db:
-            write_to_database(pkglist, Path(args.db))
+        write_to_database(pkglist, Path(args.db))
 
     print_to_screen(pkglist)
-    
-                
+
+
 if __name__ == "__main__":
     main()
