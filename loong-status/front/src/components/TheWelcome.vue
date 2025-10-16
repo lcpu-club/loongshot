@@ -53,7 +53,7 @@
 </template>
 
 <script setup>
-import { Document, Collection, Tools } from '@element-plus/icons-vue'
+import { Document, Collection, Tools, Download } from '@element-plus/icons-vue'
 import Stat from './Stat.vue'
 import { useRouter } from 'vue-router'
 
@@ -74,6 +74,11 @@ const navItems = [
     text: 'Infra',
     path: 'https://github.com/lcpu-club/loongshot',
     icon: Tools,
+  },
+  { 
+    text: 'Download ISO',
+    path: 'https://mirrors.wsyu.edu.cn/loongarch/archlinux/iso/latest/archlinux-loong64.iso',
+    icon: Download,
   }
 ]
 
@@ -185,6 +190,7 @@ h1 {
   font-size: 0.9rem;
   color: #444;
   text-align: center;
+  white-space: nowrap;
 }
 
 .repo-footer {
