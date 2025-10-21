@@ -308,9 +308,9 @@ def write_to_json(data, file):
 
 
 # Write packages to database
-def write_to_database(data, db):
+def write_to_database(data):
 
-    conn = dbinit.get_conn(db)
+    conn = dbinit.get_conn()
     try:
         cursor = conn.cursor()
         cursor.execute('''DROP TABLE IF EXISTS prebuild_list ''')
@@ -375,7 +375,7 @@ def main():
     parser.add_argument("-l", "--lint", action="store_true", help="Check for db errors.")
     parser.add_argument("-d", "--depend", type=str, help="List reverse depends.")
     parser.add_argument("-o", "--output", type=str, help="Save output to file.")
-    parser.add_argument("--db", type=str, help="Save output to database.")
+    parser.add_argument("--db", action="store_true", help="Save output to database.")
     parser.add_argument("--mirror_x86", type=str, help="Mirror of x86.")
     parser.add_argument("--mirror_loong", type=str, help="Mirror of loong.")
 
@@ -472,7 +472,7 @@ def main():
     if args.output:
         write_to_json(pkglist, Path(args.output))
     elif args.db:
-        write_to_database(pkglist, Path(args.db))
+        write_to_database(pkglist)
 
     print_to_screen(pkglist)
 
