@@ -70,7 +70,7 @@ def find_orphan_libs(links, files):
 
 def main():
     parser = argparse.ArgumentParser(description="Check file db and links db for orphans.")
-    parser.add_argument("--db", help="Export")
+    parser.add_argument("--db", action="store_true", help="Export")
 
     args = parser.parse_args()
 
@@ -103,7 +103,7 @@ def main():
     pkgs = find_orphan_libs(links_libs, files_libs)
 
     if args.db:
-        conn = dbinit.get_conn(args.db)
+        conn = dbinit.get_conn()
         try:
             cursor = conn.cursor()
             for pkg_name in pkgs:

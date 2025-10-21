@@ -56,17 +56,17 @@ class BuildControl:
             sys.exit(0)
 
 # Fetch one task from build list
-def get_pending_task(db_path, table):
-    conn = dbinit.get_conn(db_path)
+def get_pending_task():
+    conn = dbinit.get_conn()
     try:
         with conn.cursor(cursor_factory=extras.DictCursor) as cursor:
             cursor.execute(
                 f"""
-                UPDATE {table}
+                UPDATE build_list
                 SET status = 'Building'
                 WHERE task_no = (
                     SELECT task_no
-                    FROM {table}
+                    FROM build_list
                     WHERE status = 'Pending'
                     ORDER BY task_no ASC
                     LIMIT 1
@@ -86,8 +86,8 @@ def get_pending_task(db_path, table):
         conn.close()
 
 # Remove completed build task
-def delete_record(db_path: str, name, record_id: int, new_loong_version, error = "Success") -> None:
-    conn = dbinit.get_conn(db_path)
+def delete_record(name, record_id: int, new_loong_version, error = "Success") -> None:
+    conn = dbinit.get_conn()
     cursor = conn.cursor()
 
     try:
@@ -125,7 +125,7 @@ def delete_record(db_path: str, name, record_id: int, new_loong_version, error =
         conn.close()
 
 # Execute build
-def execute_with_retry(script_path, db, record, builder):
+def execute_with_retry(script_path, record, builder):
     control = BuildControl()
     attempt = 0  # Retry attempts
     max_retries = 3
@@ -193,10 +193,10 @@ def execute_with_retry(script_path, db, record, builder):
                     process.wait()
 
                 if control.action == 'skip':
-                    delete_record(db, record['name'], record['task_no'], loong_version, "skipped")
+                    delete_record(record['name'], record['task_no'], loong_version, "skipped")
                     return True
                 elif control.action == 'quit':
-                    delete_record(db, record['name'], loong_version, "QUIT by user")
+                    delete_record(record['name'], loong_version, "QUIT by user")
                     return False
                 else:
                     need_retry = True
@@ -211,7 +211,7 @@ def execute_with_retry(script_path, db, record, builder):
         returncode = process.wait()
         if returncode == 0:
             print("✓ Build successful!")
-            delete_record(db, record['name'], record['task_no'], loong_version)
+            delete_record(record['name'], record['task_no'], loong_version)
             return
 
         # When build fails
@@ -245,16 +245,16 @@ def execute_with_retry(script_path, db, record, builder):
         else:
             print("Failed to build... Now removing task")
             # If the build succeeds, new loong_version will be used, which might not be the same as the x86_version
-            delete_record(db, record['name'], record['task_no'], loong_version, error)
+            delete_record(record['name'], record['task_no'], loong_version, error)
             return
 
 
     # If all retries failed, delete the record
     print("Failed after retries... Now removing task")
-    delete_record(db, record['name'], record['task_no'], loong_version, error)
+    delete_record(record['name'], record['task_no'], loong_version, error)
 
-def check_black_list(db):
-    conn = dbinit.get_conn(db)
+def check_black_list():
+    conn = dbinit.get_conn()
     cursor = conn.cursor()
 
     try:
@@ -272,7 +272,7 @@ def check_black_list(db):
 def main():
     parser = argparse.ArgumentParser(description='Constantly fetch tasks from build list and run 0build')
 
-    parser.add_argument('--db', nargs=2, metavar=('DB_PATH', 'TABLE_NAME'), help='Database that stores the build list')
+    parser.add_argument('--db', action="store_true", help='Database that stores the build list')
     parser.add_argument('--script', type=str, help='Build script to execute')
     parser.add_argument('--builder', type=str, help='Builder machine to use')
 
@@ -285,23 +285,21 @@ def main():
     if not args.script:
         print("No build script provided!")
         return
-
-    db = args.db[0]
-    table = args.db[1]
+    
     script = args.script
     builder = "localhost"
 
     if args.builder:
         builder = args.builder
 
-    print(f"Database: {db}\nBuild List: {table}\nBuild script: {script}")
+    # print(f"Database: {db}\nBuild List: {table}\nBuild script: {script}")
 
     # Remove packages that are already in black list
-    check_black_list(db)
+    check_black_list()
 
     while True:
 
-        record = get_pending_task(db, table)
+        record = get_pending_task()
 
         if not record:
             print("All task completed")
@@ -310,7 +308,7 @@ def main():
         print(f"\nTask ID={record['task_no']}, name={record['name']}, version={record['x86_version']}")
 
         try:
-            success = execute_with_retry(script, db, record, builder)
+            success = execute_with_retry(script, record, builder)
             if success is False:
                 print("Exiting program as per user request.")
                 break

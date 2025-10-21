@@ -23,7 +23,7 @@ def load_config(config_file):
         print(f"Error loading configuration file: {e}")
         raise
 
-def get_conn(config):
+def get_conn(config="database.json"):
     config = load_config(config)
 
     conn = psycopg2.connect(
@@ -262,15 +262,10 @@ def log_check(conn):
 
 def main():
     parser = argparse.ArgumentParser(description="Compare packages between x86 and loong.")
-    parser.add_argument("--db", type=str, help="Database name.")
     parser.add_argument("--bl", type=str, help="Banned packages")
     args = parser.parse_args()
 
-    if args.db is None:
-        print("Must provide database name!")
-        return
-
-    conn = get_conn(args.db)
+    conn = get_conn()
     try:
         conn.autocommit = False
 
