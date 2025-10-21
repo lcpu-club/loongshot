@@ -55,7 +55,7 @@ parser.add_argument('--dep', nargs='?', default="",
 # Either packages or a database that contains packages must be provided
 group = parser.add_mutually_exclusive_group()
 group.add_argument('package', nargs='*', help='Packages to rebuild')
-group.add_argument('--pkgdb', nargs=1, help='Packages to rebuild from a database')
+group.add_argument('--pkgdb', action="store_true", help='Packages to rebuild from a database')
 
 args = parser.parse_args()
 
@@ -84,8 +84,7 @@ if not args.package and not args.pkgdb:
 rebuild_list = set()
 
 if args.pkgdb:
-    db = args.pkgdb[0]
-    conn = dbinit.get_conn(Path(db))
+    conn = dbinit.get_conn()
     cursor = conn.cursor()
     select_name = f'''SELECT name FROM prebuild_list WHERE x86_version != 'missing'; '''
     cursor.execute(select_name)
@@ -338,8 +337,7 @@ for pkg in nx.topological_sort(G):
 
 # Write back to database
 if args.pkgdb:
-    db = args.pkgdb[0]
-    conn = dbinit.get_conn(Path(db))
+    conn = dbinit.get_conn()
     cursor = conn.cursor()
 
     try:
