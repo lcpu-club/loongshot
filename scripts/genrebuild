@@ -64,7 +64,7 @@ if args.haskell_check:
     args.expand_make = True
     args.expand_check = True
     if args.ignore == "":
-        arg.ignore = "ghc,ghc-static"
+        args.ignore = "ghc,ghc-static"
 
 args.ignore = set(args.ignore.split(","))
 args.db = set(args.db.split(","))
