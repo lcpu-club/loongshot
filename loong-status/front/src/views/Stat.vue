@@ -1,5 +1,5 @@
 <script setup>
-import Stat from '../components/Stat.vue'
+import Stat from "../components/Stat.vue";
 </script>
 
 <template>

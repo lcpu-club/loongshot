@@ -3,12 +3,12 @@
     <!-- Title -->
     <div class="upper-layer">
       <div class="header-content">
-        <img src="/public/logo.png" class="logo" alt="LoongArch Logo">
+        <img src="/public/logo.png" class="logo" alt="LoongArch Logo" />
         <h1>Arch Linux for Loong64</h1>
         <p class="subtitle">
-          This is a port of 
-          <a href="https://archlinux.org/">Arch Linux</a> 
-          for <a href="https://www.loongson.cn/EN">Loong64</a> 
+          This is a port of
+          <a href="https://archlinux.org/">Arch Linux</a>
+          for <a href="https://www.loongson.cn/EN">Loong64</a>
           architecture.
         </p>
       </div>
@@ -31,8 +31,8 @@
 
     <!-- Navigators -->
     <div class="nav-container">
-      <div 
-        v-for="(item, index) in navItems" 
+      <div
+        v-for="(item, index) in navItems"
         :key="index"
         class="nav-orb"
         @click="navigateTo(item.path)"
@@ -44,7 +44,7 @@
 
     <!-- Mirror -->
     <div class="repo-footer">
-      Mirror: 
+      Mirror:
       <a href="https://mirrors.pku.edu.cn/loongarch-lcpu/archlinux/">
         https://mirrors.pku.edu.cn/loongarch-lcpu/archlinux/
       </a>
@@ -53,51 +53,51 @@
 </template>
 
 <script setup>
-import { Document, Collection, Tools, Download } from '@element-plus/icons-vue'
-import Stat from './Stat.vue'
-import { useRouter } from 'vue-router'
+import { Document, Collection, Tools, Download } from "@element-plus/icons-vue";
+import Stat from "./Stat.vue";
+import { useRouter } from "vue-router";
 
-const router = useRouter()
+const router = useRouter();
 
 const navItems = [
-  { 
-    text: 'Status',
-    path: '/status',
+  {
+    text: "Status",
+    path: "/status",
     icon: Document,
   },
-  { 
-    text: 'Patches',
-    path: 'https://github.com/lcpu-club/loongarch-packages',
+  {
+    text: "Patches",
+    path: "https://github.com/lcpu-club/loongarch-packages",
     icon: Collection,
   },
-  { 
-    text: 'Infra',
-    path: 'https://github.com/lcpu-club/loongshot',
+  {
+    text: "Infra",
+    path: "https://github.com/lcpu-club/loongshot",
     icon: Tools,
   },
-  { 
-    text: 'Download ISO',
-    path: 'https://mirrors.wsyu.edu.cn/loongarch/archlinux/iso/latest/archlinux-loong64.iso',
+  {
+    text: "Download ISO",
+    path: "https://mirrors.wsyu.edu.cn/loongarch/archlinux/iso/latest/archlinux-loong64.iso",
     icon: Download,
-  }
-]
+  },
+];
 
 const navigateTo = (path) => {
-  if (path.startsWith('http')) {
-    window.open(path, '_blank')
+  if (path.startsWith("http")) {
+    window.open(path, "_blank");
   } else {
-    router.push(path)
+    router.push(path);
   }
-}
+};
 </script>
 
 <style scoped>
 .container {
-min-height: 100vh;
-display: flex;
-flex-direction: column;
-border-radius: 5px; 
-overflow: hidden; 
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  border-radius: 5px;
+  overflow: hidden;
 }
 
 .upper-layer {
@@ -124,7 +124,7 @@ h1 {
 }
 
 .subtitle {
-  color: rgba(255,255,255,0.9);
+  color: rgba(255, 255, 255, 0.9);
   font-size: 1.1rem;
 }
 
@@ -146,7 +146,7 @@ h1 {
   padding: 20px;
   background: white;
   border-radius: 8px;
-  box-shadow: 0 2px 12px rgba(0,0,0,0.1);
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
 }
 
 .stats-title {

@@ -1,121 +1,147 @@
 <template>
   <div class="page-container">
-  <div class="header-container">
-    <!-- Return button -->
-    <router-link to="/" class="nav-button home-button">
-      <svg class="icon" viewBox="0 0 24 24">
-        <path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/>
-      </svg>
-    </router-link>
+    <div class="header-container">
+      <!-- Return button -->
+      <router-link to="/" class="nav-button home-button">
+        <svg class="icon" viewBox="0 0 24 24">
+          <path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z" />
+        </svg>
+      </router-link>
 
-    <div class="search-container">
-    <div class="search-group">
-      <!-- Input box-->
-      <input
-        v-model="searchName"
-        placeholder="Search packages..."
-        @keyup.enter="onSearch"
-        class="search-input"
-      />
-      <!-- Filter button -->
-        <div class="filter-wrapper">
-          <button class="filter-btn" @click="toggleFilter">
-            <svg class="filter-icon" viewBox="0 0 24 24">
-              <path d="M4 21h16v-2H4v2zm0-4h16v-2H4v2zm0-4h16v-2H4v2zm0-4h16V7H4v2zm0-4h16V3H4v2z"/>
-            </svg>
-          </button>
-          
-          <!-- Filter menu -->
-          <div v-show="showFilter" class="filter-panel">
-            <div 
-              v-for="label in filterOptions"
-              :key="label" 
-              class="filter-item"
-              :class="{ active: selectedErrorType === label }"
-              @click="selectFilter(label)"
-            >
-              {{ label }}
+      <div class="search-container">
+        <div class="search-group">
+          <!-- Input box-->
+          <input
+            v-model="searchName"
+            placeholder="Search packages..."
+            @keyup.enter="onSearch"
+            class="search-input"
+          />
+          <!-- Filter button -->
+          <div class="filter-wrapper">
+            <button class="filter-btn" @click="toggleFilter">
+              <svg class="filter-icon" viewBox="0 0 24 24">
+                <path
+                  d="M4 21h16v-2H4v2zm0-4h16v-2H4v2zm0-4h16v-2H4v2zm0-4h16V7H4v2zm0-4h16V3H4v2z"
+                />
+              </svg>
+            </button>
+
+            <!-- Filter menu -->
+            <div v-show="showFilter" class="filter-panel">
+              <div
+                v-for="label in filterOptions"
+                :key="label"
+                class="filter-item"
+                :class="{ active: selectedErrorType === label }"
+                @click="selectFilter(label)"
+              >
+                {{ label }}
+              </div>
             </div>
           </div>
+          <button @click="onSearch" class="search-btn">
+            <svg class="search-icon" viewBox="0 0 24 24">
+              <path
+                d="M15.5 14h-.79l-.28-.27a6.5 6.5 0 1 0-.7.7l.27.28v.79l5 5 1.5-1.5-5-5zm-6 0a4.5 4.5 0 1 1 0-9 4.5 4.5 0 0 1 0 9z"
+              />
+            </svg>
+          </button>
         </div>
-      <button @click="onSearch" class="search-btn">
-        <svg class="search-icon" viewBox="0 0 24 24">
-          <path d="M15.5 14h-.79l-.28-.27a6.5 6.5 0 1 0-.7.7l.27.28v.79l5 5 1.5-1.5-5-5zm-6 0a4.5 4.5 0 1 1 0-9 4.5 4.5 0 0 1 0 9z"/>
+      </div>
+
+      <!-- Current building list sidebar -->
+      <button class="nav-button task-button" @click="toggleSidebar">
+        <svg class="sidebar-icon" viewBox="0 0 24 24">
+          <path
+            d="M4 18h16c.55 0 1-.45 1-1s-.45-1-1-1H4c-.55 0-1 .45-1 1s.45 1 1 1zm0-5h16c.55 0 1-.45 1-1s-.45-1-1-1H4c-.55 0-1 .45-1 1s.45 1 1 1zM3 7c0 .55.45 1 1 1h16c.55 0 1-.45 1-1s-.45-1-1-1H4c-.55 0-1 .45-1 1z"
+          />
         </svg>
       </button>
-    </div>
-  </div>
-  
-    <!-- Current building list sidebar -->
-    <button class="nav-button task-button" @click="toggleSidebar">
-      <svg class="sidebar-icon" viewBox="0 0 24 24">
-        <path d="M4 18h16c.55 0 1-.45 1-1s-.45-1-1-1H4c-.55 0-1 .45-1 1s.45 1 1 1zm0-5h16c.55 0 1-.45 1-1s-.45-1-1-1H4c-.55 0-1 .45-1 1s.45 1 1 1zM3 7c0 .55.45 1 1 1h16c.55 0 1-.45 1-1s-.45-1-1-1H4c-.55 0-1 .45-1 1z"/>
-      </svg>
-    </button>
-    <div class="sidebar" :class="{ active: isSidebarOpen }">
-      <div class="sidebar-header">
-        <h3>Building Tasks</h3>
-        <button class="close-btn" @click="toggleSidebar">&times;</button>
-      </div>
-      <div class="sidebar-content">
-        <div v-if="activeTask" class="current-task">
-        Current building task: #{{activeTask.task_no}} {{ activeTask.name }} 
+      <div class="sidebar" :class="{ active: isSidebarOpen }">
+        <div class="sidebar-header">
+          <h3>Building Tasks</h3>
+          <button class="close-btn" @click="toggleSidebar">&times;</button>
         </div>
-        <div v-if="loading" class="loading">Loading...</div>
-        <div v-else-if="error" class="error">{{ error }}</div>
-        <div v-else>
-          <table class="sidebar-table">
-        <thead>
-          <tr>
-            <th>#</th>
-            <th>Name</th>
-            <th>Base</th>
-            <th>Repo</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr 
-            v-for="(task, index) in buildingTasks" 
-            :key="task.id"
-            :class="{ 'processing': task.status === 'Building' }"
-          >
-            <td>{{ index + 1 }}</td>
-            <td class="text-ellipsis">{{ task.name }}</td>
-            <td>{{ task.base }}</td>
-            <td>{{ task.repo }}</td>
-          </tr>
-        </tbody>
-      </table>
+        <div class="sidebar-content">
+          <div v-if="activeTask" class="current-task">
+            Current building task: #{{ activeTask.task_no }}
+            {{ activeTask.name }}
+          </div>
+          <div v-if="loading" class="loading">Loading...</div>
+          <div v-else-if="error" class="error">{{ error }}</div>
+          <div v-else>
+            <table class="sidebar-table">
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>Name</th>
+                  <th>Base</th>
+                  <th>Repo</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr
+                  v-for="(task, index) in buildingTasks"
+                  :key="task.id"
+                  :class="{ processing: task.status === 'Building' }"
+                >
+                  <td>{{ index + 1 }}</td>
+                  <td class="text-ellipsis">{{ task.name }}</td>
+                  <td>{{ task.base }}</td>
+                  <td>{{ task.repo }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
+      <!-- Sidebar overlay -->
+      <div
+        v-if="isSidebarOpen"
+        class="sidebar-overlay"
+        @click="toggleSidebar"
+      ></div>
     </div>
-    <!-- Sidebar overlay -->
-    <div v-if="isSidebarOpen" class="sidebar-overlay" @click="toggleSidebar"></div>
-  </div>
     <div class="main-content">
       <!-- Package data displaying table -->
-      <div class="table-container" ref="tableContainer" :class="{ 'no-data': !total }">
+      <div
+        class="table-container"
+        ref="tableContainer"
+        :class="{ 'no-data': !total }"
+      >
         <div class="flat-stats-bar">
           <div class="stat-cell">
             <span class="stat-number">{{ total }} packages found </span>
           </div>
         </div>
 
-        <div class="table-scroll-container" :style="{ maxHeight: tableHeight + 'px' }">
-          <table>      
+        <div
+          class="table-scroll-container"
+          :style="{ maxHeight: tableHeight + 'px' }"
+        >
+          <table>
             <colgroup>
-              <col v-for="(col, index) in columnWidths" 
-                   :key="index" 
-                   :style="{ width: col.width }">
+              <col
+                v-for="(col, index) in columnWidths"
+                :key="index"
+                :style="{ width: col.width }"
+              />
             </colgroup>
             <thead>
               <tr>
                 <th v-for="column in columns" :key="column">
-                  <div class="column-header"
-                       @click="column === 'Repo' ? toggleRepoFilter() : null"
-                       :class="{ 'clickable': column === 'Repo' }">
+                  <div
+                    class="column-header"
+                    @click="column === 'Repo' ? toggleRepoFilter() : null"
+                    :class="{ clickable: column === 'Repo' }"
+                  >
                     {{ column }}
-                    <span v-if="column === 'Repo'" class="repo-filter-dropdown" v-show="showRepoFilter">
+                    <span
+                      v-if="column === 'Repo'"
+                      class="repo-filter-dropdown"
+                      v-show="showRepoFilter"
+                    >
                       <ul>
                         <li @click.stop="filterRepo('')">All</li>
                         <li @click.stop="filterRepo('extra')">Extra</li>
@@ -127,7 +153,8 @@
                       [?]
                       <div class="tooltip-content">
                         <div v-for="item in legendItems" :key="item.symbol">
-                          <span :style="item.style">{{ item.symbol }}</span>: {{ item.description }}
+                          <span :style="item.style">{{ item.symbol }}</span
+                          >: {{ item.description }}
                         </div>
                       </div>
                     </span>
@@ -137,7 +164,11 @@
             </thead>
             <tbody v-if="tableData.length">
               <tr v-for="row in tableData" :key="row.id">
-                <td v-for="column in columns" :key="column" v-html="row[column]"></td>
+                <td
+                  v-for="column in columns"
+                  :key="column"
+                  v-html="row[column]"
+                ></td>
               </tr>
             </tbody>
             <tbody v-else>
@@ -154,40 +185,40 @@
 
     <!-- Page button -->
     <div class="paginator">
-      <button 
-      class="page-arrow"
-      @click="prevPage" 
-      :disabled="currentPage === 1"
-    >
-      &lt;
-    </button>
-    
-    <div class="page-input">
-      <input
-        v-model.number="currentPage"
-        type="number"
-        min="1"
-        :max="totalPages"
-        @keyup.enter="goToSpecificPage"
-      />
-      <span>of {{ totalPages }}</span>
+      <button
+        class="page-arrow"
+        @click="prevPage"
+        :disabled="currentPage === 1"
+      >
+        &lt;
+      </button>
+
+      <div class="page-input">
+        <input
+          v-model.number="currentPage"
+          type="number"
+          min="1"
+          :max="totalPages"
+          @keyup.enter="goToSpecificPage"
+        />
+        <span>of {{ totalPages }}</span>
+      </div>
+
+      <button
+        class="page-arrow"
+        @click="nextPage"
+        :disabled="currentPage >= totalPages"
+      >
+        &gt;
+      </button>
     </div>
-    
-    <button
-      class="page-arrow"
-      @click="nextPage"
-      :disabled="currentPage >= totalPages"
-    >
-      &gt;
-    </button>
-    </div>
-</div>
+  </div>
 </template>
 
 <script>
-import { useRoute } from 'vue-router';
-import { ref, computed, onMounted, onBeforeUnmount, nextTick } from 'vue';
-import axios from 'axios';
+import { useRoute } from "vue-router";
+import { ref, computed, onMounted, onBeforeUnmount, nextTick } from "vue";
+import axios from "axios";
 
 export default {
   setup() {
@@ -195,10 +226,10 @@ export default {
     const total = ref(0);
     const perPage = ref(20);
     const currentPage = ref(1);
-    const searchName = ref('')
-    const selectedErrorType = ref('')
+    const searchName = ref("");
+    const selectedErrorType = ref("");
     const showRepoFilter = ref(false);
-    const selectedRepo = ref('');
+    const selectedRepo = ref("");
     const route = useRoute();
     const showFilter = ref(false);
 
@@ -207,28 +238,36 @@ export default {
     const tableHeight = ref(600);
     const autoPageSize = ref(50);
 
-    const columns = ref(['Name', 'Base', 'Repo', 'x86 Version', 'Loong Version', 'Status']);
+    const columns = ref([
+      "Name",
+      "Base",
+      "Repo",
+      "x86 Version",
+      "Loong Version",
+      "Status",
+    ]);
     const filterOptions = ref([
-    'All failed builds',
-    'Fail to apply loong\'s patch',
-    'Unknown error before build',
-    'Fail to download source',
-    'Fail to pass the validity check',
-    'Fail to pass PGP check',
-    'Could not resolve all dependencies',
-    'Failed in prepare',
-    'Failed in build',
-    'Failed in check',
-    'Failed in package',
-    'Cannot guess build type'
+      "All failed builds",
+      "Fail to apply loong's patch",
+      "Unknown error before build",
+      "Fail to download source",
+      "Fail to pass the validity check",
+      "Fail to pass PGP check",
+      "Could not resolve all dependencies",
+      "Failed in prepare",
+      "Failed in build",
+      "Failed in check",
+      "Failed in package",
+      "Cannot guess build type",
     ]);
 
     function compareVersions(loongVersion, x86Version) {
-      if (!loongVersion || !x86Version || loongVersion === 'missing') return false;
-      const [loong_pkgver, loong_rel] = loongVersion.split('-')
-      const loong_relver = loong_rel.split('.')[0]
-      const [x86_pkgver, x86_relver] = x86Version.split('-')
-      return (loong_pkgver === x86_pkgver) && (loong_relver === x86_relver);
+      if (!loongVersion || !x86Version || loongVersion === "missing")
+        return false;
+      const [loong_pkgver, loong_rel] = loongVersion.split("-");
+      const loong_relver = loong_rel.split(".")[0];
+      const [x86_pkgver, x86_relver] = x86Version.split("-");
+      return loong_pkgver === x86_pkgver && loong_relver === x86_relver;
     }
 
     function compareAll(item) {
@@ -239,22 +278,22 @@ export default {
       let error_type = item.error_type;
       let status;
 
-      if (x86 === 'missing') {
-          status = '🗑';
-      } else if (loong ==='missing') {
-          status = '❌';
+      if (x86 === "missing") {
+        status = "🗑";
+      } else if (loong === "missing") {
+        status = "❌";
       } else if (compareVersions(loong, x86)) {
-          status = '✅';
+        status = "✅";
       } else {
-          status = '⭕';
+        status = "⭕";
       }
 
-      status += '&nbsp';
+      status += "&nbsp";
       if (item.has_log !== null) {
         // Use loong version to generate log link, we always assume the package is built succesfully
         const encodedLogname = encodeURIComponent(item.has_log);
         const logUrl = `/log?base=${item.base}&log_name=${encodedLogname}`;
-        status += `<span><a href="${logUrl}" target="_blank" style="color: gold;">🅻</a></span>`;      
+        status += `<span><a href="${logUrl}" target="_blank" style="color: gold;">🅻</a></span>`;
       } else {
         status += '<span style="color: gray;">🅻</span>';
       }
@@ -273,7 +312,7 @@ export default {
     }
 
     function mergeVersion(stable, testing, staging) {
-      let merge = stable ? stable: 'N/A';
+      let merge = stable ? stable : "N/A";
       if (testing) merge += `\n${testing}🄣`;
       if (staging) merge += `\n${staging}🄢`;
       return merge;
@@ -281,58 +320,72 @@ export default {
 
     const fetchData = async () => {
       try {
-        const response = await axios.get('/api/packages/data', {
+        const response = await axios.get("/api/packages/data", {
           params: {
             page: currentPage.value,
             per_page: perPage.value,
             name: searchName.value,
             error_type: selectedErrorType.value,
-            repo: selectedRepo.value
+            repo: selectedRepo.value,
           },
         });
         tableDataRaw.value = response.data.data;
         total.value = response.data.total;
       } catch (error) {
-        console.error('Error fetching data:', error);
+        console.error("Error fetching data:", error);
       }
     };
 
     const tableData = computed(() =>
-      tableDataRaw.value.map(item => ({
+      tableDataRaw.value.map((item) => ({
         Name: item.name,
         Base: item.base,
         Repo: item.repo,
         has_log: item.has_log,
         is_blacklisted: item.is_blacklisted,
-        'x86 Version': mergeVersion(item.x86_version, item.x86_testing_version, item.x86_staging_version),
-        'Loong Version': mergeVersion(item.loong_version, item.loong_testing_version, item.loong_staging_version),
+        "x86 Version": mergeVersion(
+          item.x86_version,
+          item.x86_testing_version,
+          item.x86_staging_version,
+        ),
+        "Loong Version": mergeVersion(
+          item.loong_version,
+          item.loong_testing_version,
+          item.loong_staging_version,
+        ),
         Status: compareAll(item),
-      }))
+      })),
     );
 
     // Auto page size calculation
     const calculateAutoPageSize = () => {
       if (tableContainer.value) {
         const containerRect = tableContainer.value.getBoundingClientRect();
-        
-        const paginator = document.querySelector('.paginator');
-        const paginatorHeight = paginator ? paginator.getBoundingClientRect().height : 60;
+
+        const paginator = document.querySelector(".paginator");
+        const paginatorHeight = paginator
+          ? paginator.getBoundingClientRect().height
+          : 60;
         const bottomMargin = 20;
-        
-        const availableHeight = window.innerHeight - containerRect.top - paginatorHeight - bottomMargin;
-        
+
+        const availableHeight =
+          window.innerHeight -
+          containerRect.top -
+          paginatorHeight -
+          bottomMargin;
+
         // Table container height
         const statsBarHeight = 43;
         tableHeight.value = Math.max(400, availableHeight - statsBarHeight);
-        
+
         const rowHeight = 45; // From CSS estimation
         const headerHeight = 50; // From CSS estimation
-        
+
         const usableHeight = tableHeight.value - headerHeight;
         const visibleRows = Math.floor(usableHeight / rowHeight);
-        
+
         autoPageSize.value = Math.max(10, Math.min(100, visibleRows));
-    }
+      }
     };
 
     // Handle page size change
@@ -363,40 +416,43 @@ export default {
     };
 
     const goToSpecificPage = () => {
-      currentPage.value = Math.max(1, Math.min(currentPage.value, totalPages.value))
+      currentPage.value = Math.max(
+        1,
+        Math.min(currentPage.value, totalPages.value),
+      );
       fetchData();
     };
 
-    const totalPages = computed(() => Math.ceil(total.value / perPage.value)) || 1;
+    const totalPages =
+      computed(() => Math.ceil(total.value / perPage.value)) || 1;
 
     // Close dropdown when clicking outside
     const handleClickOutside = (event) => {
-      const filterPanel = document.querySelector('.filter-panel');
-      const filterBtn = document.querySelector('.filter-btn');
-      const repoDropdown = document.querySelector('.repo-filter-dropdown');
-      const repoBtn = document.querySelector('.clickable'); 
+      const filterPanel = document.querySelector(".filter-panel");
+      const filterBtn = document.querySelector(".filter-btn");
+      const repoDropdown = document.querySelector(".repo-filter-dropdown");
+      const repoBtn = document.querySelector(".clickable");
 
       const clickedOutside = (box, btn) => {
-      const target = event.target;
-      // Not in the filter panel or button
-      return box && !box.contains(target) && (!btn || !btn.contains(target));
+        const target = event.target;
+        // Not in the filter panel or button
+        return box && !box.contains(target) && (!btn || !btn.contains(target));
       };
 
       if (showFilter.value && clickedOutside(filterPanel, filterBtn)) {
-      showFilter.value = false; 
-      console.log('Close filter');
+        showFilter.value = false;
+        console.log("Close filter");
       }
 
       if (showRepoFilter.value && clickedOutside(repoDropdown, repoBtn)) {
-      showRepoFilter.value = false; 
-      console.log('Close repo filter');
+        showRepoFilter.value = false;
+        console.log("Close repo filter");
       }
-      };
-
+    };
 
     onMounted(() => {
-      document.addEventListener('click', handleClickOutside);
-      window.addEventListener('resize', handleResize);
+      document.addEventListener("click", handleClickOutside);
+      window.addEventListener("resize", handleResize);
 
       searchName.value = route.query.name?.trim() || null;
       selectedErrorType.value = route.query.error_type?.trim() || null;
@@ -411,7 +467,7 @@ export default {
     });
 
     onBeforeUnmount(() => {
-      document.removeEventListener('click', handleClickOutside);
+      document.removeEventListener("click", handleClickOutside);
     });
 
     const onSearch = () => {
@@ -420,19 +476,20 @@ export default {
     };
 
     const toggleFilter = () => {
-      showFilter.value = !showFilter.value
-    }
+      showFilter.value = !showFilter.value;
+    };
 
     const toggleRepoFilter = () => {
       showRepoFilter.value = !showRepoFilter.value;
     };
 
     const selectFilter = (label) => {
-      label = label === 'All failed builds' ? 'Success' : label
-      selectedErrorType.value = selectedErrorType.value === label ? null : label
-      showFilter.value = false
-      fetchData()
-    }
+      label = label === "All failed builds" ? "Success" : label;
+      selectedErrorType.value =
+        selectedErrorType.value === label ? null : label;
+      showFilter.value = false;
+      fetchData();
+    };
 
     const filterRepo = (repo) => {
       selectedRepo.value = repo?.trim() || null;
@@ -474,29 +531,52 @@ export default {
       buildingTasks: [],
       loading: false,
       error: null,
-      activeTask:null,
+      activeTask: null,
       legendItems: [
-      { symbol: '✅', description: 'loong\'s version matches x86\'s', style: '' },
-      { symbol: '⭕', description: 'loong\'s version mis-matches', style: '' },
-      { symbol: '❌', description: 'missing this package in loong', style: '' },
-      { symbol: '🗑', description: 'missing this package in x86', style: '' },
-      { symbol: '🅿', description: 'has patch in our repo', style: 'color: lime;' },
-      { symbol: '🅻', description: 'has build log on server', style: 'color: gold;' },
-      { symbol: '🅲', description: 'build with nocheck', style: 'color: blue;' },
-      { symbol: '🅾', description: 'config.sub is too old', style: 'color: orange;' },
-      { symbol: '🅵', description: 'build fails', style: 'color: red;' },
-      { symbol: '🅱︎', description: 'in blacklist', style: 'color: black;' }
+        {
+          symbol: "✅",
+          description: "loong's version matches x86's",
+          style: "",
+        },
+        { symbol: "⭕", description: "loong's version mis-matches", style: "" },
+        {
+          symbol: "❌",
+          description: "missing this package in loong",
+          style: "",
+        },
+        { symbol: "🗑", description: "missing this package in x86", style: "" },
+        {
+          symbol: "🅿",
+          description: "has patch in our repo",
+          style: "color: lime;",
+        },
+        {
+          symbol: "🅻",
+          description: "has build log on server",
+          style: "color: gold;",
+        },
+        {
+          symbol: "🅲",
+          description: "build with nocheck",
+          style: "color: blue;",
+        },
+        {
+          symbol: "🅾",
+          description: "config.sub is too old",
+          style: "color: orange;",
+        },
+        { symbol: "🅵", description: "build fails", style: "color: red;" },
+        { symbol: "🅱︎", description: "in blacklist", style: "color: black;" },
       ],
       columnWidths: [
-          { width: '20%' },  
-          { width: '20%' },
-          { width: '5%' },
-          { width: '20%' },
-          { width: '20%' },
-          { width: '15%' }
-        ],
+        { width: "20%" },
+        { width: "20%" },
+        { width: "5%" },
+        { width: "20%" },
+        { width: "20%" },
+        { width: "15%" },
+      ],
     };
-    
   },
   methods: {
     toggleSidebar() {
@@ -509,23 +589,21 @@ export default {
       this.loading = true;
       this.error = null;
       try {
-        const response = await fetch('/api/packages/building_list');
-        if (!response.ok) throw new Error('Failed to fetch tasks');
-        
+        const response = await fetch("/api/packages/building_list");
+        if (!response.ok) throw new Error("Failed to fetch tasks");
+
         const tasks = await response.json();
         this.buildingTasks = tasks;
 
-        this.activeTask = tasks.find(task => 
-          task.status === "Building"
-        ) || null;
-
+        this.activeTask =
+          tasks.find((task) => task.status === "Building") || null;
       } catch (err) {
         this.error = err.message;
       } finally {
         this.loading = false;
       }
     },
-  }
+  },
 };
 </script>
 <style scoped>
@@ -543,20 +621,19 @@ export default {
   justify-content: space-between;
   padding: 12px 20px;
   background: #9b2d35;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
   position: relative;
-  z-index: 100; 
+  z-index: 100;
   min-height: 60px;
   gap: 20px;
   border-radius: 8px 8px 0 0;
-
 }
 
 .main-content {
   flex: 1;
   display: flex;
   flex-direction: column;
-  min-height: 0; 
+  min-height: 0;
 }
 
 .nav-button {
@@ -602,7 +679,7 @@ export default {
   align-items: stretch;
   background: #8b2830;
   border-radius: 35px;
-  box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
   transition: all 0.3s ease;
 }
 
@@ -625,7 +702,7 @@ export default {
 /* Search button */
 .search-btn {
   width: 60px;
-  height: 50px; 
+  height: 50px;
   border: none;
   background: #8b2830;
   border-radius: 0 35px 35px 0;
@@ -647,8 +724,8 @@ export default {
 }
 
 .filter-btn {
-  height: 50px; 
-  padding: 0 12px; 
+  height: 50px;
+  padding: 0 12px;
   background: #8b2830;
   border: none;
   border-radius: 4px;
@@ -676,7 +753,7 @@ export default {
   background: white;
   border: 1px solid #eee;
   border-radius: 6px;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
   margin-top: 8px;
   z-index: 1000;
   max-height: 400px;
@@ -760,7 +837,7 @@ export default {
   text-align: center;
   -moz-appearance: textfield;
   appearance: textfield;
-  
+
   &::-webkit-outer-spin-button,
   &::-webkit-inner-spin-button {
     -webkit-appearance: none;
@@ -812,9 +889,9 @@ export default {
   }
 
   .sidebar-table thead {
-    top: 60px; 
+    top: 60px;
   }
-  
+
   .sidebar-content {
     height: calc(100vh - 80px);
   }
@@ -823,7 +900,7 @@ export default {
     gap: 10px;
     padding: 15px;
   }
-  
+
   .page-arrow {
     width: 35px;
     height: 35px;
@@ -843,7 +920,7 @@ export default {
   color: #666;
   font-size: 0.8em;
   margin-left: 4px;
-  
+
   &:hover .tooltip-content {
     visibility: visible;
     opacity: 1;
@@ -862,14 +939,14 @@ export default {
   border: 1px solid var(--border-color);
   border-radius: 6px;
   padding: 12px;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
   min-width: 240px;
-  z-index: 1000; 
+  z-index: 1000;
   transition: opacity 0.2s;
   font-size: 14px;
   line-height: 1.6;
   text-align: left;
-  
+
   div {
     display: flex;
     align-items: center;
@@ -880,11 +957,11 @@ export default {
 
 .task-button {
   background: #8b2830;
-  
+
   .icon {
     fill: white;
   }
-  
+
   &:hover {
     background: #6b2024;
   }
@@ -896,10 +973,10 @@ export default {
   top: 0;
   width: 1000px;
   height: 100%;
-  min-width: 360px; 
-  max-width: 90%; 
+  min-width: 360px;
+  max-width: 90%;
   background: white;
-  box-shadow: -2px 0 5px rgba(0,0,0,0.2);
+  box-shadow: -2px 0 5px rgba(0, 0, 0, 0.2);
   transition: right 0.3s ease;
   z-index: 1001;
 }
@@ -924,7 +1001,7 @@ export default {
   left: 0;
   width: 100%;
   height: 100%;
-  background: rgba(0,0,0,0.5);
+  background: rgba(0, 0, 0, 0.5);
   z-index: 1000;
 }
 
@@ -956,9 +1033,10 @@ export default {
   min-width: 380px;
   border-collapse: collapse;
   overflow: visible;
-  display: block; 
+  display: block;
   scroll-behavior: smooth;
-  th, td {
+  th,
+  td {
     padding: 12px 16px;
     border-bottom: 1px solid var(--border-color);
     text-align: left;
@@ -981,13 +1059,13 @@ export default {
   top: 0;
   z-index: 10;
   background: var(--bg-primary);
-  box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
 }
 
 .sidebar-table tbody {
   display: block;
   overflow-y: auto;
-  max-height: calc(100vh - 160px); 
+  max-height: calc(100vh - 160px);
 }
 
 .sidebar-table thead tr,
@@ -1013,7 +1091,8 @@ export default {
   border-bottom: 1px solid #eee;
 }
 
-.loading, .error {
+.loading,
+.error {
   padding: 1rem;
   text-align: center;
 }
@@ -1040,7 +1119,7 @@ tr.processing td:first-child {
 
 /* Home button */
 .home-button .icon {
-  transform: translateX(-2px); 
+  transform: translateX(-2px);
 }
 
 .table-scroll-container {
@@ -1051,7 +1130,7 @@ tr.processing td:first-child {
 }
 
 .table-container {
-  min-height: 200px; 
+  min-height: 200px;
   border: 1px solid var(--border-color);
   border-radius: 8px;
   flex: 1;
@@ -1060,7 +1139,7 @@ tr.processing td:first-child {
 }
 
 .table-container.no-data {
-  overflow: hidden; 
+  overflow: hidden;
 }
 
 .page-size-select {
@@ -1100,7 +1179,7 @@ tr.processing td:first-child {
   flex: 0 0 auto;
   padding: 8px 16px;
   border-right: 1px #dee2e6;
-  min-width: 120px; 
+  min-width: 120px;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -1118,18 +1197,19 @@ thead {
   top: 0;
   background: var(--bg-primary);
   z-index: 2;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-} 
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+}
 
 table {
   width: 100%;
   border-collapse: collapse;
   background: white;
   position: relative;
-  padding-top: 40px; 
+  padding-top: 40px;
 }
 
-th, td {
+th,
+td {
   border: 1px solid #ddd;
   white-space: pre-line;
   word-wrap: break-word;
@@ -1139,7 +1219,7 @@ th, td {
 
 td {
   overflow: hidden;
-  text-overflow:ellipsis;
+  text-overflow: ellipsis;
 }
 
 th {
@@ -1152,25 +1232,25 @@ tr:hover {
 }
 
 .repo-filter-dropdown {
-  position: absolute; 
+  position: absolute;
   background: white;
-  top: 100%; 
+  top: 100%;
   left: 0;
   border-radius: 4px;
-  border: 1px solid #ccc; 
-  z-index: 1000; 
+  border: 1px solid #ccc;
+  z-index: 1000;
 }
 .repo-filter-dropdown ul {
-  list-style: none; 
-  padding: 0; 
-  margin: 0; 
+  list-style: none;
+  padding: 0;
+  margin: 0;
 }
 .repo-filter-dropdown li {
-  padding: 8px 12px; 
-  cursor: pointer; 
+  padding: 8px 12px;
+  cursor: pointer;
 }
 .repo-filter-dropdown li:hover {
-  background: #6b2024; 
+  background: #6b2024;
 }
 
 .clickable {

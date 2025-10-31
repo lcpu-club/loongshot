@@ -28,12 +28,20 @@
         </tr>
         <tr>
           <td>loong64</td>
-          <td class="green-text">{{ formatCount(data.core_match, data.core_total) }}</td>
+          <td class="green-text">
+            {{ formatCount(data.core_match, data.core_total) }}
+          </td>
           <td class="orange-text">{{ data.core_mismatch }}</td>
-          <td class="red-text">{{ data.core_total - data.core_mismatch - data.core_match }}</td>
-          <td class="green-text">{{ formatCount(data.extra_match, data.extra_total) }}</td>
+          <td class="red-text">
+            {{ data.core_total - data.core_mismatch - data.core_match }}
+          </td>
+          <td class="green-text">
+            {{ formatCount(data.extra_match, data.extra_total) }}
+          </td>
           <td class="orange-text">{{ data.extra_mismatch }}</td>
-          <td class="red-text">{{ data.extra_total - data.extra_mismatch - data.extra_match }}</td>
+          <td class="red-text">
+            {{ data.extra_total - data.extra_mismatch - data.extra_match }}
+          </td>
         </tr>
       </tbody>
     </table>
@@ -41,8 +49,8 @@
 </template>
 
 <script>
-import { ref, onMounted } from 'vue';
-import axios from 'axios';
+import { ref, onMounted } from "vue";
+import axios from "axios";
 
 export default {
   setup() {
@@ -65,7 +73,7 @@ export default {
     // Fetch data on mount
     onMounted(async () => {
       try {
-        const response = await axios.get('/api/packages/stat');
+        const response = await axios.get("/api/packages/stat");
         data.value = response.data;
       } catch (error) {
         console.error("Error fetching data:", error);
@@ -117,4 +125,3 @@ tbody tr:hover {
   color: green;
 }
 </style>
-

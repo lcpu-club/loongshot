@@ -8,17 +8,17 @@
 </template>
 
 <script>
-import axios from 'axios';
-import * as ansi_up from 'ansi_up';
-import DOMPurify from 'dompurify';
+import axios from "axios";
+import * as ansi_up from "ansi_up";
+import DOMPurify from "dompurify";
 
 export default {
   data() {
     return {
-      logContent: '',
-      parsedLogContent: '',
+      logContent: "",
+      parsedLogContent: "",
       loading: false,
-      error: null
+      error: null,
     };
   },
   created() {
@@ -32,30 +32,30 @@ export default {
 
       try {
         const response = await axios.get(`/api/logs`, {
-          params: { base, log_name }
+          params: { base, log_name },
         });
         this.logContent = response.data;
-        
+
         const converter = new ansi_up.AnsiUp();
-        
+
         // Add line numbers
         this.parsedLogContent = this.logContent
-          .split('\n')
+          .split("\n")
           .map((line, index) => {
             const htmlLine = converter.ansi_to_html(line);
             const safeLine = DOMPurify.sanitize(htmlLine);
             return `<span class="line-number">${index + 1}</span>  ${safeLine}`;
           })
-          .join('\n');
-        
+          .join("\n");
       } catch (err) {
         console.error("Failed to fetch log:", err);
-        this.error = "Failed to load log. Please check the URL or try again later.";
+        this.error =
+          "Failed to load log. Please check the URL or try again later.";
       } finally {
         this.loading = false;
       }
-    }
-  }
+    },
+  },
 };
 </script>
 
@@ -63,7 +63,7 @@ export default {
 .log-container {
   background-color: #282c34;
   color: #abb2bf;
-  font-family: 'Fira Code', 'Courier New', monospace; 
+  font-family: "Fira Code", "Courier New", monospace;
   padding: 1rem;
   border-radius: 6px;
 }

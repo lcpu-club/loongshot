@@ -1,5 +1,5 @@
 <script setup>
-import ShowLog from '../components/ShowLog.vue'
+import ShowLog from "../components/ShowLog.vue";
 </script>
 
 <template>

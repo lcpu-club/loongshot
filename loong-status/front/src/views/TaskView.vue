@@ -1,5 +1,5 @@
 <script setup>
-import TaskData from '../components/TaskData.vue'
+import TaskData from "../components/TaskData.vue";
 </script>
 
 <template>
