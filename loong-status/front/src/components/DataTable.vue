@@ -30,11 +30,11 @@
             <!-- Filter menu -->
             <div v-show="showFilter" class="filter-panel">
               <div
-                v-for="label in filterOptions"
+                v-for="(label, index) in filterOptions"
                 :key="label"
                 class="filter-item"
                 :class="{ active: selectedErrorType === label }"
-                @click="selectFilter(label)"
+                @click="selectFilter(index)"
               >
                 {{ label }}
               </div>
@@ -247,6 +247,7 @@ export default {
       "Status",
     ]);
     const filterOptions = ref([
+      "All packages",
       "All failed builds",
       "Fail to apply loong's patch",
       "Unknown error before build",
@@ -329,8 +330,8 @@ export default {
             repo: selectedRepo.value,
           },
         });
-        tableDataRaw.value = response.data.data;
-        total.value = response.data.total;
+        tableDataRaw.value = response.data;
+        total.value = response.data[0].total_count;
       } catch (error) {
         console.error("Error fetching data:", error);
       }
@@ -483,10 +484,8 @@ export default {
       showRepoFilter.value = !showRepoFilter.value;
     };
 
-    const selectFilter = (label) => {
-      label = label === "All failed builds" ? "Success" : label;
-      selectedErrorType.value =
-        selectedErrorType.value === label ? null : label;
+    const selectFilter = (index) => {
+      selectedErrorType.value = index;
       showFilter.value = false;
       fetchData();
     };
