@@ -223,12 +223,12 @@ export default {
       let loong = item.loong_version;
       let testing = item.loong_testing_version;
       let staging = item.loong_staging_version;
-      let error_type = item.error_type;
+      let flags = item.flags;
       let status;
 
-      if (x86 === "missing") {
+      if (!x86 && (loong || testing || staging)) {
         status = "🗑";
-      } else if (loong === "missing") {
+      } else if (!loong && !testing && !staging) {
         status = "❌";
       } else if (compareVersions(loong, x86)) {
         status = "✅";
@@ -237,25 +237,16 @@ export default {
       }
 
       status += "&nbsp";
-      if (item.has_log !== null) {
-        // Use loong version to generate log link, we always assume the package is built succesfully
-        const encodedLogname = encodeURIComponent(item.has_log);
-        const logUrl = `/log?base=${item.base}&log_name=${encodedLogname}`;
-        status += `<span><a href="${logUrl}" target="_blank" style="color: gold;">🅻</a></span>`;
-      } else {
-        status += '<span style="color: gray;">🅻</span>';
+      if (flags) {
+        if (flags & 1)
+          status += `<span><a href="https://github.com/lcpu-club/loongarch-packages/tree/master/${item.base}" style="color: lime;">🅿</a></span>`;
+        if (flags & 2) status += '<span style="color: blue;">🅲</span>';
+        if (flags & 4) status += '<span style="color: orange;">🅾</span>';
+        if (flags & 16)
+          status += `<span><a href="log.html?url=/buildlogs/${item.base}/all.log" style="color: gold;">🅻</a></span>`;
+        if (flags & (1 << 15))
+          status += `<span title="${fail_reason[flags >> (16 - 1)]}" style="cursor: pointer; color: red;">🅵</span>`;
       }
-
-      if (item.is_blacklisted === true) {
-        status += '<span style="color: black;">🅱︎</span>';
-      }
-      // if (flags) {
-      //   if (flags & 1) status += `<span><a href="https://github.com/lcpu-club/loongarch-packages/tree/master/${item.base}" style="color: lime;">🅿</a></span>`;
-      //   if (flags & 2) status += '<span style="color: blue;">🅲</span>';
-      //   if (flags & 4) status += '<span style="color: orange;">🅾</span>';
-      //   if (flags & 16) status += `<span><a href="log.html?url=/buildlogs/${item.base}/all.log" style="color: gold;">🅻</a></span>`;
-      //   if (flags & (1 << 15)) status += `<span title="${fail_reason[flags >> 16 - 1]}" style="cursor: pointer; color: red;">🅵</span>`;
-      // }
       return status;
     }
 
@@ -289,8 +280,6 @@ export default {
         Name: item.name,
         Base: item.base,
         Repo: item.repo,
-        has_log: item.has_log,
-        is_blacklisted: item.is_blacklisted,
         "x86 Version": mergeVersion(
           item.x86_version,
           item.x86_testing_version,
@@ -468,6 +457,46 @@ export default {
       showRepoFilter,
       toggleRepoFilter,
       onSearch,
+    };
+  },
+  data() {
+    return {
+      legendItems: [
+        {
+          symbol: "✅",
+          description: "loong's version matches x86's",
+          style: "",
+        },
+        { symbol: "⭕", description: "loong's version mis-matches", style: "" },
+        {
+          symbol: "❌",
+          description: "missing this package in loong",
+          style: "",
+        },
+        { symbol: "🗑", description: "missing this package in x86", style: "" },
+        {
+          symbol: "🅿",
+          description: "has patch in our repo",
+          style: "color: lime;",
+        },
+        {
+          symbol: "🅻",
+          description: "has build log on server",
+          style: "color: gold;",
+        },
+        {
+          symbol: "🅲",
+          description: "build with nocheck",
+          style: "color: blue;",
+        },
+        {
+          symbol: "🅾",
+          description: "config.sub is too old",
+          style: "color: orange;",
+        },
+        { symbol: "🅵", description: "build fails", style: "color: red;" },
+        { symbol: "🅱︎", description: "in blacklist", style: "color: black;" },
+      ],
     };
   },
 };
