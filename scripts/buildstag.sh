@@ -19,6 +19,10 @@ while [[ $# -gt 0 ]]; do
             RESUME="yes"
             shift
             ;;
+        --save)
+            SAVE="yes"
+            shift
+            ;;
         --skip) # a file of list of packages to skip
             shift
             SKIP=$1
@@ -62,8 +66,12 @@ if [[ -z "$RESUME" ]]; then
     fi
     sudo pacman -Sy
     PKG=$(timeout 20 ./genrebuild `cat today.lst` | tr ' ' ',')
+    if [[ ! -z "$SAVE" ]]; then
+        echo $PKG
+        exit 1
+    fi
     if [[ -z "$PKG" ]]; then
-            exit 1
+        exit 1
     fi
     ./dbcmd.py task --add "$PKG" $REPOSWITCH
 fi
