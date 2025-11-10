@@ -245,7 +245,7 @@ export default {
         if (flags & 16)
           status += `<span><a href="log.html?url=/buildlogs/${item.base}/all.log" style="color: gold;">🅻</a></span>`;
         if (flags & (1 << 15))
-          status += `<span title="${fail_reason[flags >> (16 - 1)]}" style="cursor: pointer; color: red;">🅵</span>`;
+          status += `<span title="${filterOptions[flags >> (16 - 1)]}" style="cursor: pointer; color: red;">🅵</span>`;
       }
       return status;
     }
