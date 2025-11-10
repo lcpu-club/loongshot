@@ -1,7 +1,7 @@
 #!/bin/bash
 PAGER=cat psql -U pguser -d archdb -c "select name from packages where x86_version is Null and x86_testing_version is Null and x86_staging_version is Null" | sed 's/^ //;s/\r$//;1,2d;$d' | sed '$d' > /tmp/missing.lst
 # don't remove the pacakges uniqe to loong
-sed -i '/loong/d;/x86_64-linux/d;/lcpu/d;/yt6801/d' /tmp/missing.lst
+sed -i '/loong/d;/x86_64-linux/d;/lcpu/d;/yt6801/d;/linux-4k/d;/edk2-loongarch/d;' /tmp/missing.lst
 
 BACKUP=$(mktemp -d)
 REPODIR=/srv/http/loongarch/archlinux
