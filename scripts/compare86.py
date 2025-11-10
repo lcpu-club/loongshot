@@ -259,7 +259,7 @@ def compare_repos(x86_db, loong64_db, showtime, show_newer=False, repo='missing'
                 loong64_version=f'{loong64_version}',
                 repo=repo
             )
-        pkglist.append(p)
+            pkglist.append(p)
 
 
 # compare one package
