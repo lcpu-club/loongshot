@@ -172,8 +172,8 @@ class DatabaseManager:
                     maxid = 0
 
             if insert:
-                cursor.execute("UPDATE tasks SET taskno=taskno+%s WHERE tasklist=%s and info is NULL",
-                               (len(pkgbase_list), tasklist))
+                cursor.execute("UPDATE tasks SET taskno=taskno+%s WHERE tasklist=%s and taskno>=%s",
+                               (len(pkgbase_list), tasklist, first))
             else:
                 first = last + 1
             rows = [(i+first, pkgbase, maxid + 1, tasklist, repo) for i, pkgbase in enumerate(pkgbase_list)]
@@ -213,8 +213,8 @@ class DatabaseManager:
                 else:
                     done = "nolog"
                     logid = 0
-                cursor.execute("UPDATE tasks SET info=%s,logid=%s WHERE pkgbase=%s and tasklist=%s",
-                    (done, logid, pkgbase, tasklist))
+                cursor.execute("UPDATE tasks SET info=%s,logid=%s WHERE pkgbase=%s and tasklist=%s and info=%s",
+                    (done, logid, pkgbase, tasklist, "building"))
             self.conn.commit()
         finally:
             cursor.close()
@@ -278,8 +278,8 @@ class DatabaseManager:
                 taskno = result[0]
                 pkgbase = result[1]
                 if building and not pkgbase.startswith('%'):
-                    cursor.execute("UPDATE tasks SET info=%s WHERE tasklist=%s and taskno=%s",
-                                   ("building", tasklist, taskno))
+                    cursor.execute("UPDATE tasks SET info=%s WHERE tasklist=%s and taskno=%s and pkgbase=%s",
+                                   ("building", tasklist, taskno, pkgbase))
                     self.conn.commit()
                 return pkgbase
             else: # Delete the tasks when all done.
