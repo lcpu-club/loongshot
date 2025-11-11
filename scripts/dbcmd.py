@@ -204,6 +204,8 @@ class DatabaseManager:
                     flags = results[0]
                 else:
                     flags = 0
+                if flags is None:
+                    flags = 0
                 done = f"failed:{flags >> 16}" if flags > 32767 else "done"
                 # get build log it from logs database
                 cursor.execute("SELECT id FROM logs WHERE pkgbase=%s AND build_time > NOW() - INTERVAL '1 hour' ORDER BY build_time DESC limit 1", (realbase,))
