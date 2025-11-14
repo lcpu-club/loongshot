@@ -122,7 +122,7 @@ class DatabaseManager:
         finally:
             cursor.close()  # Close the cursor but keep the connection open
 
-    def insert_task(self, pkgs, tasklist, repo, insert=False):
+    def insert_task(self, pkgs, tasklist, repo, insert=False, taskno=0):
         """Insert packages by list of pkgbase."""
 
         cursor = self.conn.cursor()
@@ -170,7 +170,8 @@ class DatabaseManager:
                     maxid = result[0]
                 if maxid is None:
                     maxid = 0
-
+            if taskno > first:
+                first = taskno
             if insert:
                 cursor.execute("UPDATE tasks SET taskno=taskno+%s WHERE tasklist=%s and taskno>=%s",
                                (len(pkgbase_list), tasklist, first))
@@ -186,15 +187,18 @@ class DatabaseManager:
         finally:
             cursor.close()
 
-    def remove_task(self, pkgbase, tasklist, remove=False):
+    def remove_task(self, pkgbase, tasklist, remove=False, taskno=0):
         """Removes or done one task from the task list."""
         cursor = self.conn.cursor()
         try:
             if remove or pkgbase.startswith('%'): # commands just delete
-                cursor.execute("DELETE FROM tasks WHERE pkgbase=%s and tasklist=%s",
+                if taskno == 0:
+                    cursor.execute("DELETE FROM tasks WHERE pkgbase=%s and tasklist=%s",
                                (pkgbase, tasklist))
-                if cursor.rowcount == 0:
-                    print("No package deleted")
+                else:
+                    cursor.execute("DELETE FROM tasks WHERE pkgbase=%s and tasklist=%s and taskno=%s",
+                               (pkgbase, tasklist, taskno))
+                print(f"{cursor.rowcount} task(s) deleted")
             else:
                 # get build result from packages database
                 realbase = pkgbase.split(':')[0]
@@ -225,7 +229,7 @@ class DatabaseManager:
         """Show the task list."""
         cursor = self.conn.cursor()
         try:
-            select_query = "SELECT pkgbase,info FROM tasks WHERE tasklist=%s ORDER BY taskno ASC";
+            select_query = "SELECT pkgbase,info,taskno FROM tasks WHERE tasklist=%s ORDER BY taskno ASC";
             cursor.execute(select_query, (tasklist,))
             results = cursor.fetchall()
             for row in results:
@@ -234,7 +238,7 @@ class DatabaseManager:
                     info = "command"
                 if info.startswith("failed:"):
                     info = f"failed: {error_type[int(info.split(':')[1])]}"
-                print(f"{row[0]:34} {info}")
+                print(f"{row[2]:4} {row[0]:34} {info}")
         except Exception as e:
             print(f"An error occurred: {e}")
         finally:
@@ -353,6 +357,7 @@ def parse_args():
     task_parser.add_argument("--hist", type=int, help="Show list history", default=-1)
     task_parser.add_argument("--stag", action="store_true", help="Add tasks from staging repo")
     task_parser.add_argument("--test", action="store_true", help="Add tasks from testing repo")
+    task_parser.add_argument("--taskno", type=int, help="Taskno to operate on", default=0)
     return parser, parser.parse_args()
 
 def main():
@@ -410,11 +415,11 @@ def main():
         if args.add:
             db_manager.insert_task(args.add, args.list, repo)
         if args.insert:
-            db_manager.insert_task(args.insert, args.list, repo, True)
+            db_manager.insert_task(args.insert, args.list, repo, True, args.taskno)
         if args.get:
             print(db_manager.get_task(args.list, args.build))
         if args.remove:
-            db_manager.remove_task(args.remove, args.list, True)
+            db_manager.remove_task(args.remove, args.list, True, args.taskno)
         if args.done:
             db_manager.remove_task(args.done, args.list)
         if args.show:
