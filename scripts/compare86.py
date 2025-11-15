@@ -6,6 +6,7 @@ import os
 import psycopg2
 import pyalpm
 import requests
+import sys
 from collections import deque
 from datetime import datetime
 from pathlib import Path
@@ -47,7 +48,7 @@ def download_file(source, dest):
         with open(dest, 'wb') as out_file:
             out_file.write(response.content)
     except Exception as e:
-        print(f"Error downloading file: {e}")
+        print(f"Error downloading file: {e}", file=sys.stderr)
 
 
 # cache all package buildtime
@@ -73,7 +74,7 @@ def load_repo(repo_path, repo):
         db = handle.register_syncdb(repo, 0)
         return db
     except pyalpm.error as e:
-        print(f"Failed to load repo {repo_path}: {e}")
+        print(f"Failed to load repo {repo_path}: {e}", file=sys.stderr)
         return None
 
 
@@ -303,7 +304,7 @@ def write_to_json(data, file):
             f.write('\n')
 
     except (IOError, json.JSONDecodeError) as e:
-        print(f"Failed to save: {str(e)}")
+        print(f"Failed to save: {str(e)}", file=sys.stderr)
         raise
 
 
@@ -344,7 +345,7 @@ def write_to_database(data):
         conn.commit()
     except Exception as e:
         conn.rollback()
-        print(f"Failed to write to database: {str(e)}")
+        print(f"Failed to write to database: {str(e)}", file=sys.stderr)
         raise
     finally:
         conn.close()
