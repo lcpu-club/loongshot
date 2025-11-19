@@ -126,7 +126,7 @@ class DatabaseManager:
         """Insert packages by list of pkgbase."""
 
         cursor = self.conn.cursor()
-        pkgbase_list = pkgs.split(',')
+        pkgbase_list = [pkg for pkg in pkgs.split(',') if pkg]
         # Prepare data to insert
 
         try:
