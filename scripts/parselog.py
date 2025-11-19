@@ -60,6 +60,7 @@ class DatabaseManager:
 
     def update_bits(self, base, add_bits=0, remove_bits=0):
         """Update the bitmask in the database for the specified base."""
+        global timecost
         cursor = self.conn.cursor()
 
         try:
@@ -69,6 +70,13 @@ class DatabaseManager:
 
             if result:
                 current_flags = result[0]
+                cursor.execute("SELECT time_scale FROM builder WHERE name=%s",(builder,))
+                result2 = cursor.fetchone()
+                if result2:
+                    scale = result2[0]
+                    if scale is None:
+                        scale = 1.0
+                    timecost = timecost * scale
                 # Update the flags
                 new_flags = current_flags & ~remove_bits
                 new_flags |= add_bits
@@ -172,7 +180,7 @@ def parse_build_log(log_path):
         match = re.search(r'[built|failed] on (\w+), time cost: (\d+)', line)
         if match:
             builder = match.group(1)
-            timecost = match.group(2)
+            timecost = int(match.group(2))
         return flags, fail_stage
 
     except FileNotFoundError:

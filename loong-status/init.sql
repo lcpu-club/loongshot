@@ -34,3 +34,12 @@ CREATE TABLE IF NOT EXISTS tasks (
     logid INTEGER
 );
 
+CREATE TABLE IF NOT EXISTS builder (
+    id INTEGER PRIMARY KEY,
+    name TEXT NOT NULL,
+    cpu TEXT,
+    ram INTEGER,
+    storage INTEGER,
+    ip TEXT,
+    time_scale REAL DEFAULT 1.0
+);
