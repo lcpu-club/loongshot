@@ -4,7 +4,7 @@
 # by sogrep to find the soname dependency.
 
 target="/srv/http/loongarch/archlinux"
-repos=('core' 'extra' 'core-testing' 'extra-testing')
+repos=('core' 'extra' 'core-testing' 'extra-testing' 'core-staging' 'extra-staging')
 arches=('loong64')
 lock='/tmp/links.lck'
 tmp="$(mktemp -d)"
@@ -38,6 +38,9 @@ for repo in ${repos[@]}; do
 		# create file lists
 		for pkg in $(find $target/$repodir -xtype f -name "*-${arch}.pkg.tar.*" ! -name "*.sig"); do
 			pkgname=$(getpkgname $pkg)
+			if [[ "$pkgname" == linux-* ]]; then
+				continue
+			fi
 			tmppkgdir=${tmp}/tmp/${repodir}/${pkgname}
 			mkdir -p $tmppkgdir
  			if [ -f "${tmp}/cache/${repodir}/${pkgname}/links" ]; then
