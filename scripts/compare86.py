@@ -382,8 +382,9 @@ def main():
 
     args = parser.parse_args()
 
-    mirror_x86 = "https://mirrors.pku.edu.cn/archlinux/"
-    mirror_loong64 = "https://loongarchlinux.lcpu.dev/loongarch/archlinux/"
+    config = dbinit.load_config()
+    mirror_x86 = config['mirrors']['x86']
+    mirror_loong64 = config['mirrors']['loong64']
 
     if args.mirror_x86:
         mirror_x86 = args.mirror_x86

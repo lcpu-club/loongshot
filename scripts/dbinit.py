@@ -15,7 +15,9 @@ class PackageMetadata(BaseModel):
     loong64_version: str = "missing"
     repo: str = "missing"
 
-def load_config(config_file):
+def load_config(config_file=None):
+    if config_file is None:
+        config_file = os.path.join(os.path.expanduser('~'), '.dbconfig.json')
     try:
         with open(config_file, 'r') as f:
             return json.load(f)
@@ -23,8 +25,8 @@ def load_config(config_file):
         print(f"Error loading configuration file: {e}")
         raise
 
-def get_conn(config="database.json"):
-    config = load_config(config)
+def get_conn(config_file=None):
+    config = load_config(config_file)
 
     conn = psycopg2.connect(
         dbname=config['database']['name'],
