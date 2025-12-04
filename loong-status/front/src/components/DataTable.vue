@@ -30,11 +30,11 @@
             <!-- Filter menu -->
             <div v-show="showFilter" class="filter-panel">
               <div
-                v-for="label in filterOptions"
+                v-for="(label, index) in filterOptions"
                 :key="label"
                 class="filter-item"
                 :class="{ active: selectedErrorType === label }"
-                @click="selectFilter(label)"
+                @click="selectFilter(index)"
               >
                 {{ label }}
               </div>
@@ -49,59 +49,6 @@
           </button>
         </div>
       </div>
-
-      <!-- Current building list sidebar -->
-      <button class="nav-button task-button" @click="toggleSidebar">
-        <svg class="sidebar-icon" viewBox="0 0 24 24">
-          <path
-            d="M4 18h16c.55 0 1-.45 1-1s-.45-1-1-1H4c-.55 0-1 .45-1 1s.45 1 1 1zm0-5h16c.55 0 1-.45 1-1s-.45-1-1-1H4c-.55 0-1 .45-1 1s.45 1 1 1zM3 7c0 .55.45 1 1 1h16c.55 0 1-.45 1-1s-.45-1-1-1H4c-.55 0-1 .45-1 1z"
-          />
-        </svg>
-      </button>
-      <div class="sidebar" :class="{ active: isSidebarOpen }">
-        <div class="sidebar-header">
-          <h3>Building Tasks</h3>
-          <button class="close-btn" @click="toggleSidebar">&times;</button>
-        </div>
-        <div class="sidebar-content">
-          <div v-if="activeTask" class="current-task">
-            Current building task: #{{ activeTask.task_no }}
-            {{ activeTask.name }}
-          </div>
-          <div v-if="loading" class="loading">Loading...</div>
-          <div v-else-if="error" class="error">{{ error }}</div>
-          <div v-else>
-            <table class="sidebar-table">
-              <thead>
-                <tr>
-                  <th>#</th>
-                  <th>Name</th>
-                  <th>Base</th>
-                  <th>Repo</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr
-                  v-for="(task, index) in buildingTasks"
-                  :key="task.id"
-                  :class="{ processing: task.status === 'Building' }"
-                >
-                  <td>{{ index + 1 }}</td>
-                  <td class="text-ellipsis">{{ task.name }}</td>
-                  <td>{{ task.base }}</td>
-                  <td>{{ task.repo }}</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </div>
-      <!-- Sidebar overlay -->
-      <div
-        v-if="isSidebarOpen"
-        class="sidebar-overlay"
-        @click="toggleSidebar"
-      ></div>
     </div>
     <div class="main-content">
       <!-- Package data displaying table -->
@@ -247,6 +194,7 @@ export default {
       "Status",
     ]);
     const filterOptions = ref([
+      "All packages",
       "All failed builds",
       "Fail to apply loong's patch",
       "Unknown error before build",
@@ -275,12 +223,12 @@ export default {
       let loong = item.loong_version;
       let testing = item.loong_testing_version;
       let staging = item.loong_staging_version;
-      let error_type = item.error_type;
+      let flags = item.flags;
       let status;
 
-      if (x86 === "missing") {
+      if (!x86 && (loong || testing || staging)) {
         status = "🗑";
-      } else if (loong === "missing") {
+      } else if (!loong && !testing && !staging) {
         status = "❌";
       } else if (compareVersions(loong, x86)) {
         status = "✅";
@@ -289,25 +237,16 @@ export default {
       }
 
       status += "&nbsp";
-      if (item.has_log !== null) {
-        // Use loong version to generate log link, we always assume the package is built succesfully
-        const encodedLogname = encodeURIComponent(item.has_log);
-        const logUrl = `/log?base=${item.base}&log_name=${encodedLogname}`;
-        status += `<span><a href="${logUrl}" target="_blank" style="color: gold;">🅻</a></span>`;
-      } else {
-        status += '<span style="color: gray;">🅻</span>';
+      if (flags) {
+        if (flags & 1)
+          status += `<span><a href="https://github.com/lcpu-club/loongarch-packages/tree/master/${item.base}" style="color: lime;">🅿</a></span>`;
+        if (flags & 2) status += '<span style="color: blue;">🅲</span>';
+        if (flags & 4) status += '<span style="color: orange;">🅾</span>';
+        if (flags & 16)
+          status += `<span><a href="log.html?url=/buildlogs/${item.base}/all.log" style="color: gold;">🅻</a></span>`;
+        if (flags & (1 << 15))
+          status += `<span title="${filterOptions[flags >> (16 - 1)]}" style="cursor: pointer; color: red;">🅵</span>`;
       }
-
-      if (item.is_blacklisted === true) {
-        status += '<span style="color: black;">🅱︎</span>';
-      }
-      // if (flags) {
-      //   if (flags & 1) status += `<span><a href="https://github.com/lcpu-club/loongarch-packages/tree/master/${item.base}" style="color: lime;">🅿</a></span>`;
-      //   if (flags & 2) status += '<span style="color: blue;">🅲</span>';
-      //   if (flags & 4) status += '<span style="color: orange;">🅾</span>';
-      //   if (flags & 16) status += `<span><a href="log.html?url=/buildlogs/${item.base}/all.log" style="color: gold;">🅻</a></span>`;
-      //   if (flags & (1 << 15)) status += `<span title="${fail_reason[flags >> 16 - 1]}" style="cursor: pointer; color: red;">🅵</span>`;
-      // }
       return status;
     }
 
@@ -329,8 +268,8 @@ export default {
             repo: selectedRepo.value,
           },
         });
-        tableDataRaw.value = response.data.data;
-        total.value = response.data.total;
+        tableDataRaw.value = response.data;
+        total.value = response.data[0].total_count;
       } catch (error) {
         console.error("Error fetching data:", error);
       }
@@ -341,8 +280,6 @@ export default {
         Name: item.name,
         Base: item.base,
         Repo: item.repo,
-        has_log: item.has_log,
-        is_blacklisted: item.is_blacklisted,
         "x86 Version": mergeVersion(
           item.x86_version,
           item.x86_testing_version,
@@ -483,10 +420,8 @@ export default {
       showRepoFilter.value = !showRepoFilter.value;
     };
 
-    const selectFilter = (label) => {
-      label = label === "All failed builds" ? "Success" : label;
-      selectedErrorType.value =
-        selectedErrorType.value === label ? null : label;
+    const selectFilter = (index) => {
+      selectedErrorType.value = index;
       showFilter.value = false;
       fetchData();
     };
@@ -526,12 +461,6 @@ export default {
   },
   data() {
     return {
-      windowHeight: 0,
-      isSidebarOpen: false,
-      buildingTasks: [],
-      loading: false,
-      error: null,
-      activeTask: null,
       legendItems: [
         {
           symbol: "✅",
@@ -568,41 +497,7 @@ export default {
         { symbol: "🅵", description: "build fails", style: "color: red;" },
         { symbol: "🅱︎", description: "in blacklist", style: "color: black;" },
       ],
-      columnWidths: [
-        { width: "20%" },
-        { width: "20%" },
-        { width: "5%" },
-        { width: "20%" },
-        { width: "20%" },
-        { width: "15%" },
-      ],
     };
-  },
-  methods: {
-    toggleSidebar() {
-      this.isSidebarOpen = !this.isSidebarOpen;
-      if (this.isSidebarOpen) {
-        this.fetchBuildingTasks();
-      }
-    },
-    async fetchBuildingTasks() {
-      this.loading = true;
-      this.error = null;
-      try {
-        const response = await fetch("/api/packages/building_list");
-        if (!response.ok) throw new Error("Failed to fetch tasks");
-
-        const tasks = await response.json();
-        this.buildingTasks = tasks;
-
-        this.activeTask =
-          tasks.find((task) => task.status === "Building") || null;
-      } catch (err) {
-        this.error = err.message;
-      } finally {
-        this.loading = false;
-      }
-    },
   },
 };
 </script>
@@ -611,6 +506,7 @@ export default {
   display: flex;
   flex-direction: column;
   height: 100vh;
+  background-color: var(--color-background);
 }
 
 .header-container {
@@ -634,6 +530,7 @@ export default {
   display: flex;
   flex-direction: column;
   min-height: 0;
+  padding: 20px; /* Added padding for better spacing */
 }
 
 .nav-button {
@@ -650,7 +547,9 @@ export default {
   justify-content: center;
 }
 
-.nav-button:hover {
+.nav-button:hover,
+.search-btn:hover,
+.filter-btn:hover {
   background: #6b2024;
 }
 
@@ -659,30 +558,17 @@ export default {
   height: 24px;
   fill: white;
 }
-
-.home-button .icon {
-  transform: translateX(-2px);
-}
-
-/* Search box */
 .search-container {
-  position: static;
-  /* left: 50%;
-  top: 50%; */
-  transform: none;
   width: 50%;
   min-width: 400px;
 }
-
 .search-group {
   display: flex;
   align-items: stretch;
   background: #8b2830;
   border-radius: 35px;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
-  transition: all 0.3s ease;
 }
-
 .search-input {
   flex: 1;
   height: 50px;
@@ -690,105 +576,136 @@ export default {
   border: none;
   background: transparent;
   font-size: 16px;
-  border-radius: 35px 0 0 35px;
   color: white;
 }
-
+.search-input::placeholder {
+  color: rgba(255, 255, 255, 0.7);
+}
 .search-input:focus {
   outline: none;
-  box-shadow: none;
 }
-
-/* Search button */
-.search-btn {
-  width: 60px;
-  height: 50px;
+.search-btn,
+.filter-btn {
   border: none;
-  background: #8b2830;
-  border-radius: 0 35px 35px 0;
   cursor: pointer;
-  transition: all 0.3s ease;
+  background: #8b2830;
   display: flex;
   align-items: center;
   justify-content: center;
 }
-
-.search-btn:hover {
-  background: #6b2024;
+.search-btn {
+  width: 60px;
+  height: 50px;
+  border-radius: 0 35px 35px 0;
 }
-
-/* Filter */
-.filter-wrapper {
-  position: relative;
-  display: inline-block;
-}
-
 .filter-btn {
   height: 50px;
   padding: 0 12px;
-  background: #8b2830;
-  border: none;
-  border-radius: 4px;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  transition: all 0.2s;
 }
-
-.filter-btn:hover {
-  background: #6b2024;
-}
-
+.search-icon,
 .filter-icon {
-  width: 18px;
-  height: 18px;
-  fill: #666;
+  fill: white;
+  width: 20px;
+  height: 20px;
+}
+.filter-wrapper {
+  position: relative;
+}
+
+/* === POP-UP PANELS === */
+.filter-panel,
+.tooltip-content,
+.repo-filter-dropdown {
+  position: absolute;
+  background-color: var(--color-background);
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  z-index: 1000;
+  transition:
+    opacity 0.2s,
+    background-color 0.3s,
+    border-color 0.3s;
 }
 
 .filter-panel {
-  position: absolute;
   top: 100%;
   right: 0;
   width: 240px;
-  background: white;
-  border: 1px solid #eee;
-  border-radius: 6px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
   margin-top: 8px;
-  z-index: 1000;
-  max-height: 400px;
-  overflow-y: auto;
 }
-
 .filter-item {
   padding: 10px 16px;
   cursor: pointer;
-  transition: all 0.2s;
-  border-bottom: 1px solid #f8f9fa;
+  border-bottom: 1px solid var(--color-border);
 }
-
+.filter-item:last-child {
+  border-bottom: none;
+}
 .filter-item:hover {
-  background: #f5e4e5;
+  background-color: var(--color-background-mute);
 }
-
 .filter-item.active {
-  background: #e3f2fd;
-  color: #6b2024;
+  background: #9b2d35;
+  color: white;
   font-weight: 500;
 }
 
-.search-icon {
-  width: 22px;
-  height: 22px;
-  fill: white;
+/* === STATS BAR === */
+.flat-stats-bar {
+  display: flex;
+  align-items: center;
+  background-color: var(--color-background-soft);
+  border: 1px solid var(--color-border);
+  border-bottom: none;
+  border-radius: 8px 8px 0 0;
+  padding: 8px 16px;
+}
+.stat-number {
+  font-weight: 600;
+  color: var(--color-text);
 }
 
-.filter-icon {
-  width: 20px;
-  height: 20px;
-  fill: white;
+/* === TABLE === */
+.table-scroll-container {
+  overflow: auto;
+  border: 1px solid var(--color-border);
+  border-radius: 0 0 8px 8px;
+}
+table {
+  width: 100%;
+  border-collapse: collapse;
+}
+th,
+td {
+  padding: 12px 15px; /* Increased padding */
+  text-align: left;
+  border-bottom: 1px solid var(--color-border);
+  white-space: nowrap;
+}
+thead {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+}
+th {
+  background-color: var(--color-background-soft);
+  color: var(--color-heading);
+  font-weight: 600;
+}
+tr:hover {
+  background-color: var(--color-background-mute);
+}
+.empty-row td {
+  height: 150px;
+  text-align: center;
+}
+.empty-message {
+  color: var(--color-text);
+  opacity: 0.7;
 }
 
+/* === PAGINATOR === */
 .paginator {
   flex-shrink: 0;
   display: flex;
@@ -796,58 +713,90 @@ export default {
   align-items: center;
   gap: 15px;
   padding: 20px;
-  margin-top: 20px;
-  background: var(--bg-primary);
-  border-top: 1px solid var(--border-color);
+  border-top: 1px solid var(--color-border);
 }
-
 .page-arrow {
   width: 40px;
   height: 40px;
-  border: 1px solid #ddd;
+  border: 1px solid var(--color-border);
   border-radius: 8px;
-  background: white;
+  background-color: var(--color-background-soft);
+  color: var(--color-text);
   cursor: pointer;
   font-weight: bold;
   transition: all 0.2s;
 }
-
 .page-arrow:hover:not(:disabled) {
-  border-color: #6b2024;
-  color: #6b2024;
+  border-color: var(--color-border-hover);
+  background-color: var(--color-background-mute);
 }
-
 .page-arrow:disabled {
   opacity: 0.5;
   cursor: not-allowed;
 }
-
-.page-input {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
 .page-input input {
   width: 60px;
   height: 40px;
   padding: 0 10px;
-  border: 1px solid #ddd;
+  border: 1px solid var(--color-border);
   border-radius: 8px;
   text-align: center;
+  background-color: var(--color-background);
+  color: var(--color-text);
   -moz-appearance: textfield;
-  appearance: textfield;
-
-  &::-webkit-outer-spin-button,
-  &::-webkit-inner-spin-button {
-    -webkit-appearance: none;
-    margin: 0;
-  }
+}
+.page-input span {
+  color: var(--color-text);
+  opacity: 0.7;
+  font-size: 0.9em;
+  margin-left: 8px;
 }
 
-.page-input span {
-  color: #666;
-  font-size: 0.9em;
+/* === TOOLTIP & DROPDOWN === */
+.help-tooltip {
+  cursor: help;
+  position: relative;
+}
+.help-tooltip:hover .tooltip-content {
+  visibility: visible;
+  opacity: 1;
+}
+.tooltip-content {
+  visibility: hidden;
+  opacity: 0;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%) translateY(8px);
+  padding: 12px;
+  min-width: 240px;
+}
+.column-header.clickable {
+  cursor: pointer;
+}
+.repo-filter-dropdown {
+  top: 100%;
+  left: 0;
+}
+.repo-filter-dropdown ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.repo-filter-dropdown li {
+  padding: 8px 12px;
+  cursor: pointer;
+}
+.repo-filter-dropdown li:hover {
+  background-color: var(--color-background-mute);
+}
+
+/* Dark mode specific tweaks for shadows that look better */
+@media (prefers-color-scheme: dark) {
+  .filter-panel,
+  .tooltip-content,
+  .repo-filter-dropdown {
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+  }
 }
 
 @media (max-width: 768px) {
@@ -859,7 +808,6 @@ export default {
   .search-container {
     width: 60%;
     min-width: 300px;
-    top: 8px;
   }
 
   .search-group {
@@ -879,21 +827,11 @@ export default {
   .tooltip-content {
     min-width: 200px;
     font-size: 0.9em;
-    left: 50%;
-    transform: translateX(-50%);
   }
 
   .nav-button {
     width: 36px;
     height: 36px;
-  }
-
-  .sidebar-table thead {
-    top: 60px;
-  }
-
-  .sidebar-content {
-    height: calc(100vh - 80px);
   }
 
   .paginator {
@@ -905,366 +843,5 @@ export default {
     width: 35px;
     height: 35px;
   }
-}
-
-.column-header {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-}
-
-.help-tooltip {
-  cursor: help;
-  position: relative;
-  color: #666;
-  font-size: 0.8em;
-  margin-left: 4px;
-
-  &:hover .tooltip-content {
-    visibility: visible;
-    opacity: 1;
-  }
-}
-
-.tooltip-content {
-  visibility: hidden;
-  opacity: 0;
-  position: absolute;
-  top: 100%;
-  bottom: auto;
-  left: 50%;
-  transform: translateX(-50%) translateY(8px);
-  background: var(--bg-primary);
-  border: 1px solid var(--border-color);
-  border-radius: 6px;
-  padding: 12px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-  min-width: 240px;
-  z-index: 1000;
-  transition: opacity 0.2s;
-  font-size: 14px;
-  line-height: 1.6;
-  text-align: left;
-
-  div {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    margin: 4px 0;
-  }
-}
-
-.task-button {
-  background: #8b2830;
-
-  .icon {
-    fill: white;
-  }
-
-  &:hover {
-    background: #6b2024;
-  }
-}
-
-.sidebar {
-  position: fixed;
-  right: -1000px;
-  top: 0;
-  width: 1000px;
-  height: 100%;
-  min-width: 360px;
-  max-width: 90%;
-  background: white;
-  box-shadow: -2px 0 5px rgba(0, 0, 0, 0.2);
-  transition: right 0.3s ease;
-  z-index: 1001;
-}
-
-.sidebar:hover {
-  background: #e9ecef;
-}
-
-.sidebar-icon {
-  width: 24px;
-  height: 24px;
-  fill: white;
-}
-
-.sidebar.active {
-  right: 0;
-}
-
-.sidebar-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background: rgba(0, 0, 0, 0.5);
-  z-index: 1000;
-}
-
-.sidebar-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 1rem;
-  border-bottom: 1px solid #ddd;
-}
-
-.close-btn {
-  background: none;
-  border: none;
-  font-size: 1.5rem;
-  cursor: pointer;
-}
-
-.sidebar-content {
-  padding: 1rem;
-  height: calc(100% - 60px);
-  overflow-y: hidden;
-}
-
-.sidebar-table {
-  width: 100%;
-  height: 100%;
-  table-layout: auto;
-  min-width: 380px;
-  border-collapse: collapse;
-  overflow: visible;
-  display: block;
-  scroll-behavior: smooth;
-  th,
-  td {
-    padding: 12px 16px;
-    border-bottom: 1px solid var(--border-color);
-    text-align: left;
-  }
-
-  th {
-    font-weight: 500;
-    background: var(--bg-secondary);
-  }
-
-  tr:hover {
-    background: rgba(var(--accent-color-rgb), 0.05);
-  }
-}
-
-.sidebar-table thead {
-  display: table;
-  width: 100%;
-  position: sticky;
-  top: 0;
-  z-index: 10;
-  background: var(--bg-primary);
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
-}
-
-.sidebar-table tbody {
-  display: block;
-  overflow-y: auto;
-  max-height: calc(100vh - 160px);
-}
-
-.sidebar-table thead tr,
-.sidebar-table tbody tr {
-  display: table;
-  width: 100%;
-  table-layout: fixed;
-}
-
-.sidebar-table::-webkit-scrollbar {
-  height: 6px;
-  width: 6px;
-}
-
-.sidebar-table::-webkit-scrollbar-thumb {
-  background: var(--border-color);
-  border-radius: 3px;
-}
-
-.task-item {
-  padding: 0.5rem;
-  margin-bottom: 0.5rem;
-  border-bottom: 1px solid #eee;
-}
-
-.loading,
-.error {
-  padding: 1rem;
-  text-align: center;
-}
-
-.current-task {
-  font-size: 0.9em;
-  color: #666;
-  padding: 8px 12px;
-  background: #f5f5f5;
-  border-radius: 4px;
-  margin-bottom: 12px;
-}
-
-tr.processing {
-  background-color: #f5e4e5 !important;
-  border-left: 3px solid #9b2d35;
-  position: relative;
-}
-
-tr.processing td:first-child {
-  font-weight: 600;
-  color: #9b2d35;
-}
-
-/* Home button */
-.home-button .icon {
-  transform: translateX(-2px);
-}
-
-.table-scroll-container {
-  overflow-y: auto;
-  overflow-x: auto;
-  border: 1px solid var(--border-color);
-  border-radius: 8px;
-}
-
-.table-container {
-  min-height: 200px;
-  border: 1px solid var(--border-color);
-  border-radius: 8px;
-  flex: 1;
-  overflow: hidden;
-  position: relative;
-}
-
-.table-container.no-data {
-  overflow: hidden;
-}
-
-.page-size-select {
-  padding: 2px 8px;
-  border: 1px solid #ddd;
-  border-radius: 4px;
-  background: white;
-  cursor: pointer;
-  font-size: 0.9em;
-  margin-left: 8px;
-}
-
-.empty-row td {
-  height: 150px;
-  vertical-align: middle;
-  text-align: center;
-}
-
-.empty-message {
-  color: var(--text-secondary);
-  font-size: 0.95em;
-}
-
-.flat-stats-bar {
-  display: flex;
-  align-items: center;
-  background: #f8f9fa;
-  border-bottom: 1px solid #dee2e6;
-  margin-bottom: -1px;
-  width: 100%;
-  min-height: 42px;
-  overflow-x: auto;
-  flex-shrink: 0;
-}
-
-.stat-cell {
-  flex: 0 0 auto;
-  padding: 8px 16px;
-  border-right: 1px #dee2e6;
-  min-width: 120px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-}
-
-.stat-number {
-  font-size: 1.1em;
-  font-weight: 600;
-  color: #2c3e50;
-  line-height: 1.2;
-}
-
-thead {
-  position: sticky;
-  top: 0;
-  background: var(--bg-primary);
-  z-index: 2;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
-}
-
-table {
-  width: 100%;
-  border-collapse: collapse;
-  background: white;
-  position: relative;
-  padding-top: 40px;
-}
-
-th,
-td {
-  border: 1px solid #ddd;
-  white-space: pre-line;
-  word-wrap: break-word;
-  padding: 8px;
-  text-align: left;
-}
-
-td {
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-th {
-  color: #101010;
-  background-color: #f4f4f4;
-}
-
-tr:hover {
-  background: var(--color-background-mute);
-}
-
-.repo-filter-dropdown {
-  position: absolute;
-  background: white;
-  top: 100%;
-  left: 0;
-  border-radius: 4px;
-  border: 1px solid #ccc;
-  z-index: 1000;
-}
-.repo-filter-dropdown ul {
-  list-style: none;
-  padding: 0;
-  margin: 0;
-}
-.repo-filter-dropdown li {
-  padding: 8px 12px;
-  cursor: pointer;
-}
-.repo-filter-dropdown li:hover {
-  background: #6b2024;
-}
-
-.clickable {
-  cursor: pointer;
-}
-
-input {
-  height: 30px;
-}
-
-.text-ellipsis {
-  max-width: 150px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 </style>

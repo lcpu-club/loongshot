@@ -5,18 +5,14 @@ use sqlx::{postgres::PgPoolOptions, FromRow, Row};
 use chrono::NaiveDateTime;
 use std::fs::read_to_string;
 use std::path::Path;
-use log;
 
 #[derive(Serialize, Debug, FromRow)]
 struct Package {
-    task_no: Option<i32>,
+    total_count: i64,
     name: String,
     base: String,
     repo: String,
-    status: Option<String>,
-    error_type: Option<String>,
-    has_log: Option<String>,
-    is_blacklisted: Option<bool>,
+    flags: Option<i32>,
     x86_version: Option<String>,
     x86_testing_version: Option<String>,
     x86_staging_version: Option<String>,
@@ -30,19 +26,12 @@ struct LastUpdate {
     last_update: String,
 }
 
-#[derive(Serialize)]
-struct PagerResponse {
-    data: Vec<Package>,
-    total: i64,
-}
-
-
 #[derive(Serialize, Deserialize)]
 struct QueryParams {
     page: Option<u32>,
     per_page: Option<u32>,
     name: Option<String>,
-    error_type: Option<String>,
+    error_type: Option<u32>,
     repo: Option<String>,
 }
 
@@ -113,29 +102,7 @@ async fn get_tasks(pool: web::Data<sqlx::Pool<sqlx::Postgres>>,
 #[get("/api/packages/status")]
 async fn get_packages(pool: web::Data<sqlx::Pool<sqlx::Postgres>>) -> impl Responder {
     let packages: Vec<Package> = sqlx::query_as(
-        "SELECT name, base, repo, error_type, has_log, x86_version, x86_testing_version, x86_staging_version, loong_version, loong_testing_version, loong_staging_version FROM packages ORDER by repo, name"
-    )
-    .fetch_all(pool.get_ref())
-    .await
-    .unwrap();
-
-    HttpResponse::Ok().json(packages)
-}
-
-#[get("/api/packages/building_list")]
-async fn get_building_list(pool: web::Data<sqlx::Pool<sqlx::Postgres>>) -> impl Responder {
-    let packages: Vec<Package> = sqlx::query_as(
-        "SELECT task_no, name, base, repo, status,
-        NULL as error_type,
-        NULL as has_log,
-        NULL as is_blacklisted,
-        NULL as x86_version,
-        NULL as x86_testing_version,
-        NULL as x86_staging_version,
-        NULL as loong_version,
-        NULL as loong_testing_version,
-        NULL as loong_staging_version
-        FROM build_list ORDER by task_no"
+        "SELECT name, base, repo, flags, x86_version, x86_testing_version, x86_staging_version, loong_version, loong_testing_version, loong_staging_version FROM packages ORDER by repo, name"
     )
     .fetch_all(pool.get_ref())
     .await
@@ -149,12 +116,12 @@ async fn get_stat(pool: web::Data<sqlx::Pool<sqlx::Postgres>>) -> impl Responder
     let counts = sqlx::query_as::<_, CountResponse>(
         r#"
         SELECT
-            COUNT(*) FILTER (WHERE repo = 'core' AND split_part(x86_version, '-', 1) = split_part(loong_version, '-', 1)) AS core_match,
-            COUNT(*) FILTER (WHERE repo = 'extra' AND split_part(x86_version, '-', 1) = split_part(loong_version, '-', 1)) AS extra_match,
-            COUNT(*) FILTER (WHERE repo = 'core' AND split_part(x86_version, '-', 1) != split_part(loong_version, '-', 1) AND x86_version != 'missing' AND loong_version != 'missing') AS core_mismatch,
-            COUNT(*) FILTER (WHERE repo = 'extra' AND split_part(x86_version, '-', 1) != split_part(loong_version, '-', 1) AND x86_version != 'missing' AND loong_version != 'missing') AS extra_mismatch,
-            COUNT(*) FILTER (WHERE repo = 'core' AND x86_version != 'missing') as core_total,
-            COUNT(*) FILTER (WHERE repo = 'extra' AND x86_version != 'missing') as extra_total
+            COUNT(*) FILTER (WHERE repo = 'core' AND x86_version = regexp_replace(loong_version, '(-\w+)\.\w+$', '\1')) AS core_match,
+            COUNT(*) FILTER (WHERE repo = 'extra' AND x86_version = regexp_replace(loong_version, '(-\w+)\.\w+$', '\1')) AS extra_match,
+            COUNT(*) FILTER (WHERE repo = 'core' AND x86_version != regexp_replace(loong_version, '(-\w+)\.\w+$', '\1')) AS core_mismatch,
+            COUNT(*) FILTER (WHERE repo = 'extra' AND x86_version != regexp_replace(loong_version, '(-\w+)\.\w+$', '\1')) AS extra_mismatch,
+            COUNT(*) FILTER (WHERE repo='core' AND NOT x86_version is NULL) as core_total,
+            COUNT(*) FILTER (WHERE repo='extra' AND NOT x86_version is NULL) as extra_total
         FROM packages
         "#
     )
@@ -174,107 +141,42 @@ async fn get_data(
     let offset = (page - 1) * per_page;
 
     let mut query_builder = sqlx::QueryBuilder::new(
-        "SELECT name, base, repo, error_type, has_log, is_blacklisted,
-        x86_version, x86_testing_version, x86_staging_version, 
-        loong_version, loong_testing_version, loong_staging_version,
-        NULL as task_no,
-        NULL as status
-        FROM packages"
-    );
+        "SELECT COUNT(*) OVER() AS total_count, name, base, repo, flags, x86_version,
+        x86_testing_version, x86_staging_version, loong_version, loong_testing_version,
+        loong_staging_version FROM packages WHERE TRUE");
 
     // Construct search conditions
-    let mut where_added = false;
     if let Some(name) = &query.name {
-        query_builder.push(" WHERE name ILIKE ");
+        query_builder.push(" AND name ILIKE ");
         query_builder.push_bind(format!("%{}%", name));
-        where_added = true;
     }
 
     if let Some(error_type) = &query.error_type {
-        if where_added {
-            query_builder.push(" AND ");
-        } else {
-            query_builder.push(" WHERE ");
-            where_added = true;
+        if *error_type == 1 {
+            query_builder.push(" AND flags & (1 << 15) != 0");
         }
-            query_builder.push("error_type ");
-            match query.error_type.as_deref() {
-                Some("Success") => query_builder.push("!= "), // To filterout all failed packages
-                _ => query_builder.push("= ")
-            };
-            query_builder.push_bind(error_type);
-        
+        if *error_type > 1 {
+            query_builder.push(" AND flags >> 16 = ");
+            query_builder.push_bind(*error_type as i64 - 1);
+        }
     }
 
     if let Some(repo) = &query.repo {
-        if where_added {
-            query_builder.push(" AND ");
-        } else {
-            query_builder.push(" WHERE ");
-        }
-        query_builder.push("repo = ");
+        query_builder.push(" AND repo = ");
         query_builder.push_bind(repo);
     }
-    
+
     query_builder
     .push(" ORDER BY name, base, repo LIMIT ")
     .push_bind(per_page as i64)
     .push(" OFFSET ")
     .push_bind(offset as i64);
 
-    let packages: Vec<Package> = match query_builder.build_query_as().fetch_all(pool.get_ref()).await {
-        Ok(pkgs) => pkgs,
-        Err(e) => {
-            log::error!("Query error: {}", e);
-            return HttpResponse::InternalServerError().finish();
-        }
-    };
+    let packages: Vec<Package> = query_builder.build_query_as()
+        .fetch_all(pool.get_ref())
+        .await.unwrap();
 
-    // Counts
-    let mut count_builder = sqlx::QueryBuilder::new("SELECT COUNT(*) FROM packages");
-    
-    where_added = false;
-    if let Some(name) = &query.name {
-        count_builder.push(" WHERE name ILIKE ");
-        count_builder.push_bind(format!("%{}%", name));
-        where_added = true;
-    }
-
-    if let Some(error_type) = &query.error_type {
-        if where_added {
-            count_builder.push(" AND ");
-        } else {
-            count_builder.push(" WHERE ");
-            where_added = true;
-        }
-        count_builder.push("error_type ");
-        match query.error_type.as_deref() {
-                Some("Success") => count_builder.push("!= "), // To filterout all failed packages
-                _ => count_builder.push("= ")
-            };
-        count_builder.push_bind(error_type);
-    }
-
-    if let Some(repo) = &query.repo {
-        if where_added {
-            count_builder.push(" AND ");
-        } else {
-            count_builder.push(" WHERE ");
-        }
-        count_builder.push("repo = ");
-        count_builder.push_bind(repo);
-    }
-
-    let total = match count_builder.build().fetch_one(pool.get_ref()).await {
-        Ok(t) => t.get(0),
-        Err(e) => {
-            log::error!("Count error: {}", e);
-            return HttpResponse::InternalServerError().finish();
-        }
-        
-    };
-
-    HttpResponse::Ok().json(PagerResponse { data: packages, total})
+    HttpResponse::Ok().json(packages)
 }
 
 #[get("/api/lastupdate")]
@@ -320,7 +222,6 @@ async fn main() -> std::io::Result<()> {
             .service(get_last_update)
             .service(get_stat)
             .service(get_tasks)
-            .service(get_building_list)
             .service(get_log)
     })
     .workers(2)

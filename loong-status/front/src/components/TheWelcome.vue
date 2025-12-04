@@ -97,7 +97,6 @@ const navigateTo = (path) => {
   display: flex;
   flex-direction: column;
   border-radius: 5px;
-  overflow: hidden;
 }
 
 .upper-layer {
@@ -137,16 +136,17 @@ h1 {
 .lower-layer {
   flex: 1;
   padding: 2rem 1rem;
-  background: #f8f9fa;
+  background-color: var(--color-background-soft);
 }
 
 .stats-container {
   max-width: 1000px;
   margin: 2rem auto;
   padding: 20px;
-  background: white;
+  background-color: var(--color-background);
+  border: 1px solid var(--color-border);
   border-radius: 8px;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.05);
 }
 
 .stats-title {
@@ -160,8 +160,8 @@ h1 {
   justify-content: center;
   gap: 2rem;
   padding: 2rem;
-  background: white;
-  border-top: 1px solid #eee;
+  background-color: var(--color-background);
+  border-top: 1px solid var(--color-border);
 }
 
 .nav-orb {
@@ -177,7 +177,7 @@ h1 {
 }
 
 .nav-orb:hover {
-  background: #9b2d3510;
+  background-color: #9b2d3515;
   transform: translateY(-3px);
 }
 
@@ -188,7 +188,7 @@ h1 {
 
 .orb-text {
   font-size: 0.9rem;
-  color: #444;
+  color: var(--color-text);
   text-align: center;
   white-space: nowrap;
 }
@@ -196,8 +196,9 @@ h1 {
 .repo-footer {
   text-align: center;
   padding: 1rem;
-  background: #f8f9fa;
-  border-top: 1px solid #eee;
+  background-color: var(--color-background-soft);
+  border-top: 1px solid var(--color-border);
+  color: var(--color-text);
 }
 
 .repo-footer a {
