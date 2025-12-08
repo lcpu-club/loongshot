@@ -9,11 +9,15 @@ import subprocess
 from pydantic import BaseModel
 
 class PackageMetadata(BaseModel):
-    name: str = "missing"
-    base: str = "missing"
-    x86_version: str = "missing"
-    loong64_version: str = "missing"
-    repo: str = "missing"
+    name: str = None
+    base: str = None
+    x86_version: str = None
+    loong_version: str = None
+    x86_testing_version: str = None
+    loong_testing_version: str = None
+    x86_staging_version: str = None
+    loong_staging_version: str = None
+    repo: str = None
 
 def load_config(config_file=None):
     if config_file is None:
@@ -107,27 +111,6 @@ def load_black_list(conn, bl_file):
 
     cursor.close()
 
-# Download repo db from mirrors.
-def download_file(source, dest):
-    headers = {"User-Agent": "Mozilla/5.0", }
-    repo_path = os.path.dirname(dest)
-    if not os.path.exists(repo_path):
-        os.makedirs(repo_path)
-    try:
-        # Download the file and save it to dest_path
-        response = requests.get(source, headers=headers)
-        response.raise_for_status()
-        with open(dest, 'wb') as out_file:
-            out_file.write(response.content)
-    except Exception as e:
-        print(f"Error downloading file: {e}")
-
-def update_repo(cache_dir, mirror_x86, x86_repo_path, mirror_loong64, loong64_repo_path):
-    for mirror, repo_path in [(mirror_x86, x86_repo_path), (mirror_loong64, loong64_repo_path)]:
-        for repo in ["core", "extra"]:
-            download_file(f"{mirror}{repo}/os/{repo_path}/{repo}.db",
-                          f"{cache_dir}/{repo_path}/sync/{repo}.db")
-
 # Load the repository database
 def load_repo(repo_path, repo):
     handle = pyalpm.Handle("/", repo_path)
@@ -141,72 +124,94 @@ def load_repo(repo_path, repo):
 # Fetch all packages from x86 and loong, and insert into database
 # compare_all in compare86.py only compares package base, but here we need all built packages
 def compare_all(cache_dir, x86_repo_path, loong64_repo_path):
-    pkglist = []
+    # Key: pkg_name (str), Value: PackageMetadata (obj)
+    pkg_map = {}
 
-    for repo in ['core', 'extra']:
-        x86 = {}
-        loong = {}
+    repos = ['core', 'extra', 'core-testing', 'extra-testing', 'core-staging', 'extra-staging']
 
+    for repo in repos:
         x86_db = load_repo(os.path.join(cache_dir, x86_repo_path), repo)
-        x86_pkg = {pkg.name: [pkg.base, pkg.version] for pkg in x86_db.pkgcache}
-        x86 = {**x86, **x86_pkg}
+        x86_data = {pkg.name: [pkg.base, pkg.version] for pkg in x86_db.pkgcache}
 
         loong_db = load_repo(os.path.join(cache_dir, loong64_repo_path), repo)
-        loong_pkg = {pkg.name: [pkg.base, pkg.version] for pkg in loong_db.pkgcache}
-        loong = {**loong, **loong_pkg}
+        loong_data = {pkg.name: [pkg.base, pkg.version] for pkg in loong_db.pkgcache}
 
-        allpkg = {**loong, **x86}
-        for pkg_name in allpkg:
-            if pkg_name in x86:
-                pkg_base = x86[pkg_name][0]
-                x86_version = x86[pkg_name][1]
-            else:
-                x86_version = 'missing'
-            if pkg_name in loong:
-                pkg_base = loong[pkg_name][0]
-                loong64_version = loong[pkg_name][1]
-            else:
-                loong64_version = 'missing'
-            p = PackageMetadata(
-                name=f'{pkg_name}',
-                base=f'{pkg_base}',
-                x86_version=f'{x86_version}',
-                loong64_version=f'{loong64_version}',
-                repo=repo
-            )
-            pkglist.append(p)
-    return pkglist
+        all_current_names = set(x86_data.keys()) | set(loong_data.keys())
+
+        is_staging = 'staging' in repo
+        is_testing = 'testing' in repo
+        clean_repo_name = repo.replace('-testing', '').replace('-staging', '')
+
+        for name in all_current_names:
+            if name not in pkg_map:
+                pkg_map[name] = PackageMetadata(name=name)
+
+            p = pkg_map[name]
+
+            # Get info for this package from current loop's DBs (or None if missing)
+            x86_info = x86_data.get(name)      # [base, ver]
+            loong_info = loong_data.get(name)  # [base, ver]
+
+            # --- Update Metadata (Base & Repo) ---
+            current_base = None
+            if x86_info: current_base = x86_info[0]
+            elif loong_info: current_base = loong_info[0]
+
+            if p.base is None and current_base:
+                p.base = current_base
+
+            # Set the primary repository (e.g., 'core' or 'extra')
+            if p.repo is None:
+                p.repo = clean_repo_name
+
+            # --- Update Versions ---
+            if is_staging:
+                if x86_info: p.x86_staging_version = x86_info[1]
+                if loong_info: p.loong_staging_version = loong_info[1]
+            elif is_testing:
+                if x86_info: p.x86_testing_version = x86_info[1]
+                if loong_info: p.loong_testing_version = loong_info[1]
+            else: # Stable
+                if x86_info: p.x86_version = x86_info[1]
+                if loong_info: p.loong_version = loong_info[1]
+
+    # Return the aggregated objects
+    return list(pkg_map.values())
 
 def fetch_all_packages(conn):
     home_dir = os.path.expanduser("~")
-    cache_dir = os.path.join(home_dir, ".cache", "loongpkgs")
-    mirror_x86 = "https://mirrors.pku.edu.cn/archlinux/"
-    mirror_loong64 = "https://loongarchlinux.lcpu.dev/loongarch/archlinux/"
+    cache_dir = os.path.join(home_dir, ".cache", "compare86")
 
-    # Define repo file paths
-    x86_repo_path = "x86_64"
-    loong64_repo_path = "loong64"
-    update_repo(cache_dir, mirror_x86, x86_repo_path, mirror_loong64, loong64_repo_path)
+    x86_repo_path = "x86"
+    loong64_repo_path = "loong"
     pkglist = compare_all(cache_dir, x86_repo_path, loong64_repo_path)
 
     cursor = conn.cursor()
 
-    # If a package is moved from a repo to another, we accept the new one and remove the old one
-    # Keep track of the log! If a package has log, it should keep the log unless the new
-    # x86_version is not missing and different from loong_version
     cursor.executemany('''
-        INSERT INTO packages (name, base, x86_version, loong_version, repo, has_log)
-        VALUES (%s, %s, %s, %s, %s, NULL)
+        INSERT INTO packages (name, base, repo, flags, x86_version, loong_version,
+        x86_testing_version, loong_testing_version, x86_staging_version, loong_staging_version)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         ON CONFLICT (name) DO UPDATE
-        SET x86_version = CASE
-                            WHEN EXCLUDED.x86_version = 'missing' THEN packages.x86_version
-                            ELSE EXCLUDED.x86_version
-                        END,
+        SET x86_version = EXCLUDED.x86_version,
             loong_version = EXCLUDED.loong_version,
+            x86_testing_version = EXCLUDED.x86_testing_version,
+            x86_staging_version = EXCLUDED.x86_staging_version,
+            loong_testing_version = EXCLUDED.loong_testing_version,
+            loong_staging_version = EXCLUDED.loong_staging_version,
             repo = EXCLUDED.repo,
-            base = EXCLUDED.base
-        WHERE packages.x86_version <> 'missing' OR EXCLUDED.x86_version <> 'missing';
-    ''', [(pkg.name, pkg.base, pkg.x86_version, pkg.loong64_version, pkg.repo) for pkg in pkglist])
+            base = EXCLUDED.base,
+            flags = CASE
+                WHEN packages.flags is NULL then EXCLUDED.flags
+                ELSE packages.flags | EXCLUDED.flags
+            END
+    ''', [(pkg.name, pkg.base, pkg.repo, (1<<30), pkg.x86_version, pkg.loong_version,
+           pkg.x86_testing_version, pkg.loong_testing_version, pkg.x86_staging_version,
+           pkg.loong_staging_version) for pkg in pkglist])
+
+    # remove not used packages
+    cursor.execute("DELETE FROM packages WHERE flags is NULL or flags & (1<<30) = 0")
+    cursor.execute("UPDATE packages SET flags = flags & ~(1<<30)")
 
     cursor.close()
 
@@ -270,20 +275,11 @@ def main():
     conn = get_conn()
     try:
         conn.autocommit = False
-
-        # Step 1: Create tables
-        create_tables(conn)
-        # Step 2: Fetch all packages and insert into database
         fetch_all_packages(conn)
-        # Step 3: Load black list and update is_blacklisted field
-        if args.bl:
-            load_black_list(conn, args.bl)
-        # Commit all changes
         conn.commit()
 
-        # Step 4: Check for log files and update has_log field
-        log_check(conn)
-        conn.commit()
+        #log_check(conn)
+        #conn.commit()
     except Exception as e:
         print(f"Error during database operations: {e}")
         conn.rollback()
