@@ -162,7 +162,7 @@ build_package() {
     fi
 
     if grep -qFx "$PKGBASE" $SCRIPTSPATH/trueany.lst; then
-        MIRRORSITE=$(jq '.mirrors.x86' ~/.dbconfig.json)
+        MIRRORSITE=$(jq -r '.mirrors.x86' ~/.dbconfig.json)
         cd $LOCALREPO/temp-$BUILDREPO$TESTING/os/loong64
         (source $WORKDIR/$PKGBASE/PKGBUILD;
         for pkg in ${pkgname[@]}; do
