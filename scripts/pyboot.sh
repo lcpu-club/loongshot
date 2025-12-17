@@ -1,4 +1,8 @@
 #!/bin/bash
+# 
+# This script just review the commit logs of archlinux packages repo and
+# generate packages list(with right version tags) to bootstrap python.
+
 
 STEP=$1
 WORKDIR=/home/pluto/repos
@@ -23,8 +27,9 @@ PAGER=cat
 if [[ "$STEP" -eq 2 ]]; then
     for i in `cat pyboot.lst`;  do
         cd $WORKDIR/$i
+        git checkout main -f &> /dev/null
         echo $i
-        git log -n 2 --pretty=format:"%s"
+        git log -n 4 --pretty=format:"%ad :%s"
         echo
     done
 fi
@@ -33,14 +38,20 @@ fi
 if [[ "$STEP" -eq 3 ]]; then
     for i in `cat pyboot.lst`;  do
         cd $WORKDIR/$i
-        echo "$i:$(git tag --sort=-creatordate | sed -n '2p'):nocheck"
+        git checkout main -f &> /dev/null
+        TAG=`git log -n 1 --oneline --decorate --grep="Bootstrap" | grep -o 'tag: [^)]*' | sed 's/tag: //'`
+        echo "$i:$TAG:nocheck"
     done
 fi
 
 # extract tags to nocheck build
+# python-setuptools needs more dependencies and can't just build from here.
+# use script `canrebuild` from here to start build other python packages.
 if [[ "$STEP" -eq 4 ]]; then
     for i in `cat pyboot.lst`;  do
         cd $WORKDIR/$i
-        echo "$i:$(git tag --sort=-creatordate | sed -n '1p'):nocheck"
+        git checkout main -f &> /dev/null
+        TAG=`git log -n 1 --oneline --decorate --grep="Rebuild bootstrapped" | grep -o 'tag: [^),]*' | sed 's/tag: //'`
+        echo "$i:$TAG:nocheck"
     done
 fi
