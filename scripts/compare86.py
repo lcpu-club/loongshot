@@ -5,7 +5,6 @@ import json
 import os
 import psycopg2
 import pyalpm
-import requests
 import sys
 from collections import deque
 from datetime import datetime
@@ -35,21 +34,6 @@ class PackageMetadata(BaseModel):
     loong64_version: str = "missing"
     repo:str = "missing"
 
-# Download repo db from mirrors.
-def download_file(source, dest):
-    headers = {"User-Agent": "Mozilla/5.0", }
-    repo_path = os.path.dirname(dest)
-    if not os.path.exists(repo_path):
-        os.makedirs(repo_path)
-    try:
-        # Download the file and save it to dest_path
-        response = requests.get(source, headers=headers)
-        response.raise_for_status()
-        with open(dest, 'wb') as out_file:
-            out_file.write(response.content)
-    except Exception as e:
-        print(f"Error downloading file: {e}", file=sys.stderr)
-
 
 # cache all package buildtime
 def get_builddate():
@@ -61,14 +45,17 @@ def get_builddate():
 
 def update_repo(mirror_x86, mirror_loong64):
     for repo in source_repos:
-        download_file(f"{mirror_x86}{repo}/os/x86_64/{repo}.db",
-                      f"{cache_dir}/{x86_repo_path}/sync/{repo}.db")
-        download_file(f"{mirror_loong64}{repo}/os/loong64/{repo}.db",
-                      f"{cache_dir}/{loong64_repo_path}/sync/{repo}.db")
-
+        db = load_repo(f"{cache_dir}/{x86_repo_path}", repo)
+        db.servers = [f"{mirror_x86}/{repo}/os/x86_64/"]
+        db.update(False)
+        db = load_repo(f"{cache_dir}/{loong64_repo_path}", repo)
+        db.servers = [f"{mirror_loong64}/{repo}/os/loong64/"]
+        db.update(False)
 
 # Load the repository database
 def load_repo(repo_path, repo):
+    if not os.path.exists(repo_path):
+        os.makedirs(repo_path)
     handle = pyalpm.Handle("/", repo_path)
     try:
         db = handle.register_syncdb(repo, 0)
