@@ -7,20 +7,19 @@ rebuild packages in our staging repositories
 
 import argparse
 import tempfile
+import os
 
 from pyalpm import Handle
 import pyalpm
 
-ARCH = "loong64"
-MIRROR_URL = "https://loongarchlinux.lcpu.dev/loongarch/archlinux/{}/os/{}"
+home_dir = os.path.expanduser("~")
+cache_dir = os.path.join(home_dir, ".cache", "compare86")
 
 def register_dbs(handle, reponames):
     repos = []
 
     for reponame in reponames:
         repo = handle.register_syncdb(reponame, pyalpm.SIG_DATABASE_OPTIONAL)
-        repo.servers = [MIRROR_URL.format(reponame, ARCH)]
-        repo.update(False)
         repos.append(repo)
 
     return repos
@@ -35,7 +34,7 @@ def find_package_anywhere(handle, pkgname):
     return None
 
 
-def can_rebuild(rebuild_packages, stable_handle, staging_handle):
+def can_rebuild(rebuild_packages, x86_handle, staging_handle):
     rebuild_packages_set = set(rebuild_packages)
 
     def is_all_rebuild(depends):
@@ -55,8 +54,8 @@ def can_rebuild(rebuild_packages, stable_handle, staging_handle):
         if pkg is not None:
             continue
 
-        pkg = find_package_anywhere(stable_handle, pkgname)
-        # Can never happen
+        pkg = find_package_anywhere(x86_handle, pkgname)
+        # No rebuild upstream
         if pkg is None:
             continue
 
@@ -82,25 +81,23 @@ def main(filename, verify, output_format):
     with open(filename, 'r') as fp:
         rebuild_packages = fp.read().splitlines()
 
-    with tempfile.TemporaryDirectory() as stable_tmpdir:
-        with tempfile.TemporaryDirectory() as staging_tmpdir:
-            stable_handle = Handle(".", stable_tmpdir)
-            staging_handle = Handle(".", staging_tmpdir)
+    x86_handle = Handle(".", os.path.join(cache_dir, "x86"))
+    staging_handle = Handle(".", os.path.join(cache_dir, "loong"))
 
-            register_dbs(stable_handle, ["core", "extra"])
-            register_dbs(staging_handle, ["core-staging", "extra-staging"])
+    register_dbs(x86_handle, ["core-staging", "extra-staging"])
+    register_dbs(staging_handle, ["core-staging", "extra-staging"])
 
-            if verify:
-                packages = compare_repos(rebuild_packages, staging_handle)
-            else:
-                packages = can_rebuild(rebuild_packages, stable_handle, staging_handle)
+    if verify:
+        packages = compare_repos(rebuild_packages, staging_handle)
+    else:
+        packages = can_rebuild(rebuild_packages, x86_handle, staging_handle)
 
-            if output_format == 'space':
-                print(' '.join(packages))
-            elif output_format == 'newline':
-                print('\n'.join(packages))
-            else:
-                print('unsupported output format')
+    if output_format == 'space':
+        print(' '.join(packages))
+    elif output_format == 'newline':
+        print('\n'.join(packages))
+    else:
+        print('unsupported output format')
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
