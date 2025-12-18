@@ -145,12 +145,7 @@ build_package() {
         fi
     fi
 
-    # package may not in arch's repo
-    if [[ -z "$PKGVER" ]]; then
-        PKGVERREL=$(source PKGBUILD; echo $epoch${epoch:+:}$pkgver-$pkgrel)
-    else
-        PKGVERREL=$PKGVER
-    fi
+    PKGVERREL=$(source PKGBUILD; echo $epoch${epoch:+:}$pkgver-$pkgrel)
 
     if [[ -z "$BUILDREPO" ]]; then
         BUILDREPO=$($SCRIPTSPATH/compare86.py $REPOSWITCH -p $PKGNAME | awk '{print $5}' | tail -1)
