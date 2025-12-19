@@ -34,7 +34,7 @@ def find_package_anywhere(handle, pkgname):
     return None
 
 
-def can_rebuild(rebuild_packages, x86_handle, staging_handle):
+def can_rebuild(rebuild_packages, x86_handle, staging_handle, nocheck):
     rebuild_packages_set = set(rebuild_packages)
 
     def is_all_rebuild(depends):
@@ -59,7 +59,7 @@ def can_rebuild(rebuild_packages, x86_handle, staging_handle):
         if pkg is None:
             continue
 
-        if is_all_rebuild(pkg.depends) and is_all_rebuild(pkg.makedepends) and is_all_rebuild(pkg.checkdepends):
+        if is_all_rebuild(pkg.depends) and is_all_rebuild(pkg.makedepends) and (nocheck or is_all_rebuild(pkg.checkdepends)):
             can_rebuild_list.append(pkgname)
 
     return can_rebuild_list
@@ -73,7 +73,41 @@ def compare_repos(rebuild_packages, staging_handle):
 
     return missing
 
-def main(filename, verify, output_format):
+x86_handle = Handle(".", os.path.join(cache_dir, "x86"))
+staging_handle = Handle(".", os.path.join(cache_dir, "loong"))
+
+register_dbs(x86_handle, ["core-staging", "extra-staging"])
+register_dbs(staging_handle, ["core-staging", "extra-staging"])
+
+def printpkg(pkgname, indent_level=0):
+    indent = "    " * indent_level
+    pkgloong = find_package_anywhere(staging_handle, pkgname)
+    pkgx86 = find_package_anywhere(x86_handle, pkgname)
+    if (pkgloong is None) and (pkgx86 is not None):
+        print(f"{indent}❌ {pkgname}")
+    elif pkgx86 is None:
+        pass
+        #print(f"{indent}   {pkgname}")
+    else:
+        print(f"{indent}✅ {pkgname}")
+
+def check(pkgname):
+    pkg86 = find_package_anywhere(x86_handle, pkgname)
+    if pkg86 is None:
+        print("Not found in x86")
+        return
+    printpkg(pkgname)
+    print("Depends:")
+    for pkg in pkg86.depends:
+        printpkg(pkg, 1)
+    print("Make depends:")
+    for pkg in pkg86.makedepends:
+        printpkg(pkg, 1)
+    print("Check depends:")
+    for pkg in pkg86.checkdepends:
+        printpkg(pkg, 1)
+
+def main(filename, verify, nocheck, output_format):
     # Output of `genrebuild`.
     rebuild_packages = []
     packages = []
@@ -81,16 +115,10 @@ def main(filename, verify, output_format):
     with open(filename, 'r') as fp:
         rebuild_packages = fp.read().splitlines()
 
-    x86_handle = Handle(".", os.path.join(cache_dir, "x86"))
-    staging_handle = Handle(".", os.path.join(cache_dir, "loong"))
-
-    register_dbs(x86_handle, ["core-staging", "extra-staging"])
-    register_dbs(staging_handle, ["core-staging", "extra-staging"])
-
     if verify:
         packages = compare_repos(rebuild_packages, staging_handle)
     else:
-        packages = can_rebuild(rebuild_packages, x86_handle, staging_handle)
+        packages = can_rebuild(rebuild_packages, x86_handle, staging_handle, nocheck)
 
     if output_format == 'space':
         print(' '.join(packages))
@@ -103,9 +131,14 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(
                         prog='canrebuild',
                         description='Returns packges which can be rebuild in the staging repositories')
-    parser.add_argument('filename')
+    parser.add_argument('--file', type=str, default='python.lst', help='package list file')
+    parser.add_argument('--package', type=str, help='package to check')
     parser.add_argument('--format', default='space', choices=['space', 'newline'])
+    parser.add_argument('--nocheck', action=argparse.BooleanOptionalAction, help='ignore check dependencies')
     parser.add_argument('--verify', action=argparse.BooleanOptionalAction, help='compare staging versus stable packages')
 
     args = parser.parse_args()
-    main(args.filename, args.verify, args.format)
+    if args.package:
+        check(args.package)
+    else:
+        main(args.file, args.verify, args.nocheck, args.format)
