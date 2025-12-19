@@ -205,6 +205,20 @@ build_package() {
         echo "checkdepends+=(ruby-mapping)" >> PKGBUILD
     fi
 
+    # if upstream uses nocheck, use it here too.
+    if git log -n 1 | grep -q nocheck; then
+        has_nocheck=false
+        for arg in "${EXTRAARG[@]}"; do
+            if [[ "$arg" == "--nocheck" ]]; then
+                has_nocheck=true
+                break
+            fi
+        done
+        if [[ "$has_nocheck" == false ]]; then
+            EXTRAARG="$EXTRAARG --nocheck"
+        fi
+    fi
+
     for arg in ${EXTRAARG[@]}; do
         msg "Build with $arg."
     done
