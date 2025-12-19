@@ -49,17 +49,16 @@ def can_rebuild(rebuild_packages, x86_handle, staging_handle, nocheck):
 
     can_rebuild_list = []
     for pkgname in rebuild_packages:
-        # Already rebuild
-        pkg = find_package_anywhere(staging_handle, pkgname)
-        if pkg is not None:
-            continue
-
-        pkg = find_package_anywhere(x86_handle, pkgname)
+        pkgloong = find_package_anywhere(staging_handle, pkgname)
+        pkgx86 = find_package_anywhere(x86_handle, pkgname)
         # No rebuild upstream
-        if pkg is None:
+        if pkgx86 is None:
+            continue
+        # Already rebuild and version is up to date
+        if (pkgloong is not None) and (pkgloong.version == pkgx86.version):
             continue
 
-        if is_all_rebuild(pkg.depends) and is_all_rebuild(pkg.makedepends) and (nocheck or is_all_rebuild(pkg.checkdepends)):
+        if is_all_rebuild(pkgx86.depends) and is_all_rebuild(pkgx86.makedepends) and (nocheck or is_all_rebuild(pkgx86.checkdepends)):
             can_rebuild_list.append(pkgname)
 
     return can_rebuild_list
@@ -89,7 +88,10 @@ def printpkg(pkgname, indent_level=0):
         pass
         #print(f"{indent}   {pkgname}")
     else:
-        print(f"{indent}✅ {pkgname}")
+        if pkgloong.version == pkgx86.version:
+            print(f"{indent}✅ {pkgname}")
+        else:
+            print(f"{indent}✅ {pkgname}, {pkgloong.version} => {pkgx86.version}")
 
 def check(pkgname):
     pkg86 = find_package_anywhere(x86_handle, pkgname)
