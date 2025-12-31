@@ -14,7 +14,7 @@ repos = ['core', 'extra']
 
 def extract_tar_gz(tar_gz_path, extract_path):
     with tarfile.open(tar_gz_path, "r:gz") as tar:
-        tar.extractall(path=extract_path)
+        tar.extractall(path=extract_path, filter='data')
 
 def download_file(source, dest):
     headers = {"User-Agent": "Mozilla/5.0", }
