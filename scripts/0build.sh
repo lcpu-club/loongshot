@@ -246,6 +246,11 @@ build_package() {
         cd $LOCALREPO/temp-$BUILDREPO$TESTING/os/loong64
         for pkg in ${pkgname[@]}; do
             FILENAME=$pkg-$PKGVERREL-$ARCH.pkg.tar.zst
+            if [ ! -f $FILENAME ]; then
+                REMOVEFLAG=-R
+            else
+                REMOVEFLAG=
+            fi
             if [ "$BUILDER" = "loong1" ]; then
                 ssh -t $BUILDER "cd $BUILDPATH/$PKGBASE; [[ -f $FILENAME.sig ]] && rm -f $FILENAME.sig; gpg --detach-sign $FILENAME"
                 scp $BUILDER:$BUILDPATH/$PKGBASE/$FILENAME{,.sig} .
@@ -257,7 +262,7 @@ build_package() {
                 ssh -t loong1 "cd /mnt/repos; rm $FILENAME{,.sig} -f"
             fi
             chmod 664 $FILENAME{,.sig}
-            repo-add -R temp-$BUILDREPO$TESTING.db.tar.gz $FILENAME
+            repo-add $REMOVEFLAG temp-$BUILDREPO$TESTING.db.tar.gz $FILENAME
         done)
         DEBUGPKG=$PKGBASE-debug-$PKGVERREL-loong64.pkg.tar.zst
         # echo $DEBUGPKG
