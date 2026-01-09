@@ -17,7 +17,7 @@ CREATE TABLE IF NOT EXISTS last_update (
 );
 
 CREATE TABLE IF NOT EXISTS logs (
-    id INTEGER PRIMARY KEY,
+    id SERIAL PRIMARY KEY,
     pkgbase TEXT,
     builder INTEGER,
     build_result INTEGER,
@@ -35,11 +35,18 @@ CREATE TABLE IF NOT EXISTS tasks (
 );
 
 CREATE TABLE IF NOT EXISTS builder (
-    id INTEGER PRIMARY KEY,
+    id SERIAL PRIMARY KEY,
     name TEXT NOT NULL,
     cpu TEXT,
     ram INTEGER,
     storage INTEGER,
     ip TEXT,
     time_scale REAL DEFAULT 1.0
+);
+
+CREATE TABLE IF NOT EXISTS grouplist (
+    id SERIAL PRIMARY KEY,
+    base TEXT NOT NULL,
+    group_name TEXT NOT NULL,
+    info TEXT
 );

@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+
 import argparse
 import json
 import os
@@ -40,75 +42,24 @@ def get_conn(config_file=None):
     )
     return conn
 
-# Write packages to database
-def create_tables(conn):
+def load_black_list(conn, bl_file, info):
     cursor = conn.cursor()
 
-    cursor.execute("DROP TABLE IF EXISTS black_list;")
-    cursor.execute("DROP TABLE IF EXISTS prebuild_list;")
-    cursor.execute("DROP TABLE IF EXISTS build_list;")
-
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS packages (
-        name TEXT PRIMARY KEY,
-        base TEXT,
-        repo TEXT,
-        error_type TEXT,
-        has_log TEXT,
-        is_blacklisted BOOL DEFAULT FALSE,
-        x86_version TEXT,
-        x86_testing_version TEXT,
-        x86_staging_version TEXT,
-        loong_version TEXT,
-        loong_testing_version TEXT,
-        loong_staging_version TEXT
-        )
-    ''')
-
-    cursor.execute('''
-        CREATE TABLE black_list (
-        name TEXT PRIMARY KEY
-        )
-    ''')
-
-    cursor.close()
-
-def load_black_list(conn, bl_file):
-    cursor = conn.cursor()
-
+    pkgs = []
     with open(bl_file, 'r') as f:
         for line in f:
-            name = line.strip()
-            if name:
-                cursor.execute('INSERT INTO black_list (name) VALUES (%s) ON CONFLICT (name) DO NOTHING', (name,))
+            pkg = line.strip()
+            if pkg:
+                if info:
+                    pkgs.append((pkg, 'black', info))
+                else:
+                    pkgs.append((pkg, 'black'))
 
-    cursor.execute("""
-        SELECT name, x86_version, loong_version
-        FROM packages
-        WHERE name IN (SELECT name FROM black_list);
-    """)
-
-    packages_to_check = cursor.fetchall()
-
-    for name, x86_version, loong_version in packages_to_check:
-        # Use vercmp to compare versions
-        try:
-            result = subprocess.run(
-                ['vercmp', x86_version, loong_version],
-                capture_output=True,
-                text=True,
-                check=True
-            )
-            # If x86_version > loong_version, blacklist the package
-            if result.stdout.strip() == '1':
-                cursor.execute("""
-                    UPDATE packages
-                    SET is_blacklisted = TRUE
-                    WHERE name = %s;
-                """, (name,))
-        except subprocess.CalledProcessError:
-            print(f"Error comparing versions for {name}: {x86_version} vs {loong_version}")
-
+    if pkgs:
+        if info:
+            cursor.executemany("INSERT INTO grouplist(base, group_name, info) VALUES (%s, %s, %s)", pkgs)
+        else:
+            cursor.executemany("INSERT INTO grouplist(base, group_name) VALUES (%s, %s)", pkgs)
     cursor.close()
 
 # Load the repository database
@@ -269,15 +220,20 @@ def log_check(conn):
 
 def main():
     parser = argparse.ArgumentParser(description="Compare packages between x86 and loong.")
-    parser.add_argument("--bl", type=str, help="Banned packages")
+    parser.add_argument("-b", "--black", type=str, help="File of banned packages")
+    parser.add_argument("-I", "--info", type=str, help="Note for the banned packages")
+    parser.add_argument("-S", "--sync", action="store_true", help="Sync the packages table")
     args = parser.parse_args()
 
     conn = get_conn()
     try:
         conn.autocommit = False
-        fetch_all_packages(conn)
-        conn.commit()
+        if args.sync:
+            fetch_all_packages(conn)
 
+        if args.black:
+            load_black_list(conn, args.black, args.info)
+        conn.commit()
         #log_check(conn)
         #conn.commit()
     except Exception as e:
