@@ -1,9 +1,7 @@
 #!/usr/bin/env python3
 import argparse
-import dbinit
 import json
 import os
-import psycopg2
 import pyalpm
 import sys
 from collections import deque
@@ -34,6 +32,15 @@ class PackageMetadata(BaseModel):
     loong64_version: str = "missing"
     repo:str = "missing"
 
+def load_config(config_file=None):
+    if config_file is None:
+        config_file = os.path.join(os.path.expanduser('~'), '.dbconfig.json')
+    try:
+        with open(config_file, 'r') as f:
+            return json.load(f)
+    except Exception as e:
+        print(f"Error loading configuration file: {e}")
+        raise
 
 # cache all package buildtime
 def get_builddate():
@@ -295,48 +302,6 @@ def write_to_json(data, file):
         raise
 
 
-# Write packages to database
-def write_to_database(data):
-
-    conn = dbinit.get_conn()
-    try:
-        cursor = conn.cursor()
-        cursor.execute('''DROP TABLE IF EXISTS prebuild_list ''')
-        # Create a table to store packages to be built
-        cursor.execute('''
-        CREATE TABLE prebuild_list (
-            name TEXT PRIMARY KEY,
-            base TEXT,
-            repo TEXT,
-            x86_version TEXT,
-            x86_testing_version TEXT,
-            x86_staging_version TEXT,
-            loong_version TEXT,
-            loong_testing_version TEXT,
-            loong_staging_version TEXT
-        )
-        ''')
-
-        cursor.executemany('''
-            INSERT INTO prebuild_list (name, base, x86_version, loong_version, repo)
-            VALUES (%s, %s, %s, %s, %s)
-            ON CONFLICT (name) DO UPDATE
-            SET x86_version = CASE
-                                WHEN EXCLUDED.x86_version = 'missing' THEN prebuild_list.x86_version
-                                ELSE EXCLUDED.x86_version
-                            END,
-                loong_version = EXCLUDED.loong_version
-            WHERE prebuild_list.x86_version <> 'missing' OR EXCLUDED.x86_version <> 'missing';
-        ''', [(pkg.name, pkg.base, pkg.x86_version, pkg.loong64_version, pkg.repo) for pkg in data])
-        cursor.close()
-        conn.commit()
-    except Exception as e:
-        conn.rollback()
-        print(f"Failed to write to database: {str(e)}", file=sys.stderr)
-        raise
-    finally:
-        conn.close()
-
 # Print packages to screen
 def print_to_screen(data):
     for d in data:
@@ -363,13 +328,12 @@ def main():
     parser.add_argument("-l", "--lint", action="store_true", help="Check for db errors.")
     parser.add_argument("-d", "--depend", type=str, help="List reverse depends.")
     parser.add_argument("-o", "--output", type=str, help="Save output to file.")
-    parser.add_argument("--db", action="store_true", help="Save output to database.")
     parser.add_argument("--mirror_x86", type=str, help="Mirror of x86.")
     parser.add_argument("--mirror_loong", type=str, help="Mirror of loong.")
 
     args = parser.parse_args()
 
-    config = dbinit.load_config()
+    config = load_config()
     mirror_x86 = config['mirrors']['x86']
     mirror_loong64 = config['mirrors']['loong64']
 
@@ -383,9 +347,6 @@ def main():
     ]
     if args.output and not any(required_for_output):
         parser.error("The -o/--output option can only be used with other specific options")
-
-    if args.db and not any(required_for_output):
-        parser.error("The --db option can only be used with other specific options")
 
     if args.time is None:
         args.time = False
@@ -460,8 +421,6 @@ def main():
 
     if args.output:
         write_to_json(pkglist, Path(args.output))
-    elif args.db:
-        write_to_database(pkglist)
 
     print_to_screen(pkglist)
 
