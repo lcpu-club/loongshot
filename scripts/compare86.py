@@ -39,7 +39,7 @@ def load_config(config_file=None):
         with open(config_file, 'r') as f:
             return json.load(f)
     except Exception as e:
-        print(f"Error loading configuration file: {e}")
+        print(f"Error loading configuration file: {e}", file=sys.stderr)
         raise
 
 # cache all package buildtime

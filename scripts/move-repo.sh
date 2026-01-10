@@ -95,7 +95,7 @@ do_move(){
         echo "Error: Failed to update the repository database."
         exit 2
     fi
-    
+
     about_to_delete=()
     for pkg in $(grep -oP "Removing old package file '\K[^']*(?=')" add.log); do
         about_to_delete+=($pkg)

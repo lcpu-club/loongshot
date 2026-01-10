@@ -42,6 +42,7 @@ def get_conn(config_file=None):
     )
     return conn
 
+# Load black list from a file
 def load_black_list(conn, bl_file, info):
     cursor = conn.cursor()
 
@@ -160,7 +161,8 @@ def fetch_all_packages(conn):
            pkg.x86_testing_version, pkg.loong_testing_version, pkg.x86_staging_version,
            pkg.loong_staging_version) for pkg in pkglist])
 
-    # remove not used packages
+    # remove not used packages. Last sql command add a flag(1<<30) to every row it
+    # touchs, remove untouched rows and revert the flag.
     cursor.execute("DELETE FROM packages WHERE flags is NULL or flags & (1<<30) = 0")
     cursor.execute("UPDATE packages SET flags = flags & ~(1<<30)")
 

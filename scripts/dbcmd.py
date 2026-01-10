@@ -4,6 +4,7 @@ import argparse
 import psycopg2
 import json
 import os
+import sys
 
 # Define the bit values for check, fail, and log
 BIT_MAP = {
@@ -56,7 +57,7 @@ class DatabaseManager:
             with open(config_file, 'r') as f:
                 return json.load(f)
         except Exception as e:
-            print(f"Error loading configuration file: {e}")
+            print(f"Error loading configuration file: {e}", file=sys.stderr)
             return {}
 
     def get_db_connection(self):
@@ -70,7 +71,7 @@ class DatabaseManager:
             )
             return conn
         except Exception as e:
-            print(f"Error connecting to the database: {e}")
+            print(f"Error connecting to the database: {e}", file=sys.stderr)
             return None
 
     def get_bits(self, base):
@@ -116,7 +117,7 @@ class DatabaseManager:
                 print(f"No entry found for pkgbase '{base}'")
 
         except Exception as e:
-            print(f"Error updating bits: {e}")
+            print(f"Error updating bits: {e}", file=sys.stderr)
             self.conn.rollback()  # Rollback if there's an error
 
         finally:
@@ -136,8 +137,8 @@ class DatabaseManager:
                 results = cursor.fetchall()
                 if results:
                     conflict = ", ".join([row[0] for row in results])
-                    print(f"Fail: {conflict} had been added to the tasklist.")
-                    return
+                    print(f"Fail: {conflict} had been added to the tasklist.", file=sys.stderr)
+                    return False
 
             cursor.execute("SELECT min(taskno),max(taskno) FROM tasks WHERE tasklist=%s and info is NULL", (tasklist,))
             result = cursor.fetchone()
@@ -186,6 +187,7 @@ class DatabaseManager:
             self.conn.commit()
         finally:
             cursor.close()
+        return True
 
     def remove_task(self, pkgbase, tasklist, remove=False, taskno=0):
         """Removes or done one task from the task list."""
@@ -240,7 +242,7 @@ class DatabaseManager:
                     info = f"failed: {error_type[int(info.split(':')[1])]}"
                 print(f"{row[2]:4} {row[0]:34} {info}")
         except Exception as e:
-            print(f"An error occurred: {e}")
+            print(f"An error occurred: {e}", file=sys.stderr)
         finally:
             cursor.close()
 
@@ -266,7 +268,7 @@ class DatabaseManager:
                     info = f"failed: {error_type[int(info.split(':')[1])]}"
                 print(f"{row[0]:34} {repo:10} {info}")
         except Exception as e:
-            print(f"An error occurred: {e}")
+            print(f"An error occurred: {e}", file=sys.stderr)
         finally:
             cursor.close()
 
@@ -380,7 +382,7 @@ def main():
         if args.pkgbase:
             bits = db_manager.get_bits(args.pkgbase)
         else:
-            print("Error: 'pkgbase' argument is required for --get.")
+            print("Error: 'pkgbase' argument is required for --get.", file=sys.stderr)
         if args.get:
             print(bits)
         if args.show:
@@ -408,7 +410,7 @@ def main():
         if args.pkgbase:
             db_manager.update_bits(args.pkgbase, add_bits=add_bits, remove_bits=remove_bits)
         else:
-            print("Error: 'pkgbase' argument is required for --add or --remove.")
+            print("Error: 'pkgbase' argument is required for --add or --remove.", file=sys.stderr)
 
     if args.command == "task":
         repo = 1 if args.test else 2 if args.stag else 0
