@@ -3,6 +3,7 @@
 SCRIPTSPATH=${SCRIPTSPATH:=$HOME/loongshot/scripts}
 BUILDER=${BUILDER:=loong1}
 BUILDDIR=${BUILDDIR:=/mnt/repos}
+BUILDLIST=${BUILDLIST:="1"}
 TESTING=""
 
 while [[ $# -gt 0 ]]; do
@@ -23,10 +24,13 @@ while [[ $# -gt 0 ]]; do
             SAVE="yes"
             shift
             ;;
-        --skip) # a file of list of packages to skip
+        --nosync) # Don't sync package database
             shift
-            SKIP=$1
+            SKIP="yes"
+            ;;
+        --nokde)
             shift
+            NOKDE="--nokde"
             ;;
         *)
             shift
@@ -45,27 +49,26 @@ if [[ ! -z "$TESTING" ]]; then
 fi
 
 if [[ -z "$RESUME" ]]; then
-    if [[ -z "$TESTING" ]]; then
-        ./compare86.py -SBEC | awk '{print $1}' > /tmp/1.txt
-    else
-        ./compare86.py $REPOSWITCH -SBEC | awk '{print $1}' > /tmp/1.txt
+    if [[ -z "$SKIP" ]]; then
+        echo "Start to syncing database"
+        ${SCRIPTSPATH}/compare86.py $REPOSWITCH -S
+        ${SCRIPTSPATH}/dbinit.py -S
     fi
-    PAGER=cat psql -U pguser -d archdb -c "select distinct base from packages where flags & 32768 != 0 and log_version = x86_version" | sed 's/^ //;s/\r$//;1,2d;$d' | sed '$d'> buildfail.lst
-    grep -Fvxf buildfail.lst /tmp/1.txt > /tmp/2.txt
+    # All packages should be build
+    PKG=$(${SCRIPTSPATH}/compare86.py $REPOSWITCH -BEC | awk '{print $1}')
 
-    # a list of packages to skip
-    if [[ ! -z "$SKIP" ]]; then
-        grep -Fvxf $SKIP.lst /tmp/2.txt > /tmp/3.txt
-    else
-        mv /tmp/2.txt /tmp/3.txt
-    fi
-    # black list of some binary packages
-    grep -Fvxf black.lst /tmp/3.txt > today.lst
-    if [[ ! -s today.lst ]]; then
+    # Filter out packages not to build
+    # 1. Same version failed last time
+    # 2. Blacklists
+    # 3. KDE packages use upstream list
+    PKG=$(echo $PKG | tr ' ' '\n' | ${SCRIPTSPATH}/filterpkg.py $REPOSWITCH --list $BUILDLIST $NOKDE)
+    if [ $? -eq 1 ]; then
+        # filterpkg.py may fail when insert_task fails
         exit 1
     fi
-    sudo pacman -Sy
-    PKG=$(timeout 20 ./genrebuild `cat today.lst` | tr ' ' ',')
+    echo $PKG | tr ' ' '\n' > today.lst
+    echo "Start to ordering..."
+    PKG=$(timeout 20 ./genrebuild --dbpath ~/.cache/compare86/x86 `echo $PKG` | tr ' ' ',')
     if [[ ! -z "$SAVE" ]]; then
         echo $PKG
         exit 1
@@ -73,7 +76,7 @@ if [[ -z "$RESUME" ]]; then
     if [[ -z "$PKG" ]]; then
         exit 1
     fi
-    ./dbcmd.py task --add "$PKG" $REPOSWITCH
+    ./dbcmd.py task --add "$PKG" $REPOSWITCH --list $BUILDLIST
 fi
 
 ./buildbot.sh $REPOSWITCH --builder $BUILDER:$BUILDDIR -- --skippgpcheck
