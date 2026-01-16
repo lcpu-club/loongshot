@@ -7,7 +7,7 @@ BUILDER=${BUILDER:=loong1}
 BUILDDIR=${BUILDDIR:=/mnt/repos}
 BUILDLIST=${BUILDLIST:="1"}
 
-max_retries=2
+max_retries=3
 max_size=102400  # if the build fails quick ( with small size ), try to recovery
 DOUBLEDASH="--"
 
@@ -87,7 +87,7 @@ while [ 1 ]; do
                 continue
             fi
 
-            if grep -q -e "remote: GitLab is not responding" -e "Resolving timed out after 10000 milliseconds" -e "Connection timed out after 10001 milliseconds" $ALLLOGS; then
+            if grep -q -e "remote: GitLab is not responding" -e "Resolving timed out after 10000 milliseconds" -e "Connection timed out after 10001 milliseconds" -e "fatal: unable to access 'https://gitlab.archlinux.org"  $ALLLOGS; then
                 sleep 100
                 continue
             fi
