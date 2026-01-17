@@ -1,16 +1,13 @@
 #!/usr/bin/env python3
 
-import dbinit
 import os
 import re
 import requests
-import argparse
 from collections import defaultdict
 import tarfile
 import tempfile
 
 mirror_loong64 = "https://loongarchlinux.lcpu.dev/loongarch/archlinux/"
-repos = ['core', 'extra']
 
 def extract_tar_gz(tar_gz_path, extract_path):
     with tarfile.open(tar_gz_path, "r:gz") as tar:
@@ -59,21 +56,13 @@ def scan_directory_for_libs(dir_path, filename):
     return lib_versions
 
 def find_orphan_libs(links, files):
-    pkgs = []
     for lib_name, pkg_name in links.items():
         for pkg, version in pkg_name.items():
             allversion = set().union(*files[lib_name].values())
             if not version.issubset(allversion):
                 print(f"{pkg} links to orphan {lib_name}.so{list(version)[0]}")
-                pkgs.append(pkg)
-    return pkgs
 
 def main():
-    parser = argparse.ArgumentParser(description="Check file db and links db for orphans.")
-    parser.add_argument("--db", action="store_true", help="Export")
-
-    args = parser.parse_args()
-
     temp_dir = tempfile.TemporaryDirectory()
     links_dir = os.path.join(temp_dir.name, 'links')
     os.makedirs(links_dir)
@@ -101,29 +90,6 @@ def main():
     links_libs = scan_directory_for_libs(links_dir, 'links')
     files_libs = scan_directory_for_libs(files_dir, 'files')
     pkgs = find_orphan_libs(links_libs, files_libs)
-
-    if args.db:
-        conn = dbinit.get_conn()
-        try:
-            cursor = conn.cursor()
-            for pkg_name in pkgs:
-                # print(f"pkg_name: {pkg_name}")
-                cursor.execute('''
-                INSERT INTO prebuild_list (name, base, repo, x86_version, loong_version)
-                SELECT name, base, repo, x86_version, loong_version
-                FROM packages
-                WHERE CONCAT(name, '-', x86_version) = %s
-                ON CONFLICT (name) DO NOTHING
-                ''', (pkg_name,))
-            cursor.close()
-            conn.commit()
-        except Exception as e:
-            print(f"Error inserting into database: {e}")
-            conn.rollback()
-            raise
-        finally:
-            conn.close()
-
 
 if __name__ == "__main__":
     main()
