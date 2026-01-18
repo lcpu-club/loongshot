@@ -1,14 +1,10 @@
 #!/usr/bin/python
 import argparse
 import colorlog
-import dbinit
-import json
+from collections import defaultdict
 import networkx as nx
-import psycopg2
 import pyalpm
 import random
-from collections import defaultdict
-from pathlib import Path
 
 # TODO: Automate this. The packages listed here depend on ghc/ghc-libs but don't have .so files.
 HASKELL_DO_NOT_EXPAND = {
@@ -52,11 +48,7 @@ parser.add_argument('--dbpath', nargs='?', default="/var/lib/pacman",
                     help='Pacman sync db location. Default: /var/lib/pacman')
 parser.add_argument('--dep', nargs='?', default="",
                     help='Additional dependencies to consider, as colon-separated pairs separated by comma. Example: foo:bar means foo depends on bar.')
-# Either packages or a database that contains packages must be provided
-group = parser.add_mutually_exclusive_group()
-group.add_argument('package', nargs='*', help='Packages to rebuild')
-group.add_argument('--pkgdb', action="store_true", help='Packages to rebuild from a database')
-
+parser.add_argument('package', nargs='*', help='Packages to rebuild')
 args = parser.parse_args()
 
 if args.haskell_check:
@@ -76,24 +68,7 @@ handler = colorlog.StreamHandler()
 handler.setFormatter(colorlog.ColoredFormatter())
 logger.addHandler(handler)
 
-if args.package and args.pkgdb:
-    parser.error("Cannot specify both 'package' and '--pkgdb'")
-if not args.package and not args.pkgdb:
-    parser.error("Either 'package' or '--pkgdb' must be provided")
-
-rebuild_list = set()
-
-if args.pkgdb:
-    conn = dbinit.get_conn()
-    cursor = conn.cursor()
-    select_name = f'''SELECT name FROM prebuild_list WHERE x86_version != 'missing'; '''
-    cursor.execute(select_name)
-
-    rebuild_list = {row[0] for row in cursor.fetchall()}
-    cursor.close()
-    conn.close()
-else:
-    rebuild_list = set(filter(lambda p: not p.endswith(":nocheck"), args.package))
+rebuild_list = set(filter(lambda p: not p.endswith(":nocheck"), args.package))
 original_rebuild_list = rebuild_list.copy()
 
 package_db = defaultdict(dict)
@@ -334,56 +309,5 @@ for pkg in nx.topological_sort(G):
                     logger.info("Cycle Solver found a better build order (length: %d -> %d)" % (len(best_build_order), len(_pass1) + len(_pass2)))
                 best_build_order = _pass1 + _pass2
         result.extend(best_build_order)
-
-# Write back to database
-if args.pkgdb:
-    conn = dbinit.get_conn()
-    cursor = conn.cursor()
-
-    try:
-        get_table_schema = """SELECT column_name FROM information_schema.columns WHERE table_name = 'prebuild_list' ORDER BY ordinal_position"""
-        cursor.execute(get_table_schema)
-        columns = [row[0] for row in cursor.fetchall()]
-
-        cursor.execute('''DROP TABLE IF EXISTS build_list ''')
-
-        columns_definition = ''
-        if columns:
-            columns_definition = ', ' + ', '.join([f'"{col}" TEXT' for col in columns])
-
-        # Create a new build_list table
-        create_buildlist = f"""
-        CREATE TABLE build_list (
-            task_no SERIAL PRIMARY KEY
-            {columns_definition},
-            status TEXT DEFAULT 'Pending',
-            error_type TEXT
-        )
-        """
-        cursor.execute(create_buildlist)
-
-        serial = 1
-        for pkg in result:
-            # Get packages' entry
-            get_package = f"""SELECT * FROM prebuild_list WHERE name = '{pkg}'"""
-            cursor.execute(get_package)
-            rows = cursor.fetchall()
-
-            # Insert into build_list
-            for row in rows:
-                insert_columns = ['task_no'] + columns + ['status', 'error_type']
-                placeholders = ', '.join(['%s'] * (len(columns) + 3))
-                insert_sql = f"""INSERT INTO build_list ({', '.join(insert_columns)}) VALUES ({placeholders}) """
-                params = (serial,) + tuple(row) + ('Pending', None)
-                cursor.execute(insert_sql, params)
-                serial += 1
-
-        conn.commit()
-
-    except Exception as e:
-        conn.rollback()
-        print(f"Write to database error:{str(e)}")
-    finally:
-        conn.close()
 
 print(" ".join(result))
