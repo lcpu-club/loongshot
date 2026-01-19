@@ -1,7 +1,12 @@
 <template>
   <div>
     <div>
-      <input type="number" v-model="taskid" />
+      <!-- Use a local display ID or the one from route -->
+      <input
+        type="number"
+        v-model.number="displayTaskId"
+        @keyup.enter="goToTask"
+      />
       <button style="width: 100px" @click="prevTask">Previous</button>
       <button style="width: 100px" @click="nextTask">Next</button>
     </div>
@@ -26,50 +31,82 @@
     </table>
   </div>
 </template>
-
 <script>
-import { useRoute } from "vue-router";
+import { useRoute, useRouter } from "vue-router";
 import { ref, watch, onMounted } from "vue";
 
 export default {
   setup() {
-    const taskid = ref(0);
-    const tasks = ref([]);
     const route = useRoute();
+    const router = useRouter();
+    const tasks = ref([]);
+    const displayTaskId = ref(0);
 
-    // Fetch data from the backend API
     const fetchData = async () => {
+      // Get taskid from URL params (e.g., /task/123)
+      const tid = route.params.taskid || 0;
+
       try {
-        const response = await fetch(
-          `/api/tasks/result?taskid=${taskid.value}`,
-        );
-        if (!response.ok) throw new Error("Failed to fetch tasks");
+        const response = await fetch(`/api/tasks/result?taskid=${tid}`);
+        if (!response.ok) throw new Error("Failed to fetch");
+
         const data = await response.json();
-        tasks.value = data.map((task) => ({
+
+        // Update local state with data from backend
+        tasks.value = data.tasks.map((task) => ({
           ...task,
           build_time: convertToLocalTime(task.build_time),
           repo: lookupRepo(task.repo),
-          build_result: lookupBuildResult(task.build_result, task.pkgbase), // Lookup for build result
+          build_result: lookupBuildResult(task.build_result, task.pkgbase),
         }));
+
+        // Sync the input box and URL with the ACTUAL ID returned by the server
+        displayTaskId.value = data.taskid;
+
+        // If the URL was empty (/task) or different, update it without reloading
+        if (route.params.taskid !== String(data.taskid)) {
+          router.replace({ params: { taskid: data.taskid } });
+        }
       } catch (error) {
         console.error("Error fetching task data:", error);
       }
     };
 
-    const lookupRepo = (repo) => {
-      const repo_name = ["stable", "testing", "staging"];
-      return repo_name[repo];
+    const nextTask = () => {
+      const nextId = parseInt(displayTaskId.value) + 1;
+      router.push(`/task/${nextId}`);
     };
+
+    const prevTask = () => {
+      const prevId = parseInt(displayTaskId.value) - 1;
+      router.push(`/task/${prevId}`);
+    };
+
+    const goToTask = () => {
+      router.push(`/task/${displayTaskId.value}`);
+    };
+
+    // Watch for URL parameter changes
+    watch(
+      () => route.params.taskid,
+      () => {
+        fetchData();
+      },
+    );
+
+    onMounted(() => {
+      fetchData();
+    });
+
+    const lookupRepo = (repo) =>
+      ["stable", "testing", "staging"][repo] || "unknown";
 
     const convertToLocalTime = (utcTime) => {
       if (!utcTime) return "";
-      const date = new Date(utcTime); // Create a Date object from the UTC string
-      return date.toLocaleString(); // Convert to local string format (local time zone)
+      return new Date(utcTime).toLocaleString();
     };
 
-    // Lookup for the build result values
     const lookupBuildResult = (info, base) => {
-      let value;
       const fail_reason = [
         "Unknown error",
         "Failed to apply patch",
@@ -87,39 +124,22 @@ export default {
       if (!info) return "Waiting";
       if (info === "nolog") return "No Log";
       if (info === "building") return "Building";
+
+      let value = info;
       if (info === "done") value = "Done";
-      if (info.startsWith("failed:")) {
+      else if (info.startsWith("failed:")) {
         const failIndex = parseInt(info.split(":")[1], 10);
         value = fail_reason[failIndex] || "Unknown Failure";
       }
-      return `<a href="log.html?url=/buildlogs/${base}/all.log"> ${value} </a>`;
+      return `<a href="log.html?url=/buildlogs/${base}/all.log">${value}</a>`;
     };
-
-    // Update the taskid and fetch data when it's changed
-    const nextTask = () => {
-      taskid.value += 1;
-    };
-
-    const prevTask = () => {
-      taskid.value -= 1;
-    };
-
-    // Watch for changes to taskid and refetch data
-    watch(taskid, fetchData);
-
-    // Fetch data when component is mounted
-    onMounted(() => {
-      if (route.query.taskid) {
-        taskid.value = route.query.taskid;
-      }
-      fetchData();
-    });
 
     return {
-      taskid,
+      displayTaskId,
       tasks,
       nextTask,
       prevTask,
+      goToTask,
     };
   },
 };

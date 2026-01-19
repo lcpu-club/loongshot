@@ -2,7 +2,7 @@ use actix_web::{get, web, App, HttpResponse, HttpServer, Responder};
 use dotenv::dotenv;
 use serde::{Serialize, Deserialize};
 use sqlx::{postgres::PgPoolOptions, FromRow, Row};
-use chrono::NaiveDateTime;
+use chrono::{DateTime, Local, TimeZone, Utc, NaiveDateTime};
 use std::fs::read_to_string;
 use std::path::Path;
 
@@ -58,6 +58,12 @@ struct Task {
     build_time: Option<String>,
 }
 
+#[derive(Serialize)]
+struct TaskResponse {
+    taskid: i32,
+    tasks: Vec<Task>,
+}
+
 #[derive(Deserialize)]
 struct LogRequest {
     base: String,
@@ -65,50 +71,57 @@ struct LogRequest {
 }
 
 #[get("/api/tasks/result")]
-async fn get_tasks(pool: web::Data<sqlx::Pool<sqlx::Postgres>>,
-    query: web::Query<TaskParams>) -> impl Responder {
+async fn get_tasks(
+    pool: web::Data<sqlx::Pool<sqlx::Postgres>>,
+    query: web::Query<TaskParams>
+) -> impl Responder {
+    let input_id = query.taskid.unwrap_or(0);
 
-    let taskid = query.taskid.unwrap_or(0);
-    let last_taskid: i32 = sqlx::query("SELECT max(taskid) from tasks").fetch_one(pool.get_ref()).await.unwrap().get(0);
-    let realid = if taskid <= 0 { last_taskid + taskid } else { taskid };
+    let max_taskid_result = sqlx::query("SELECT max(taskid) from tasks")
+        .fetch_one(pool.get_ref())
+        .await;
 
-    let query = "SELECT t.pkgbase,t.repo,l.build_time,t.info FROM tasks t LEFT JOIN logs l ON t.logid = l.id WHERE t.taskid = $1 ORDER by t.taskno";
-    let rows = sqlx::query(query)
+    let last_taskid: i32 = match max_taskid_result {
+        Ok(row) => row.get::<Option<i32>, _>(0).unwrap_or(0),
+        Err(_) => return HttpResponse::InternalServerError().body("Failed to get max taskid"),
+    };
+
+    // Logic: if 0 or negative, offset from max. Else use specific ID.
+    let realid = if input_id <= 0 { last_taskid + input_id } else { input_id };
+
+    // Fetch the tasks
+    let query_str = "SELECT t.pkgbase, t.repo, l.build_time, t.info FROM tasks t LEFT JOIN logs l ON t.logid = l.id WHERE t.taskid = $1 ORDER by t.taskno";
+    let rows = sqlx::query(query_str)
         .bind(realid)
         .fetch_all(pool.get_ref())
         .await;
 
     match rows {
         Ok(tasks) => {
-            let tasks_with_converted_time: Vec<Task> = tasks.into_iter().map(|row| {
+            let tasks_converted: Vec<Task> = tasks.into_iter().map(|row| {
                 let build_time: Option<NaiveDateTime> = row.try_get("build_time").ok();
-                // Convert NaiveDateTime to formatted String, or None if NULL
-                let build_time_str = build_time.map(|dt| dt.format("%Y-%m-%d %H:%M:%S").to_string());
+                let build_time_str = build_time.and_then(|dt| {
+                    Local.from_local_datetime(&dt)
+                        .earliest()
+                        .map(|local_dt| local_dt.with_timezone(&Utc).to_rfc3339())
+                });
 
                 Task {
                     pkgbase: row.get("pkgbase"),
                     repo: row.get("repo"),
-                    build_time: build_time_str, // Store as String
+                    build_time: build_time_str,
                     build_result: row.get("info"),
                 }
             }).collect();
 
-            HttpResponse::Ok().json(tasks_with_converted_time)
+            // Return both the ID and the list
+            HttpResponse::Ok().json(TaskResponse {
+                taskid: realid,
+                tasks: tasks_converted,
+            })
         },
         Err(_) => HttpResponse::InternalServerError().body("Database query failed"),
     }
-}
-
-#[get("/api/packages/status")]
-async fn get_packages(pool: web::Data<sqlx::Pool<sqlx::Postgres>>) -> impl Responder {
-    let packages: Vec<Package> = sqlx::query_as(
-        "SELECT name, base, repo, flags, x86_version, x86_testing_version, x86_staging_version, loong_version, loong_testing_version, loong_staging_version FROM packages ORDER by repo, name"
-    )
-    .fetch_all(pool.get_ref())
-    .await
-    .unwrap();
-
-    HttpResponse::Ok().json(packages)
 }
 
 #[get("/api/packages/stat")]
@@ -188,7 +201,7 @@ async fn get_last_update(pool: web::Data<sqlx::Pool<sqlx::Postgres>>) -> impl Re
 
 #[get("/api/logs")]
 async fn get_log(info: web::Query<LogRequest>) -> impl Responder {
-    // Path of build logs 
+    // Path of build logs
     let file_path = format!("/home/arch/loong-status/build_logs/{}/{}.log", info.base, info.log_name);
     let path = Path::new(&file_path);
 
@@ -216,8 +229,7 @@ async fn main() -> std::io::Result<()> {
 
     HttpServer::new(move || {
         App::new()
-            .app_data(web::Data::new(pool.clone())) 
-            .service(get_packages)
+            .app_data(web::Data::new(pool.clone()))
             .service(get_data)
             .service(get_last_update)
             .service(get_stat)
