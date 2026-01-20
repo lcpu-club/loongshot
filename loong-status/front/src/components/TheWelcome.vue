@@ -25,6 +25,9 @@
       <!-- Stats -->
       <div class="stats-container">
         <h2 class="stats-title">Package Statistics</h2>
+        <span v-if="lastUpdated" class="update-time">
+          (Last Updated: {{ lastUpdated }})
+        </span>
         <Stat />
       </div>
     </div>
@@ -56,9 +59,11 @@
 import { Document, Collection, Tools, Download } from "@element-plus/icons-vue";
 import Stat from "./Stat.vue";
 import { useRouter } from "vue-router";
+import { ref, onMounted } from "vue";
+import axios from "axios";
 
 const router = useRouter();
-
+const lastUpdated = ref("");
 const navItems = [
   {
     text: "Status",
@@ -89,6 +94,21 @@ const navigateTo = (path) => {
     router.push(path);
   }
 };
+
+const formatToLocalTime = (utcString) => {
+  if (!utcString) return "";
+  const date = new Date(utcString);
+  return date.toLocaleString();
+};
+
+onMounted(async () => {
+  try {
+    const timeResponse = await axios.get("/api/lastupdate");
+    lastUpdated.value = formatToLocalTime(timeResponse.data.last_update);
+  } catch (error) {
+    console.error("Error fetching data:", error);
+  }
+});
 </script>
 
 <style scoped>
@@ -215,6 +235,16 @@ h1 {
 .fade-enter-from,
 .fade-leave-to {
   opacity: 0;
+}
+
+.update-time {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 0.9rem;
+  color: #666;
+  font-style: italic;
+  white-space: nowrap;
 }
 
 @media (max-width: 768px) {
