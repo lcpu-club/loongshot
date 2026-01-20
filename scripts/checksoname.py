@@ -6,8 +6,17 @@ import requests
 from collections import defaultdict
 import tarfile
 import tempfile
+import json
+import sys
 
 mirror_loong64 = "https://loongarchlinux.lcpu.dev/loongarch/archlinux/"
+config_file = os.path.join(os.path.expanduser('~'), '.dbconfig.json')
+try:
+    with open(config_file, 'r') as f:
+        config = json.load(f)
+        mirror_loong64 = config['mirrors']['loong64']
+except Exception as e:
+    print(f"Config error: {e}", file=sys.stderr)
 
 def extract_tar_gz(tar_gz_path, extract_path):
     with tarfile.open(tar_gz_path, "r:gz") as tar:
