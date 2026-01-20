@@ -131,7 +131,7 @@ export default {
         const failIndex = parseInt(info.split(":")[1], 10);
         value = fail_reason[failIndex] || "Unknown Failure";
       }
-      return `<a href="log.html?url=/buildlogs/${base}/all.log">${value}</a>`;
+      return `<a href="/log.html?url=/buildlogs/${base}/all.log">${value}</a>`;
     };
 
     return {
