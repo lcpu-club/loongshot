@@ -6,6 +6,7 @@ import sys
 import pyalpm
 from pydantic import BaseModel
 import dbcmd
+from datetime import datetime, timezone
 
 class PackageMetadata(BaseModel):
     name: str = None
@@ -153,6 +154,8 @@ def fetch_all_packages(db_manager):
         # Revert the temporary 'touched' flag
         cursor.execute("UPDATE packages SET flags = flags & ~%s", (touched_flag,))
 
+        utc_time_str = datetime.now(timezone.utc).isoformat()
+        cursor.execute("UPDATE last_update SET last_update = %s", (utc_time_str,))
 
 def log_check(db_manager):
     """Check if log files exist for packages and update the DB."""
