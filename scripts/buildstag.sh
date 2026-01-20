@@ -82,16 +82,21 @@ fi
 ./buildbot.sh $REPOSWITCH --builder $BUILDER:$BUILDDIR -- --skippgpcheck
 
 if [[ $? -eq 0 ]]; then
-        cd /srv/http/build-repo/temp-extra${TESTING}/os/loong64
-        $SCRIPTSPATH/move-repo.sh extra${TESTING}
-        cd /srv/http/build-repo/temp-core${TESTING}/os/loong64
-        $SCRIPTSPATH/move-repo.sh core${TESTING}
-        DEBUG_POOL=/srv/http/debug-pool
-        cd /srv/http/build-repo/debug-pool
-        for pkg in *.zst; do
-            pkgname=${pkg%-debug-*}
-            # remove older version
-            rm -f $DEBUG_POOL/$pkgname-debug*
-            mv $pkg{,.sig} $DEBUG_POOL
-        done
+    cd /srv/http/build-repo/temp-extra${TESTING}/os/loong64
+    $SCRIPTSPATH/move-repo.sh extra${TESTING}
+    cd /srv/http/build-repo/temp-core${TESTING}/os/loong64
+    $SCRIPTSPATH/move-repo.sh core${TESTING}
+    DEBUG_POOL=/srv/http/debug-pool
+    cd /srv/http/build-repo/debug-pool
+    for pkg in *.zst; do
+        pkgname=${pkg%-debug-*}
+        # remove older version
+        rm -f $DEBUG_POOL/$pkgname-debug*
+        mv $pkg{,.sig} $DEBUG_POOL
+    done
+    if [[ -z "$SKIP" ]]; then
+        echo "Syncing database again"
+        ${SCRIPTSPATH}/compare86.py $REPOSWITCH -S
+        ${SCRIPTSPATH}/dbinit.py -S
+    fi
 fi
