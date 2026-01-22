@@ -96,7 +96,7 @@ if [[ $? -eq 0 ]]; then
     done
     if [[ -z "$SKIP" ]]; then
         echo "Syncing database again"
-        ${SCRIPTSPATH}/compare86.py $REPOSWITCH -S
+        ${SCRIPTSPATH}/compare86.py -sTS
         ${SCRIPTSPATH}/dbinit.py -S
     fi
 fi
