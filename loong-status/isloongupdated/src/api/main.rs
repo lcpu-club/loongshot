@@ -87,7 +87,7 @@ async fn get_tasks(
     };
 
     // Logic: if 0 or negative, offset from max. Else use specific ID.
-    let realid = if input_id <= 0 { last_taskid + input_id } else { input_id };
+    let realid = if input_id <= 0 { last_taskid + input_id } else { if input_id > last_taskid { last_taskid } else { input_id } };
 
     // Fetch the tasks
     let query_str = "SELECT t.pkgbase, t.repo, l.build_time, t.info FROM tasks t LEFT JOIN logs l ON t.logid = l.id WHERE t.taskid = $1 ORDER by t.taskno";
