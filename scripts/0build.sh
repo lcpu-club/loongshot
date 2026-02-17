@@ -229,7 +229,8 @@ build_package() {
         msg "Can't copy PKGBUILD to builder."
         return
     fi
-    ssh -t $BUILDER "cd $BUILDPATH/$PKGBASE; PACKAGER=\"$PACKAGER\" extra$TESTING-loong64-build $CLEAN -- -- -A -L $EXTRAARG" 2>/dev/null
+    NOLOONG=$(source PKGBUILD 2>/dev/null;[[ " ${arch[*]} " =~ " loong64 " ]] || echo "-A")
+    ssh -t $BUILDER "cd $BUILDPATH/$PKGBASE; PACKAGER=\"$PACKAGER\" extra$TESTING-loong64-build $CLEAN -- -- $NOLOONG -L $EXTRAARG" 2>/dev/null
     EXITCODE=$?
 
     ENDTIME=$SECONDS
