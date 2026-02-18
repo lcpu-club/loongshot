@@ -1,25 +1,49 @@
 #!/bin/bash
-PAGER=cat psql -U pguser -d archdb -c "select name from packages where x86_version is Null and x86_testing_version is Null and x86_staging_version is Null" | sed 's/^ //;s/\r$//;1,2d;$d' | sed '$d' > /tmp/missing.lst
-# don't remove the pacakges uniqe to loong
-sed -i '/loong/d;/x86_64-linux/d;/lcpu/d;/yt6801/d;/linux-4k/d;/edk2-loongarch/d;' /tmp/missing.lst
 
+REPODIR="/srv/http/loongarch/archlinux"
 BACKUP=$(mktemp -d)
-REPODIR=/srv/http/loongarch/archlinux
+REPOS=("core" "extra")
+
 echo "Backup dir is $BACKUP"
 
-cd $REPODIR/extra/os/loong64
+for REPO in "${REPOS[@]}"; do
+    echo "Processing repository: $REPO"
 
-repo-remove extra.db.tar.gz `cat /tmp/missing.lst` | tee remove.log
-about_to_delete=()
-for pkg in $(grep -oP "Removing existing entry '\K[^']*(?=')" remove.log); do
-    about_to_delete+=($pkg)
+    # Generate the list of packages to remove for this specific repo
+    # Queries packages that exist in our DB for $REPO but have no x86 equivalent
+    PAGER=cat psql -U pguser -d archdb -c "select name from packages where x86_version is Null and x86_testing_version is Null and x86_staging_version is Null and repo='$REPO'" \
+        | sed 's/^ //;s/\r$//;1,2d;$d' | sed '$d' > /tmp/missing_$REPO.lst
+
+    # Filter out packages that are unique to LoongArch (should not be deleted)
+    sed -i '/loong/d;/x86_64-linux/d;/lcpu/d;/yt6801/d;/linux-4k/d;/edk2-loongarch/d;/musl-x86_64/d;' /tmp/missing_$REPO.lst
+
+    # Skip if the list is empty
+    if [ ! -s /tmp/missing_$REPO.lst ]; then
+        echo "No packages to remove in $REPO."
+        rm "/tmp/missing_$REPO.lst"
+        continue
+    fi
+
+    # Perform removal from the repository database
+    pushd "$REPODIR/$REPO/os/loong64" > /dev/null
+
+    repo-remove "$REPO.db.tar.gz" $(cat "/tmp/missing_$REPO.lst") | tee remove_$REPO.log
+
+    # Identify and move the actual files to backup
+    about_to_delete=($(grep -oP "Removing existing entry '\K[^']*(?=')" remove_$REPO.log))
+
+    if [ "${#about_to_delete[@]}" -gt 0 ]; then
+        for file in "${about_to_delete[@]}"; do
+            echo "Moving $file to backup..."
+            # Remove from local repo dir (symlinks)
+            rm -f "$file"*.zst "$file"*.sig
+            # Move actual files from pool to backup
+            mv "$REPODIR/pool/packages/$file"*.zst "$BACKUP/" 2>/dev/null
+            mv "$REPODIR/pool/packages/$file"*.sig "$BACKUP/" 2>/dev/null
+        done
+    fi
+
+    # Cleanup temp files for this repo
+    rm "remove_$REPO.log" "/tmp/missing_$REPO.lst"
+    popd > /dev/null
 done
-if [ ! "${#about_to_delete[@]}" -eq 0 ]; then
-    for file in "${about_to_delete[@]}"; do
-        rm $file*.zst
-        rm $file*.sig
-        mv $REPODIR/pool/packages/$file*.zst $BACKUP
-        mv $REPODIR/pool/packages/$file*.sig $BACKUP
-    done
-fi
-rm remove.log
