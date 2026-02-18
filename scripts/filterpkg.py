@@ -82,7 +82,7 @@ def process_packages_with_kdebuild(task_mgr, input_packages, build_list, repo, n
 
             # Logic: If missing count is low (<3), assume we are adding new packages
             # and schedule the whole KDE group for build.
-            if len(missings) < 3:
+            if len(missings) < 4:
                 # Remove KDE packages from input_packages because we are scheduling
                 # them separately via insert_task (or ignoring them if nokde=True)
                 for pkg in kde_packages:
