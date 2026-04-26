@@ -6,14 +6,6 @@
     group: arch
     mode: '0755'
 
-- name: Install loong-updator
-  copy:
-    src: "{{ lsrc_dir }}/loong-updator"
-    dest: "{{ ldest_dir }}/loong-updator"
-    owner: arch
-    group: arch
-    mode: '0755'
-
 - name: Install index.html
   copy:
     src: ../../loong-status/new.html
@@ -32,25 +24,14 @@
 
 - name: Install systemd service
   template:
-    src: "{{ item }}.j2"
-    dest: "/etc/systemd/system/{{ item }}"
-    owner: root
-    group: root
-    mode: '0644'
-  with_items:
-    - lupdator.service
-    - lapi.service
-
-- name: Install systemd timer
-  copy:
-    src: updator_timer.timer
-    dest: /etc/systemd/system/updator_timer.timer
+    src: "lapi.service.j2"
+    dest: "/etc/systemd/system/lapi.service"
     owner: root
     group: root
     mode: '0644'
 
-- name: Activate systemd timer and service
-  service: name={{ item }} enabled=yes state=started
-  with_items:
-    - updator_timer.timer
-    - lapi.service
+- name: Activate systemd service
+  service:
+    name: lapi.service
+    enabled: yes
+    state: started

@@ -1,9 +1,0 @@
-[Unit]
-Description=Run updator every 20 minutes
-
-[Service]
-Type=simple
-WorkingDirectory={{ ldest_dir }}
-ExecStart={{ ldest_dir }}/loong-updator
-User=arch
-Group=arch
