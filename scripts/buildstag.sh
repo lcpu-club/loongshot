@@ -99,4 +99,10 @@ if [[ $? -eq 0 ]]; then
         ${SCRIPTSPATH}/compare86.py -sTS
         ${SCRIPTSPATH}/dbinit.py -S
     fi
+    if ls /srv/http/build-repo/temp-core${TESTING}/os/loong64/*.zst 2>/dev/null; then
+        echo "WARNING: Remaining .zst files found in temp-core${TESTING}"
+    fi
+    if ls /srv/http/build-repo/temp-extra${TESTING}/os/loong64/*.zst 2>/dev/null; then
+        echo "WARNING: Remaining .zst files found in temp-extra${TESTING}"
+    fi
 fi
