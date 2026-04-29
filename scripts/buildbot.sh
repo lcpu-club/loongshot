@@ -80,6 +80,10 @@ while [ 1 ]; do
             fi
 
             if grep -q "Could not download sources." $ALLLOGS; then
+                if grep -q "server does not seem to support byte ranges" $ALLLOGS; then
+                    ssh $BUILDER -t "rm $BUILDDIR/$pkg/*.part -f"
+                    continue
+                fi
                 for failed in `awk '/is not a clone/ && $3 ~ /^\/mnt\/repos\//  {print $3}' "$ALLLOGS"`; do
                     # remove bad repo
                     ssh $BUILDER -t "rm $failed -rf"
