@@ -10,8 +10,9 @@ CREATE TABLE IF NOT EXISTS packages (
     loong_staging_version TEXT,
     flags INTEGER,
     timecost INTEGER,
-    log_version TEXT,
+    log_version TEXT
 );
+
 CREATE TABLE IF NOT EXISTS last_update (
     last_update TEXT PRIMARY KEY
 );
