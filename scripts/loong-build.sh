@@ -201,7 +201,7 @@ build_package() {
         if [[ ! -z $NOKEEP ]]; then
             rm -rf $ZSTLOGDIR/$PKGBASE
         fi
-        cp -a $WORKDIR/$PKGBASE $ZSTLOGDIR/
+        rsync -av $WORKDIR/$PKGBASE $ZSTLOGDIR/ --exclude=.*
         cd $ZSTLOGDIR/$PKGBASE
         PACKAGER="$PACKAGER" extra$TESTING-loong64-build $CLEAN -- -- -A -L $EXTRAARG
         EXITCODE=$?
