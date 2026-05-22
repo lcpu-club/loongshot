@@ -241,7 +241,7 @@ build_package() {
         done)
     fi
     if [[ "$BUILDER" == "localhost" ]]; then
-        BUILDER=$(hostname) # save the hostname in log
+        BUILDER=$(hostnamectl hostname) # save the hostname in log
     fi
     if [[ $EXITCODE -eq 0 ]]; then
         msg "$PKGBASE-$PKGVERREL built on $BUILDER, time cost: $TIMECOST"
