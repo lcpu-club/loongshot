@@ -85,8 +85,7 @@ do_move(){
     done
 
     if [[ ${#ALLZST[@]} -eq 0 ]]; then
-        echo "No files to add to the repository."
-        exit 0
+        return
     fi
 
     repo-add --include-sigs -R $NEWREPO/$TO.db.tar.gz "${ALLZST[@]}" | tee add.log
