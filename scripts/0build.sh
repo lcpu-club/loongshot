@@ -143,6 +143,8 @@ build_package() {
             find $LOONGREPO/$PKGBASE -type f -name "*" ! -name "loong.patch" -exec cp {} . \;
             msg "Loong's patch applied."
         fi
+        # pkgname might change after patching.
+        PKGNAME=$(. PKGBUILD; echo $pkgname)
     fi
 
     PKGVERREL=$(source PKGBUILD; echo $epoch${epoch:+:}$pkgver-$pkgrel)
