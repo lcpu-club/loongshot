@@ -13,7 +13,6 @@ PACKAGES_DICT = {
     'kf6': 'kcoreaddons',
     'maui': 'mauiman',
     'plasma': 'kwayland',
-    'qt5': 'qt5-base',
     'qt6': 'qt6-base'
 }
 
