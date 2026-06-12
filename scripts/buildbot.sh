@@ -100,7 +100,4 @@ while [ 1 ]; do
     done
 
     $SCRIPTSPATH/dbcmd.py task --done $orig --list $BUILDLIST
-
-    # tracking the soname changes
-    grep -A4 "WARNING.*Sonames differ" $ALLLOGS >> sonames.log
 done
