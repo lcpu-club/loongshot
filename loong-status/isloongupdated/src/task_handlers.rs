@@ -10,6 +10,7 @@ pub struct TaskParams {
 
 #[derive(Serialize, Debug, FromRow)]
 pub struct Task {
+    pub taskno: i32,
     pub pkgbase: String,
     pub repo: i32,
     pub build_result: Option<String>,
@@ -50,7 +51,7 @@ pub async fn get_tasks(
     };
 
     // Fetch the tasks
-    let query_str = "SELECT t.pkgbase, t.repo, l.build_time, t.info FROM tasks t LEFT JOIN logs l ON t.logid = l.id WHERE t.taskid = $1 ORDER by t.taskno";
+    let query_str = "SELECT t.taskno, t.pkgbase, t.repo, l.build_time, t.info FROM tasks t LEFT JOIN logs l ON t.logid = l.id WHERE t.taskid = $1 ORDER by t.taskno";
     let rows = sqlx::query(query_str)
         .bind(realid)
         .fetch_all(pool.get_ref())
@@ -67,6 +68,7 @@ pub async fn get_tasks(
                 });
 
                 Task {
+                    taskno: row.get("taskno"),
                     pkgbase: row.get("pkgbase"),
                     repo: row.get("repo"),
                     build_time: build_time_str,

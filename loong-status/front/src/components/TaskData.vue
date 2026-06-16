@@ -14,6 +14,7 @@
     <table>
       <thead>
         <tr>
+          <th>Task No</th>
           <th>Package Base</th>
           <th>Repo</th>
           <th>Finish Time</th>
@@ -22,6 +23,7 @@
       </thead>
       <tbody>
         <tr v-for="task in tasks" :key="task.pkgbase">
+          <td>{{ task.taskno }}</td>
           <td>{{ task.pkgbase }}</td>
           <td>{{ task.repo }}</td>
           <td>{{ task.build_time }}</td>
