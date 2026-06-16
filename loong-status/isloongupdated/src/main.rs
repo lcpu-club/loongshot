@@ -22,6 +22,7 @@ async fn main() -> std::io::Result<()> {
             .service(package_handlers::get_last_update)
             .service(package_handlers::get_stat)
             .service(task_handlers::get_tasks)
+            .service(task_handlers::get_tasks_by_build_time)
             .service(log_handlers::get_log)
     })
     .workers(2)

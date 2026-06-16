@@ -1,17 +1,50 @@
 <template>
   <div>
-    <div>
-      <!-- Use a local display ID or the one from route -->
+    <!-- All query controls in one row -->
+    <div class="query-bar">
       <input
         type="number"
         v-model.number="displayTaskId"
         @keyup.enter="goToTask"
+        placeholder="Task ID"
+        class="task-id-input"
       />
-      <button style="width: 100px" @click="prevTask">Previous</button>
-      <button style="width: 100px" @click="nextTask">Next</button>
+      <button class="btn" @click="prevTask">&lt; Prev</button>
+      <button class="btn" @click="nextTask">Next &gt;</button>
+      <span class="query-label">By Date:</span>
+      <input type="date" v-model="selectedDate" class="native-date-picker" />
+      <button class="btn" @click="searchByDate">Search</button>
     </div>
 
-    <table>
+    <!-- Summary view: multiple taskids matched -->
+    <div v-if="isSummary" class="summary-section">
+      <h3>{{ summaries.length }} Task(s) on this date</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>Task ID</th>
+            <th>First Pkgbase</th>
+            <th>Records</th>
+            <th>Action</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="item in summaries" :key="item.taskid">
+            <td>{{ item.taskid }}</td>
+            <td>{{ item.pkgbase }}</td>
+            <td>{{ item.count }}</td>
+            <td>
+              <button @click="goToTask(item.taskid)" class="view-link">
+                View
+              </button>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Full task list view -->
+    <table v-else>
       <thead>
         <tr>
           <th>Task No</th>
@@ -22,7 +55,7 @@
         </tr>
       </thead>
       <tbody>
-        <tr v-for="task in tasks" :key="task.pkgbase">
+        <tr v-for="task in tasks" :key="task.pkgbase + '-' + task.taskno">
           <td>{{ task.taskno }}</td>
           <td>{{ task.pkgbase }}</td>
           <td>{{ task.repo }}</td>
@@ -38,34 +71,46 @@ import { useRoute, useRouter } from "vue-router";
 import { ref, watch, onMounted } from "vue";
 
 export default {
+  // ElementPlus is globally registered in main.js
   setup() {
     const route = useRoute();
     const router = useRouter();
     const tasks = ref([]);
+    const summaries = ref([]);
+    const isSummary = ref(false);
     const displayTaskId = ref(0);
+    const selectedDate = ref("");
+
+    const resetState = () => {
+      tasks.value = [];
+      summaries.value = [];
+      isSummary.value = false;
+    };
+
+    const mapTaskData = (tasks) =>
+      tasks.map((task) => ({
+        ...task,
+        build_time: convertToLocalTime(task.build_time),
+        repo: lookupRepo(task.repo),
+        build_result: lookupBuildResult(task.build_result, task.pkgbase),
+      }));
 
     const fetchData = async () => {
-      // Get taskid from URL params (e.g., /task/123)
       const tid = route.params.taskid || 0;
 
       try {
+        resetState();
         const response = await fetch(`/api/tasks/result?taskid=${tid}`);
         if (!response.ok) throw new Error("Failed to fetch");
 
         const data = await response.json();
 
-        // Update local state with data from backend
-        tasks.value = data.tasks.map((task) => ({
-          ...task,
-          build_time: convertToLocalTime(task.build_time),
-          repo: lookupRepo(task.repo),
-          build_result: lookupBuildResult(task.build_result, task.pkgbase),
-        }));
+        tasks.value = mapTaskData(data.tasks);
 
-        // Sync the input box and URL with the ACTUAL ID returned by the server
-        displayTaskId.value = data.taskid;
+        if (data.taskid !== undefined) {
+          displayTaskId.value = data.taskid;
+        }
 
-        // If the URL was empty (/task) or different, update it without reloading
         if (route.params.taskid !== String(data.taskid)) {
           router.replace({ params: { taskid: data.taskid } });
         }
@@ -74,21 +119,54 @@ export default {
       }
     };
 
+    const fetchByDate = async (dateStr) => {
+      try {
+        resetState();
+        const response = await fetch(
+          `/api/tasks/by_build_time?build_time=${encodeURIComponent(dateStr)}`,
+        );
+        if (!response.ok) throw new Error("Failed to fetch");
+
+        const data = await response.json();
+
+        if (Array.isArray(data)) {
+          if (data.length === 0) {
+            return;
+          }
+          summaries.value = data;
+          isSummary.value = true;
+          tasks.value = [];
+        } else if (data.tasks) {
+          tasks.value = mapTaskData(data.tasks);
+          if (data.taskid !== undefined) {
+            displayTaskId.value = data.taskid;
+          }
+        }
+      } catch (error) {
+        console.error("Error fetching by build_time:", error);
+      }
+    };
+
+    const searchByDate = () => {
+      if (!selectedDate.value) return;
+      fetchByDate(selectedDate.value);
+    };
+
     const nextTask = () => {
-      const nextId = parseInt(displayTaskId.value) + 1;
-      router.push(`/task/${nextId}`);
+      router.push(`/task/${Number(displayTaskId.value) + 1}`);
     };
 
     const prevTask = () => {
-      const prevId = parseInt(displayTaskId.value) - 1;
-      router.push(`/task/${prevId}`);
+      router.push(`/task/${Number(displayTaskId.value) - 1}`);
     };
 
-    const goToTask = () => {
-      router.push(`/task/${displayTaskId.value}`);
+    const goToTask = (taskId) => {
+      const id = taskId !== undefined ? taskId : Number(displayTaskId.value);
+      // Use router.resolve to generate the URL and force navigation
+      const route = router.resolve({ path: `/task/${id}` });
+      window.location.href = route.href;
     };
 
-    // Watch for URL parameter changes
     watch(
       () => route.params.taskid,
       () => {
@@ -139,14 +217,77 @@ export default {
     return {
       displayTaskId,
       tasks,
+      summaries,
+      isSummary,
+      selectedDate,
       nextTask,
       prevTask,
       goToTask,
+      searchByDate,
     };
   },
 };
 </script>
 <style scoped>
+.query-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 8px;
+  flex-wrap: nowrap;
+}
+
+.task-id-input {
+  width: 80px;
+  padding: 2px 6px;
+  font-size: 0.85rem;
+}
+
+.btn {
+  width: 65px;
+  font-size: 0.8rem;
+  padding: 2px 4px;
+}
+
+.query-label {
+  font-size: 0.85rem;
+  color: var(--color-text);
+  white-space: nowrap;
+}
+
+.native-date-picker {
+  padding: 2px 6px;
+  font-size: 0.85rem;
+  width: 155px;
+  cursor: pointer;
+}
+
+.summary-section {
+  margin-bottom: 12px;
+}
+
+.summary-section h3 {
+  color: #9b2d35;
+  margin-bottom: 6px;
+  font-size: 1rem;
+}
+
+.view-link {
+  color: #9b2d35;
+  text-decoration: none;
+  font-weight: bold;
+  font-size: 0.85rem;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  display: inline;
+}
+
+.view-link:hover {
+  text-decoration: underline;
+}
+
 table {
   width: 100%;
   border-collapse: collapse;
