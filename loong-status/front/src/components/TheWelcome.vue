@@ -3,7 +3,7 @@
     <!-- Title -->
     <div class="upper-layer">
       <div class="header-content">
-        <img src="/public/logo.png" class="logo" alt="LoongArch Logo" />
+        <img src="/logo.png" class="logo" alt="LoongArch Logo" />
         <h1>Arch Linux for Loong64</h1>
         <p class="subtitle">
           This is a port of
