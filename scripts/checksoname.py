@@ -68,8 +68,9 @@ def find_orphan_libs(links, files):
     for lib_name, pkg_name in links.items():
         for pkg, version in pkg_name.items():
             allversion = set().union(*files[lib_name].values())
-            if not version.issubset(allversion):
-                print(f"{pkg} links to orphan {lib_name}.so{list(version)[0]}")
+            missing = version - allversion
+            for ver in missing:
+                print(f"{pkg} links to orphan {lib_name}.so{ver}")
 
 def main():
     temp_dir = tempfile.TemporaryDirectory()
