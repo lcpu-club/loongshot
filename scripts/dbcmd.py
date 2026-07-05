@@ -256,6 +256,24 @@ class TaskManager:
         except Exception as e:
             print(f"Show task failed: {e}", file=sys.stderr)
 
+    def show_task_by_cost(self, tasklist):
+        try:
+            with self.db.transaction() as cursor:
+                cursor.execute("""
+                    SELECT p.name, p.timecost, t.taskno
+                    FROM tasks t
+                    JOIN packages p ON t.pkgbase=p.name
+                    WHERE t.tasklist=%s AND t.info IS NULL
+                    ORDER BY p.timecost DESC NULLS LAST
+                """, (tasklist,))
+                for row in cursor.fetchall():
+                    name = row[0]
+                    timecost = row[1] if row[1] is not None else "N/A"
+                    taskno = row[2]
+                    print(f"{taskno:5} {name:34} {timecost}")
+        except Exception as e:
+            print(f"Show task by cost failed: {e}", file=sys.stderr)
+
     def show_hist(self, hist_no):
         try:
             with self.db.transaction() as cursor:
@@ -340,6 +358,7 @@ def parse_args():
     task_parser.add_argument("--add", type=str, help="Packages to append")
     task_parser.add_argument("--insert", type=str, help="Packages to insert from top")
     task_parser.add_argument("--show", action="store_true", help="Show queue")
+    task_parser.add_argument("--cost", action="store_true", help="Show queue by time cost")
     task_parser.add_argument("--remove", type=str, help="Remove package")
     task_parser.add_argument("--get", action="store_true", help="Get one package")
     task_parser.add_argument("--done", type=str, help="Mark finished")
@@ -397,6 +416,7 @@ def main():
             if args.done: task_mgr.remove_task(args.done, args.list)
             if args.show: task_mgr.show_task(args.list)
             if args.hist >= 0: task_mgr.show_hist(args.hist)
+            if args.cost: task_mgr.show_task_by_cost(args.list)
 
 if __name__ == "__main__":
     try:
