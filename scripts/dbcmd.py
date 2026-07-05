@@ -274,6 +274,28 @@ class TaskManager:
         except Exception as e:
             print(f"Show task by cost failed: {e}", file=sys.stderr)
 
+    def show_eta(self, tasklist):
+        try:
+            with self.db.transaction() as cursor:
+                cursor.execute("""
+                    SELECT SUM(p.timecost) AS total_timecost
+                    FROM tasks t
+                    JOIN packages p ON t.pkgbase = p.name
+                    WHERE t.tasklist = %s AND t.info IS NULL
+                """, (tasklist,))
+                result = cursor.fetchone()
+                total_seconds = result[0] if result and result[0] is not None else 0
+
+                if total_seconds == 0:
+                    print("No remaining tasks or no time cost data available.")
+                else:
+                    hours = int(total_seconds // 3600)
+                    minutes = int((total_seconds % 3600) // 60)
+                    seconds = int(total_seconds % 60)
+                    print(f"ETA: {hours:02d}:{minutes:02d}:{seconds:02d} (total: {total_seconds} seconds)")
+        except Exception as e:
+            print(f"Show ETA failed: {e}", file=sys.stderr)
+
     def show_hist(self, hist_no):
         try:
             with self.db.transaction() as cursor:
@@ -368,6 +390,7 @@ def parse_args():
     task_parser.add_argument("--stag", action="store_true", help="Staging repo")
     task_parser.add_argument("--test", action="store_true", help="Testing repo")
     task_parser.add_argument("--taskno", type=int, default=0)
+    task_parser.add_argument("--eta", action="store_true", help="Show ETA for remaining tasks")
 
     return parser.parse_args()
 
@@ -417,6 +440,7 @@ def main():
             if args.show: task_mgr.show_task(args.list)
             if args.hist >= 0: task_mgr.show_hist(args.hist)
             if args.cost: task_mgr.show_task_by_cost(args.list)
+            if args.eta: task_mgr.show_eta(args.list)
 
 if __name__ == "__main__":
     try:
