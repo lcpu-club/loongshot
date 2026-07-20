@@ -65,7 +65,10 @@ def scan_directory_for_libs(dir_path, filename):
     return lib_versions
 
 def find_orphan_libs(links, files):
+    white_list = {'libc', 'libdeepin_pw_check'}
     for lib_name, pkg_name in links.items():
+        if lib_name in white_list:
+            continue
         for pkg, version in pkg_name.items():
             allversion = set().union(*files[lib_name].values())
             missing = version - allversion
