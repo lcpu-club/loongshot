@@ -113,12 +113,12 @@ build_package() {
         # clone arch package repo
         if [[ -d $WORKDIR/$PKGBASE ]]; then
             cd $WORKDIR/$PKGBASE
-            pkgctl repo switch main -f
-            git pull 2>&1 || return
+            HADREPO=1
         else
-            cd $WORKDIR 2>&1 || return
-            pkgctl repo clone --protocol=https $PKGBASE 2>&1 || return
+            cd $WORKDIR 2>&1 || return 1
+            pkgctl repo clone --protocol=https $PKGBASE 2>&1 || return 1
             cd $PKGBASE
+            HADREPO=0
         fi
 
         PKGNAME=$(. PKGBUILD; echo $pkgname)
@@ -131,31 +131,39 @@ build_package() {
             fi
         fi
 
+        # pull only when the release tag is not available locally
+        if [[ "$HADREPO" == 1 ]]; then
+            TAG=${PKGVER//:/-}
+            if [[ ! -z "$TAG" ]] && git rev-parse -q --verify refs/tags/$TAG >/dev/null 2>&1; then
+                pkgctl repo switch $TAG -f
+            else
+                pkgctl repo switch main -f
+                git pull 2>&1 || return 1
+            fi
+        fi
+
         # switch to the current release tag
         if [[ ! -z "$PKGVER" ]]; then
             if ! pkgctl repo switch ${PKGVER//:/-}; then
                 msg "Release tag could not be found."
-                return
+                return 1
             fi
         fi
         # apply patch
         if [[ -d "$LOONGREPO/$PKGBASE" ]]; then
             if ! patch -Np1 -i $LOONGREPO/$PKGBASE/loong.patch; then
                 msg "Fail to apply loong's patch."
-                return
+                return 1
             fi
             # copy additional files
             find $LOONGREPO/$PKGBASE -type f -name "*" ! -name "loong.patch" -exec cp {} . \;
             msg "Loong's patch applied."
         fi
+        # pkgname might change after patching.
+        PKGNAME=$(. PKGBUILD; echo $pkgname)
     fi
 
-    # package may not in arch's repo
-    if [[ -z "$PKGVER" ]]; then
-        PKGVERREL=$(source PKGBUILD; echo $epoch${epoch:+:}$pkgver-$pkgrel)
-    else
-        PKGVERREL=$PKGVER
-    fi
+    PKGVERREL=$(source PKGBUILD; echo $epoch${epoch:+:}$pkgver-$pkgrel)
 
     # Try to find the pkgver from tier0 server
     PKGNAME=$(. PKGBUILD; echo $pkgname)
@@ -209,7 +217,7 @@ build_package() {
         rsync -avzP $WORKDIR/$PKGBASE/ $BUILDER:$BUILDPATH/$PKGBASE/ $NOKEEP --exclude=.*
         if [[ ! $? -eq 0 ]]; then
             msg "Can't copy PKGBUILD to builder."
-            return
+            return 1
         fi
         ssh -t $BUILDER "cd $BUILDPATH/$PKGBASE; PACKAGER=\"$PACKAGER\" extra$TESTING-loong64-build $CLEAN -- -- -A -L $EXTRAARG" 2>/dev/null
         EXITCODE=$?
@@ -245,30 +253,38 @@ build_package() {
     fi
     if [[ $EXITCODE -eq 0 ]]; then
         msg "$PKGBASE-$PKGVERREL built on $BUILDER, time cost: $TIMECOST"
+        return 0
     else
         msg "$PKGBASE-$PKGVERREL failed on $BUILDER, time cost: $TIMECOST"
+        return 1
     fi
 }
 
 # after debuging, maybe you just want to upload the log without rebuilding.
 if [[ -z "$UPLOG" ]]; then
     build_package | tee all.log
+    BUILDSTATUS=${PIPESTATUS[0]}
+else
+    BUILDSTATUS=0
 fi
 
 if [[ "$DEBUG" == "yes" ]]; then
-    exit 1
-else
-    if [[ ! -z "$TIER0" ]]; then
-        LOGPATH=/home/arch/loong-status/build_logs
-        # 1. mkdir for log. 2. upload. 3. parse the log
-        ssh -t $TIER0 "mkdir -p $LOGPATH/$PKGBASE" && scp all.log $TIER0:$LOGPATH/$PKGBASE/ && ssh -t $TIER0 "parselog.py $PKGBASE"
-    fi
-
-    # rename the log and move to the working directory
-    if [[ -f $WORKDIR/$PKGBASE/PKGBUILD ]]; then
-        PKGVERREL=$(source $WORKDIR/$PKGBASE/PKGBUILD; echo $epoch${epoch:+:}$pkgver-$pkgrel)
-        # when build fails, destination dir will missing
-        mkdir -p $ZSTLOGDIR/$PKGBASE
-        mv all.log $ZSTLOGDIR/$PKGBASE/$PKGBASE-$PKGVERREL.log
-    fi
+    exit $BUILDSTATUS
 fi
+
+# upload the log to server (run for both success and failure)
+if [[ ! -z "$TIER0" ]]; then
+    LOGPATH=/home/arch/loong-status/build_logs
+    # 1. mkdir for log. 2. upload. 3. parse the log
+    ssh -t $TIER0 "mkdir -p $LOGPATH/$PKGBASE" && scp all.log $TIER0:$LOGPATH/$PKGBASE/ && ssh -t $TIER0 "parselog.py $PKGBASE"
+fi
+
+# rename the log and move to the working directory
+if [[ -f $WORKDIR/$PKGBASE/PKGBUILD ]]; then
+    PKGVERREL=$(source $WORKDIR/$PKGBASE/PKGBUILD; echo $epoch${epoch:+:}$pkgver-$pkgrel)
+    # when build fails, destination dir will missing
+    mkdir -p $ZSTLOGDIR/$PKGBASE
+    mv all.log $ZSTLOGDIR/$PKGBASE/$PKGBASE-$PKGVERREL.log
+fi
+
+exit $BUILDSTATUS
