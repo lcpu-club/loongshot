@@ -6,14 +6,6 @@
     group: arch
     mode: '0755'
 
-- name: Install index.html
-  copy:
-    src: ../../loong-status/new.html
-    dest: /srv/http/status/html/new.html
-    owner: http
-    group: http
-    mode: '0644'
-
 - name: Create env file
   ansible.builtin.copy:
     dest: "{{ ldest_dir }}/.env"
