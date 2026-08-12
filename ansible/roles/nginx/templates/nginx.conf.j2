@@ -5,6 +5,8 @@ events {
 }
 
 http {
+    types_hash_max_size 2048;
+    types_hash_bucket_size 128;
     include       mime.types;
     default_type  application/octet-stream;
 
@@ -32,6 +34,10 @@ http {
             autoindex on;
             autoindex_exact_size on;
             autoindex_localtime on;
+            expires -1;
+            add_header Cache-Control "no-store, no-cache, must-revalidate";
+            add_header Pragma "no-cache";
+            add_header Expires "Thu, 01 Jan 1970 00:00:00 GMT";
         }
 
         location /buildlogs/ {
