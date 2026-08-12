@@ -109,12 +109,12 @@ build_package() {
         # clone arch package repo
         if [[ -d $WORKDIR/$PKGBASE ]]; then
             cd $WORKDIR/$PKGBASE
-            pkgctl repo switch main -f
-            git pull 2>&1 || return 1
+            HADREPO=1
         else
             cd $WORKDIR 2>&1 || return 1
             pkgctl repo clone --protocol=https $PKGBASE 2>&1 || return 1
             cd $PKGBASE
+            HADREPO=0
         fi
 
         PKGNAME=$(. PKGBUILD; echo $pkgname)
@@ -124,6 +124,17 @@ build_package() {
                 REPOSWITCH=-${TESTING%ing}
             fi
             PKGVER=`$SCRIPTSPATH/compare86.py $REPOSWITCH -p $PKGNAME |grep x86_64|awk -F= '{print $2}'`
+        fi
+
+        # pull only when the release tag is not available locally
+        if [[ "$HADREPO" == 1 ]]; then
+            TAG=${PKGVER//:/-}
+            if [[ ! -z "$TAG" ]] && git rev-parse -q --verify refs/tags/$TAG >/dev/null 2>&1; then
+                pkgctl repo switch $TAG -f
+            else
+                pkgctl repo switch main -f
+                git pull 2>&1 || return 1
+            fi
         fi
 
         # switch to the current release tag
