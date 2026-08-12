@@ -110,10 +110,10 @@ build_package() {
         if [[ -d $WORKDIR/$PKGBASE ]]; then
             cd $WORKDIR/$PKGBASE
             pkgctl repo switch main -f
-            git pull 2>&1 || return
+            git pull 2>&1 || return 1
         else
-            cd $WORKDIR 2>&1 || return
-            pkgctl repo clone --protocol=https $PKGBASE 2>&1 || return
+            cd $WORKDIR 2>&1 || return 1
+            pkgctl repo clone --protocol=https $PKGBASE 2>&1 || return 1
             cd $PKGBASE
         fi
 
@@ -130,14 +130,14 @@ build_package() {
         if [[ ! -z "$PKGVER" ]]; then
             if ! pkgctl repo switch ${PKGVER//:/-}; then
                 msg "Release tag could not be found."
-                return
+                return 1
             fi
         fi
         # apply patch
         if [[ -d "$LOONGREPO/$PKGBASE" ]]; then
             if ! patch -Np1 -i $LOONGREPO/$PKGBASE/loong.patch; then
                 msg "Fail to apply loong's patch."
-                return
+                return 1
             fi
             # copy additional files
             find $LOONGREPO/$PKGBASE -type f -name "*" ! -name "loong.patch" -exec cp {} . \;
@@ -229,7 +229,7 @@ build_package() {
     rsync -avzP $WORKDIR/$PKGBASE/ $BUILDER:$BUILDPATH/$PKGBASE/ $NOKEEP --exclude=.*
     if [[ ! $? -eq 0 ]]; then
         msg "Can't copy PKGBUILD to builder."
-        return
+        return 1
     fi
     NOLOONG=$(source PKGBUILD 2>/dev/null;[[ " ${arch[*]} " =~ " loong64 " ]] || echo "-A")
     ssh -t $BUILDER "cd $BUILDPATH/$PKGBASE; PACKAGER=\"$PACKAGER\" extra$TESTING-loong64-build $CLEAN -- -- $NOLOONG -L $EXTRAARG" 2>/dev/null
@@ -282,23 +282,28 @@ build_package() {
             chmod 664 $LOCALREPO/debug-pool/$DEBUGPKG{,.sig}
         fi
         msg "$PKGBASE-$PKGVERREL built on $BUILDER, time cost: $TIMECOST"
+        return 0
     else
         msg "$PKGBASE-$PKGVERREL failed on $BUILDER, time cost: $TIMECOST"
+        return 1
     fi
 }
 
 build_package | tee all.log.$BUILDER
+BUILDSTATUS=${PIPESTATUS[0]}
 
-if [[ ${PIPESTATUS[0]} -eq 2 ]] || [[ "$DEBUG" == "yes" ]]; then
-    exit 1
-else
-    # 1. mkdir for log. 2. upload. 3. parse the log
-    mkdir -p $LOGPATH/$PKGBASE
-    cp all.log.$BUILDER $LOGPATH/$PKGBASE/all.log
-    parselog.py $PKGBASE
-    if [[ -f $WORKDIR/$PKGBASE/PKGBUILD ]]; then
-        PKGVERREL=$(source $WORKDIR/$PKGBASE/PKGBUILD; echo $epoch${epoch:+:}$pkgver-$pkgrel)
-        mkdir -p $ZSTLOGDIR/$PKGBASE
-        mv all.log.$BUILDER $ZSTLOGDIR/$PKGBASE/$PKGBASE-$PKGVERREL.log
-    fi
+if [[ "$BUILDSTATUS" -eq 2 ]] || [[ "$DEBUG" == "yes" ]]; then
+    exit 0
 fi
+
+# 1. mkdir for log. 2. upload. 3. parse the log (run for both success and failure)
+mkdir -p $LOGPATH/$PKGBASE
+cp all.log.$BUILDER $LOGPATH/$PKGBASE/all.log
+parselog.py $PKGBASE
+if [[ -f $WORKDIR/$PKGBASE/PKGBUILD ]]; then
+    PKGVERREL=$(source $WORKDIR/$PKGBASE/PKGBUILD; echo $epoch${epoch:+:}$pkgver-$pkgrel)
+    mkdir -p $ZSTLOGDIR/$PKGBASE
+    mv all.log.$BUILDER $ZSTLOGDIR/$PKGBASE/$PKGBASE-$PKGVERREL.log
+fi
+
+exit $BUILDSTATUS
