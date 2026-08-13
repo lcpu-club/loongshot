@@ -76,6 +76,8 @@ if [[ -z "$RESUME" ]]; then
     if [[ -z "$PKG" ]]; then
         exit 1
     fi
+    # Add version parameters to packages that need to be built multiple times
+    PKG=$(${SCRIPTSPATH}/addver.py $REPOSWITCH $PKG)
     ./dbcmd.py task --add "$PKG" $REPOSWITCH --list $BUILDLIST
 fi
 
