@@ -55,12 +55,18 @@ while [ 1 ]; do
 
     while [[ $retries -lt $max_retries ]]; do
         ./0build.sh $pkg $VER "$@" $DOUBLEDASH $NOCHECK
+        BUILD_STATUS=$?
         ((retries++))
         if [[ -f all.log.$BUILDER ]]; then
             ALLLOGS=all.log.$BUILDER
         else
             PKGVER=$(source $WORKDIR/$pkg/PKGBUILD; echo $epoch${epoch:+:}$pkgver-$pkgrel)
             ALLLOGS=$ZSTLOGDIR/$pkg/$pkg-$PKGVER.log
+        fi
+
+        # only try to recover from a failed build
+        if [[ "$BUILD_STATUS" -eq 0 ]]; then
+            break
         fi
 
         if [ $(stat -c %s "$ALLLOGS") -lt $max_size ]; then
