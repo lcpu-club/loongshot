@@ -167,15 +167,14 @@ class TaskManager:
                 cursor.execute("LOCK TABLE tasks IN SHARE ROW EXCLUSIVE MODE")
 
                 # 3. Calculate IDs
-                cursor.execute("SELECT min(taskno), max(taskno) FROM tasks WHERE tasklist=%s AND info IS NULL", (tasklist,))
-                result = cursor.fetchone()
-                first, last = result if result else (None, None)
+                cursor.execute("SELECT min(taskno) FROM tasks WHERE tasklist=%s AND info IS NULL", (tasklist,))
+                res = cursor.fetchone()
+                first = res[0] if res and res[0] is not None else None
 
                 if first is None:
                     cursor.execute("SELECT max(taskno) FROM tasks WHERE tasklist=%s", (tasklist,))
                     res = cursor.fetchone()
                     first = (res[0] + 1) if res and res[0] is not None else 1
-                    last = first - 1
 
                 cursor.execute("SELECT max(taskid) FROM tasks WHERE tasklist=%s", (tasklist,))
                 res = cursor.fetchone()
@@ -185,15 +184,20 @@ class TaskManager:
                     res = cursor.fetchone()
                     maxid = res[0] if res and res[0] is not None else 0
 
-                if taskno > first:
-                    first = taskno
-
                 # 4. Insert
                 if insert:
+                    # Insert at the requested position, shifting every row at or
+                    # after it (regardless of info/state) to make room.
+                    if taskno > 0:
+                        first = taskno
                     cursor.execute("UPDATE tasks SET taskno=taskno+%s WHERE tasklist=%s AND taskno>=%s",
                                    (len(pkgbase_list), tasklist, first))
                 else:
-                    first = last + 1
+                    # Append after the highest taskno in this tasklist, including
+                    # finished/failed rows, so we never collide with them.
+                    cursor.execute("SELECT max(taskno) FROM tasks WHERE tasklist=%s", (tasklist,))
+                    res = cursor.fetchone()
+                    first = (res[0] + 1) if res and res[0] is not None else 1
 
                 rows = [(i+first, pkgbase, maxid + 1, tasklist, repo) for i, pkgbase in enumerate(pkgbase_list)]
                 insert_query = "INSERT INTO tasks (taskno, pkgbase, taskid, tasklist, repo) VALUES (%s, %s, %s, %s, %s)"
