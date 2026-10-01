@@ -1,5 +1,11 @@
 #!/bin/bash
 
+# If the commit message already has content (ignoring comments and blank lines),
+# keep it as is and do not add anything.
+if grep -qvE '^[[:space:]]*(#|$)' "$1"; then
+    exit 0
+fi
+
 # Get the git diff
 changes=$(git diff --cached --numstat)
 
