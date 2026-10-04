@@ -97,8 +97,9 @@ while [ 1 ]; do
                 continue
             fi
 
-            if grep -q -e "remote: GitLab is not responding" -e "Resolving timed out after 10000 milliseconds" -e "Connection timed out after 10001 milliseconds" -e "fatal: unable to access 'https://gitlab.archlinux.org"  $ALLLOGS; then
+            if grep -e "remote: GitLab is not responding" -e "Resolving timed out after 10000 milliseconds" -e "Connection timed out after 10001 milliseconds" -e "fatal: unable to access 'https://gitlab.archlinux.org" -e "Can't copy PKGBUILD to builder"  $ALLLOGS; then
                 sleep 100
+                ((retries--))
                 continue
             fi
         fi
