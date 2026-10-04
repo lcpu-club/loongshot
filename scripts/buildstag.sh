@@ -68,7 +68,7 @@ if [[ -z "$RESUME" ]]; then
     fi
     echo $PKG | tr ' ' '\n' > today.lst
     echo "Start to ordering..."
-    PKG=$(timeout 20 ./genrebuild --dbpath ~/.cache/compare86/x86 `echo $PKG` | tr ' ' ',')
+    PKG=$(timeout 50 ./genrebuild --dbpath ~/.cache/compare86/x86 `echo $PKG` | tr ' ' ',')
     if [[ ! -z "$SAVE" ]]; then
         echo $PKG
         exit 1
@@ -107,4 +107,5 @@ if [[ $? -eq 0 ]]; then
     if ls /srv/http/build-repo/temp-extra${TESTING}/os/loong64/*.zst 2>/dev/null; then
         echo "WARNING: Remaining .zst files found in temp-extra${TESTING}"
     fi
+    ${SCRIPTSPATH}/compare86.py -l
 fi
