@@ -221,7 +221,7 @@ build_package() {
     # if upstream uses nocheck, use it here too.
     if git log -n 1 | grep -q nocheck; then
         has_nocheck=false
-        for arg in "${EXTRAARG[@]}"; do
+        for arg in ${EXTRAARG[@]}; do
             if [[ "$arg" == "--nocheck" ]]; then
                 has_nocheck=true
                 break
