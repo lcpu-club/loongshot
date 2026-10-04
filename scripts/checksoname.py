@@ -65,7 +65,7 @@ def scan_directory_for_libs(dir_path, filename):
     return lib_versions
 
 def find_orphan_libs(links, files):
-    white_list = {'libc', 'libdeepin_pw_check'}
+    white_list = {'libc', 'libdeepin_pw_check', 'libetebase'}
     for lib_name, pkg_name in links.items():
         if lib_name in white_list:
             continue
