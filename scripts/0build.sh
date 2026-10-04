@@ -179,7 +179,7 @@ build_package() {
             wget $MIRRORSITE/$BUILDREPO$TESTING/os/x86_64/$FILENAME.sig
             chmod 644 $FILENAME
             chmod 644 $FILENAME.sig
-            repo-add -R temp-$BUILDREPO$TESTING.db.tar.gz $FILENAME
+            repo-add -w -R temp-$BUILDREPO$TESTING.db.tar.gz $FILENAME
         done)
         return 2
     fi
@@ -276,7 +276,7 @@ build_package() {
                 ssh -t loong1 "cd /mnt/repos; rm $FILENAME{,.sig} -f"
             fi
             chmod 664 $FILENAME{,.sig}
-            repo-add $REMOVEFLAG temp-$BUILDREPO$TESTING.db.tar.gz $FILENAME
+            repo-add -w $REMOVEFLAG temp-$BUILDREPO$TESTING.db.tar.gz $FILENAME
         done)
         DEBUGPKG=$PKGBASE-debug-$PKGVERREL-loong64.pkg.tar.zst
         # echo $DEBUGPKG
