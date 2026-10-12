@@ -266,23 +266,23 @@ build_package() {
                 REMOVEFLAG=
             fi
             if [ "$BUILDER" = "loong1" ]; then
-                ssh -t $BUILDER "cd $BUILDPATH/$PKGBASE; [[ -f $FILENAME.sig ]] && rm -f $FILENAME.sig; gpg --detach-sign $FILENAME"
+                ssh -t $BUILDER "cd $BUILDPATH/$PKGBASE; gpg --yes --detach-sign $FILENAME"
                 scp $BUILDER:$BUILDPATH/$PKGBASE/$FILENAME{,.sig} .
             else # Only loong1 has the signing key
                 scp $BUILDER:$BUILDPATH/$PKGBASE/$FILENAME .
-                ssh -t loong1 "sshfs pluto@tier0:$LOCALREPO/temp-$BUILDREPO$TESTING/os/loong64 t; gpg --detach-sign t/$FILENAME; fusermount3 -u t"
+                ssh -t loong1 "sshfs pluto@tier0:$LOCALREPO/temp-$BUILDREPO$TESTING/os/loong64 t; gpg --yes --detach-sign t/$FILENAME; fusermount3 -u t"
             fi
             chmod 664 $FILENAME{,.sig}
             repo-add -w $REMOVEFLAG temp-$BUILDREPO$TESTING.db.tar.gz $FILENAME
         done)
         DEBUGPKG=$PKGBASE-debug-$PKGVERREL-loong64.pkg.tar.zst
         # echo $DEBUGPKG
-        if ssh -t $BUILDER "cd $BUILDPATH/$PKGBASE; if [ -f $DEBUGPKG ]; then rm -f $DEBUGPKG.sig; gpg --detach-sign $DEBUGPKG; fi; [ -f $BUILDPATH/$PKGBASE/$DEBUGPKG ]" 2>/dev/null; then
+        if ssh -t $BUILDER "cd $BUILDPATH/$PKGBASE; gpg --yes --detach-sign $DEBUGPKG; [ -f $BUILDPATH/$PKGBASE/$DEBUGPKG ]" 2>/dev/null; then
             if [ "$BUILDER" = "loong1" ]; then
                 scp $BUILDER:$BUILDPATH/$PKGBASE/$DEBUGPKG{,.sig} $LOCALREPO/debug-pool
             else # Only loong1 has the signing key
                 scp $BUILDER:$BUILDPATH/$PKGBASE/$DEBUGPKG $LOCALREPO/debug-pool
-                ssh -t loong1 "sshfs pluto@tier0:$LOCALREPO/debug-pool t; gpg --detach-sign t/$DEBUGPKG; fusermount3 -u t"
+                ssh -t loong1 "sshfs pluto@tier0:$LOCALREPO/debug-pool t; gpg --yes --detach-sign t/$DEBUGPKG; fusermount3 -u t"
             fi
             chmod 664 $LOCALREPO/debug-pool/$DEBUGPKG{,.sig}
         fi
