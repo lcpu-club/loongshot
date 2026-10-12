@@ -88,7 +88,7 @@ do_move(){
         return
     fi
 
-    repo-add --include-sigs -R $NEWREPO/$TO.db.tar.gz "${ALLZST[@]}" | tee add.log
+    repo-add --include-sigs -R -w $NEWREPO/$TO.db.tar.gz "${ALLZST[@]}" | tee add.log
     exit_code=${PIPESTATUS[0]}
     if [[ ! $exit_code -eq 0 ]]; then
         echo "Error: Failed to update the repository database."
