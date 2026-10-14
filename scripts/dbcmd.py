@@ -5,6 +5,7 @@ import psycopg2
 import json
 import os
 import sys
+from datetime import datetime, timedelta
 from enum import IntFlag
 from contextlib import contextmanager
 
@@ -296,7 +297,9 @@ class TaskManager:
                     hours = int(total_seconds // 3600)
                     minutes = int((total_seconds % 3600) // 60)
                     seconds = int(total_seconds % 60)
+                    end_time = (datetime.now() + timedelta(seconds=total_seconds)).strftime("%Y-%m-%d %H:%M:%S")
                     print(f"ETA: {hours:02d}:{minutes:02d}:{seconds:02d} (total: {total_seconds} seconds)")
+                    print(f"Expected end time: {end_time}")
         except Exception as e:
             print(f"Show ETA failed: {e}", file=sys.stderr)
 
