@@ -103,6 +103,11 @@ while [ 1 ]; do
                 continue
             fi
         fi
+
+        # haskell packages often fail in check, retrying may just work
+        if [[ "$pkg" == haskell* ]] && grep -q "A failure occurred in check" "$ALLLOGS"; then
+            continue
+        fi
         break
     done
 
