@@ -10,3 +10,5 @@ su - arch -c "borg create -C zstd $BORG_REPO_DIR::repos-{now} $BACKUP_SOURCE_DIR
 
 # Prune old backups, keeping the last 30 daily backups
 su - arch -c "borg prune --keep-daily=$RETENTION_DAYS $BORG_REPO_DIR"
+
+su - arch -c "borg compact $BORG_REPO_DIR"
