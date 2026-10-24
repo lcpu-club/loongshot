@@ -270,7 +270,7 @@ build_package() {
                 scp $BUILDER:$BUILDPATH/$PKGBASE/$FILENAME{,.sig} .
             else # Only loong1 has the signing key
                 scp $BUILDER:$BUILDPATH/$PKGBASE/$FILENAME .
-                ssh -t loong1 "sshfs pluto@tier0:$LOCALREPO/temp-$BUILDREPO$TESTING/os/loong64 t; gpg --yes --detach-sign t/$FILENAME; fusermount3 -u t"
+                ssh -t loong1 "sshfs pluto@tier0:$LOCALREPO/temp-$BUILDREPO$TESTING/os/loong64 $BUILDER; gpg --yes --detach-sign $BUILDER/$FILENAME; fusermount3 -u $BUILDER"
             fi
             chmod 664 $FILENAME{,.sig}
             repo-add -w $REMOVEFLAG temp-$BUILDREPO$TESTING.db.tar.gz $FILENAME
@@ -282,7 +282,7 @@ build_package() {
                 scp $BUILDER:$BUILDPATH/$PKGBASE/$DEBUGPKG{,.sig} $LOCALREPO/debug-pool
             else # Only loong1 has the signing key
                 scp $BUILDER:$BUILDPATH/$PKGBASE/$DEBUGPKG $LOCALREPO/debug-pool
-                ssh -t loong1 "sshfs pluto@tier0:$LOCALREPO/debug-pool t; gpg --yes --detach-sign t/$DEBUGPKG; fusermount3 -u t"
+                ssh -t loong1 "sshfs pluto@tier0:$LOCALREPO/debug-pool $BUILDER; gpg --yes --detach-sign $BUILDER/$DEBUGPKG; fusermount3 -u $BUILDER"
             fi
             chmod 664 $LOCALREPO/debug-pool/$DEBUGPKG{,.sig}
         fi
