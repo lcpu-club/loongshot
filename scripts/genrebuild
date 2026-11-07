@@ -3,8 +3,9 @@ import argparse
 import colorlog
 from collections import defaultdict
 import networkx as nx
+import os
 import pyalpm
-import random
+import re
 
 # TODO: Automate this. The packages listed here depend on ghc/ghc-libs but don't have .so files.
 HASKELL_DO_NOT_EXPAND = {
@@ -48,6 +49,10 @@ parser.add_argument('--dbpath', nargs='?', default="/var/lib/pacman",
                     help='Pacman sync db location. Default: /var/lib/pacman')
 parser.add_argument('--dep', nargs='?', default="",
                     help='Additional dependencies to consider, as colon-separated pairs separated by comma. Example: foo:bar means foo depends on bar.')
+parser.add_argument('--loop-list', nargs='?', default="loop_list.lst",
+                    help='File mapping unresolvable dependency cycles to a manual build order, one [cycle]->[order] per line. Default: loop_list.lst')
+parser.add_argument('--propagate', nargs='?', default="haskell", const="haskell", choices=("haskell", "all"),
+                    help='Which rebuilt packages pull their hard reverse deps into pass2. "haskell" (default): only haskell packages, whose soname embeds a GHC ABI hash. "all": any rebuilt package, the previous conservative behaviour.')
 parser.add_argument('package', nargs='*', help='Packages to rebuild')
 args = parser.parse_args()
 
@@ -67,6 +72,20 @@ logger.setLevel(colorlog.DEBUG)
 handler = colorlog.StreamHandler()
 handler.setFormatter(colorlog.ColoredFormatter())
 logger.addHandler(handler)
+
+loop_list = {}
+if os.path.exists(args.loop_list):
+    for line in open(args.loop_list):
+        line = line.strip()
+        if not line or line.startswith('#'):
+            continue
+        m = re.match(r'\[(.*?)\]\s*->\s*\[(.*?)\]', line)
+        if not m:
+            logger.warning(f"Ignoring invalid {args.loop_list} line: {line}")
+            continue
+        key = frozenset(p.strip() for p in m.group(1).split(',') if p.strip())
+        order = [p.strip() for p in m.group(2).split(',') if p.strip()]
+        loop_list[key] = order
 
 rebuild_list = set(filter(lambda p: not p.endswith(":nocheck"), args.package))
 original_rebuild_list = rebuild_list.copy()
@@ -94,9 +113,9 @@ for db in args.db:
 
 
 for pkg in package_db:
-    package_db[pkg]["depends"] = {pkgbase[dep.split("=")[0].split(">")[0].split("<")[0]] for dep in package_db[pkg]["depends"]}
-    package_db[pkg]["makedepends"] = {pkgbase[dep.split("=")[0].split(">")[0].split("<")[0]] for dep in package_db[pkg]["makedepends"]}
-    package_db[pkg]["checkdepends"] = {pkgbase[dep.split("=")[0].split(">")[0].split("<")[0]] for dep in package_db[pkg]["checkdepends"]}
+    package_db[pkg]["depends"] = {pkgbase[dep.split("=")[0].split(">")[0].split("<")[0]] for dep in package_db[pkg]["depends"]} - {pkg}
+    package_db[pkg]["makedepends"] = {pkgbase[dep.split("=")[0].split(">")[0].split("<")[0]] for dep in package_db[pkg]["makedepends"]} - {pkg}
+    package_db[pkg]["checkdepends"] = {pkgbase[dep.split("=")[0].split(">")[0].split("<")[0]] for dep in package_db[pkg]["checkdepends"]} - {pkg}
 
 
 def resolve_pkg(pkg):
@@ -195,6 +214,63 @@ except nx.NetworkXNoCycle:
     pass
 
 
+unresolvable_cycles = []
+manual_ordered = set()
+
+
+def is_haskell(pkg):
+    # ghc-libs/ghc-static are subpackages of ghc, so pkgbase normalization turns
+    # "depends ghc-libs" into "depends ghc". Only depends is checked on purpose:
+    # a package that merely uses ghc as a build tool carries no libHS.
+    return "ghc" in package_db[pkg]["depends"]
+
+
+def split_loop_entry(entry):
+    """Split a loop_list.lst entry into (pkgbase, version, nocheck).
+
+    Accepted forms: pkg, pkg:nocheck, pkg:<tag>, pkg:<tag>:nocheck.
+    The tag is passed through untouched to the emitted build order (buildbot
+    turns it into --ver), it does not change the dependency graph, which always
+    comes from the current sync db.
+    """
+    nocheck = entry.endswith(':nocheck')
+    if nocheck:
+        entry = entry.removesuffix(':nocheck')
+    name, _, version = entry.partition(':')
+    return name, version, nocheck
+
+
+def hard_rdeps(pkg, NG):
+    return set([rdep for rdep in reverse_deps[pkg]
+                if pkg in package_db[rdep]["depends"] and rdep in NG and rdep not in manual_ordered])
+
+
+def rebuild_propagation(pkg, NG):
+    # Packages that must be rebuilt after pkg was rebuilt.
+    #
+    # A rebuilt non-haskell package keeps its soname (it comes from upstream
+    # version-info), so packages linking it stay valid. A rebuilt haskell
+    # package gets a new GHC package ABI hash inside its soname
+    # (libHSfoo-<ver>-<abi>-ghc<ver>.so), so every DT_NEEDED pointing at it
+    # breaks -- but only those: a non-haskell package rebuilt against it keeps
+    # its own soname, hence the per-node check below instead of a full closure.
+    to_break = set()
+    if args.propagate == "haskell" and not is_haskell(pkg):
+        return to_break
+
+    to_break = hard_rdeps(pkg, NG)
+    frontier = set(to_break)
+    while frontier:
+        nxt = set()
+        for _pkg in frontier:
+            if args.propagate == "haskell" and not is_haskell(_pkg):
+                continue
+            nxt |= {rdep for rdep in hard_rdeps(_pkg, NG) if rdep not in to_break}
+        to_break |= nxt
+        frontier = nxt
+    return to_break
+
+
 def pass1(pkg):
     NG = nx.DiGraph()
     NG.add_nodes_from(pkg)
@@ -203,32 +279,89 @@ def pass1(pkg):
             if _pkg in pkg and dep in pkg:
                 NG.add_edge(dep, _pkg)
     nocheck_pkg = set()
+    # frozenset cycle -> the literal build sequence given in loop_list.lst.
+    # A manual order may name a package twice (bootstrap with :nocheck, then a
+    # clean rebuild), which cannot be expressed as graph edges, so the cycle is
+    # contracted into one node and expanded verbatim when emitting the order.
+    manual_sequences = {}
 
     while nx.algorithms.components.number_strongly_connected_components(NG) != len(NG):
-        found = False
-        while True:
-            node = random.choice(list(NG))
-            if node in HASKELL_REAL_MAKEDEPEND:
-                continue
-            for rdep in list(NG.successors(node)):
-                if node not in package_db[rdep]["depends"]:
-                    logger.warning(f"Removing soft dep to solve circular dependency: {node} <- {rdep}")
-                    NG.remove_edge(node, rdep)
-                    nocheck_pkg.add(rdep)
-                    found = True
+        sccs = [c for c in nx.strongly_connected_components(NG) if len(c) > 1]
+        # Prefer breaking a soft dependency edge (make/check dep) in any
+        # circular component: that only needs the dependent package to be
+        # rebuilt with :nocheck.
+        edge = None
+        for scc in sorted(sccs, key=len):
+            for u in scc:
+                for v in list(NG.successors(u)):
+                    if v in scc and u not in HASKELL_REAL_MAKEDEPEND and u not in package_db[v]["depends"]:
+                        edge = (u, v)
+                        break
+                if edge is not None:
                     break
-
-            if found:
+            if edge is not None:
                 break
 
-        if not found:
-            logger.error(f"Removing HARD dep to solve circular dependency:  {node} <- {rdep}")
-            NG.remove_edge(node, rdep)
-            nocheck_pkg.add(rdep)
+        if edge is not None:
+            u, v = edge
+            logger.warning(f"Removing soft dep to solve circular dependency: {u} <- {v}")
+            NG.remove_edge(u, v)
+            nocheck_pkg.add(v)
+            continue
+
+        # No soft dependency edge left: the remaining cycle is made entirely of
+        # hard (depends) edges, so it cannot be resolved by reordering.
+        scc = min(sccs, key=len)
+        key = frozenset(scc)
+        manual = loop_list.get(key)
+        if manual:
+            entries = [split_loop_entry(entry) for entry in manual]
+            names = [name for name, _, _ in entries]
+            # "pkg:" / "pkg::nocheck" would be emitted as a broken build token.
+            empty_version = [entry for entry in manual
+                             if ':' in entry.removesuffix(':nocheck')
+                             and not split_loop_entry(entry)[1]]
+            if set(names) != scc:
+                logger.error("Manual order for cycle (" + ", ".join(sorted(scc)) + ") does not match its members: " + " ".join(manual))
+            elif empty_version:
+                logger.error("Manual build order for cycle (" + ", ".join(sorted(scc)) +
+                             ") has entries with an empty version: " + " ".join(empty_version))
+            else:
+                logger.info("Using manual build order for cycle (" + ", ".join(sorted(scc)) + "): " + " ".join(manual))
+                # The manual order replaces the ordering of this cycle as-is.
+                # Contract the cycle into a single node so the rest of the graph
+                # still sees it as one unit, and remember the sequence verbatim
+                # (including repeated packages and version tags).
+                node = names[0]
+                for other in dict.fromkeys(names[1:]):
+                    if other != node:
+                        NG = nx.contracted_nodes(NG, node, other, self_loops=False)
+                manual_sequences[node] = list(manual)
+                for name, _version, nocheck in entries:
+                    if nocheck:
+                        nocheck_pkg.add(name)
+                manual_ordered.update(names)
+                continue
+        if key not in loop_list:
+            loop_list[key] = []
+            # Keep the appended template on its own line: a hand-edited file may
+            # not end with a newline.
+            prefix = ""
+            if os.path.exists(args.loop_list) and os.path.getsize(args.loop_list) > 0:
+                with open(args.loop_list, 'rb') as f:
+                    f.seek(-1, os.SEEK_END)
+                    if f.read(1) != b"\n":
+                        prefix = "\n"
+            with open(args.loop_list, 'a') as f:
+                f.write(prefix + "[" + ",".join(sorted(key)) + "]->[]\n")
+        unresolvable_cycles.append(sorted(scc))
+        return None
 
     pass1 = []
     for _pkg in nx.topological_sort(NG):
-        if _pkg in nocheck_pkg:
+        if _pkg in manual_sequences:
+            pass1.extend(manual_sequences[_pkg])
+        elif _pkg in nocheck_pkg:
             pass1.append(_pkg + ":nocheck")
         else:
             pass1.append(_pkg)
@@ -242,19 +375,14 @@ def pass2(NG, nocheck_pkg):
     for _ in range(3):
         _pass2 = []
         broken_set = set()
-        nocheck_pkg = nocheck_pkg_bak.copy()
+        nocheck_pkg = nocheck_pkg_bak.copy() - manual_ordered
         loop_detector = 0
 
         while nocheck_pkg | broken_set:
             for pkg in nocheck_pkg | broken_set:
                 if not (package_db[pkg]["depends"] | package_db[pkg]["makedepends"] | package_db[pkg]["checkdepends"]) & broken_set:
                     loop_detector = 0
-                    to_break = set([rdep for rdep in reverse_deps[pkg] if pkg in package_db[rdep]["depends"] and rdep in NG])
-                    last_to_break = False
-                    while to_break != last_to_break:
-                        last_to_break = to_break
-                        for _pkg in set(to_break):
-                            to_break = to_break | set([rdep for rdep in reverse_deps[_pkg] if _pkg in package_db[rdep]["depends"] and rdep in NG])
+                    to_break = rebuild_propagation(pkg, NG)
                     # if not to_break <= (nocheck_pkg | broken_set):
                     #     continue
                     _pass2.append(pkg)
@@ -267,9 +395,8 @@ def pass2(NG, nocheck_pkg):
             else:
                 loop_detector += 1
                 if loop_detector > 20:
-                    logger.error("Cycle Solver pass2 loop detected, let's abort!")
-                    _pass2 = []
-                    break
+                    unresolvable_cycles.append(sorted(broken_set | nocheck_pkg))
+                    return None
 
                 logger.warning("Cycle Solver pass2 (try " + str(_) + ") found no package to build cleanly, adding more nocheck packages...")
                 for pkg in broken_set:
@@ -278,10 +405,6 @@ def pass2(NG, nocheck_pkg):
                         nocheck_pkg.add(pkg)
                         broken_set.remove(pkg)
                         break
-
-        if not _pass2:
-            logger.error("Cycle Solver pass2 failed to resolve any packages, retrying from pass1...")
-            raise RuntimeError
 
         if best_pass2 is False or len(_pass2) < len(best_pass2):
             best_pass2 = _pass2.copy()
@@ -295,19 +418,23 @@ for pkg in nx.topological_sort(G):
     if isinstance(pkg, str):
         result.append(pkg)
     else:
-        # Try 3 times for a more optimal result
-        best_build_order = False
-        for _ in range(3):
-            _pass1, NG, nocheck_pkg = pass1(pkg)
-            try:
-                _pass2 = pass2(NG, nocheck_pkg)
-            except RuntimeError:
-                logger.warning("Cycle Solver retrying from pass1...")
-                continue
-            if best_build_order is False or len(_pass1) + len(_pass2) < len(best_build_order):
-                if best_build_order is not False:
-                    logger.info("Cycle Solver found a better build order (length: %d -> %d)" % (len(best_build_order), len(_pass1) + len(_pass2)))
-                best_build_order = _pass1 + _pass2
-        result.extend(best_build_order)
+        resolved = pass1(pkg)
+        if resolved is None:
+            continue
+        _pass1, NG, nocheck_pkg = resolved
+        _pass2 = pass2(NG, nocheck_pkg)
+        if _pass2 is None:
+            continue
+        result.extend(_pass1 + _pass2)
+
+if unresolvable_cycles:
+    logger.error(f"Found {len(unresolvable_cycles)} unresolvable dependency cycle(s):")
+    for cycle in unresolvable_cycles:
+        logger.error("  - " + ", ".join(cycle))
+    logger.error("These packages depend on each other at build time and cannot be ordered automatically. "
+                 "Add a manual build order for each cycle above in " + args.loop_list + " "
+                 "(format: [pkg1,pkg2]->[order]; new cycles are appended as [cycle]->[] for you to fill in), "
+                 "then rerun.")
+    exit(1)
 
 print(" ".join(result))
