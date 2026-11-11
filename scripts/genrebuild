@@ -106,16 +106,32 @@ for db in args.db:
             pkgbase[pkg] = package.base  # FIXME: There can be collision
         if package.name in args.ignore:
             continue
-        for field in ("depends", "makedepends", "checkdepends", "arch"):
+        for field in ("depends", "makedepends", "checkdepends"):
             if field not in package_db[package.base]:
                 package_db[package.base][field] = set()
             package_db[package.base][field] |= set(getattr(package, field))
+        # arch is a plain string in pyalpm, keep it as a set of strings so that
+        # split packages of one pkgbase do not lose information.
+        package_db[package.base].setdefault("arch", set()).add(package.arch)
 
 
 for pkg in package_db:
     package_db[pkg]["depends"] = {pkgbase[dep.split("=")[0].split(">")[0].split("<")[0]] for dep in package_db[pkg]["depends"]} - {pkg}
     package_db[pkg]["makedepends"] = {pkgbase[dep.split("=")[0].split(">")[0].split("<")[0]] for dep in package_db[pkg]["makedepends"]} - {pkg}
     package_db[pkg]["checkdepends"] = {pkgbase[dep.split("=")[0].split(">")[0].split("<")[0]] for dep in package_db[pkg]["checkdepends"]} - {pkg}
+
+
+def is_arch_haskell(pkg):
+    """Whether a rebuild of pkg can change a GHC-ABI-hashed soname.
+
+    Only depends is checked on purpose: a package that merely uses ghc as a
+    build tool carries no libHS. arch=any packages carry no ELF objects at all,
+    so a rebuild cannot invalidate anyone's DT_NEEDED even though they depend
+    on ghc-libs (e.g. haskell-gi-overloading). The arch test is a proxy, it is
+    the best the sync db offers: libHS*.so presence is not in the metadata.
+    """
+    db = package_db[pkg]
+    return "ghc" in db["depends"] and db["arch"] != {"any"}
 
 
 def resolve_pkg(pkg):
@@ -125,11 +141,11 @@ def resolve_pkg(pkg):
             logger.error(f"Package {pkg} not found in any db")
             exit(1)
 
-        if args.haskell_check and (not ({"ghc", "ghc-libs"} & set(package_db[pkg]["depends"]) and package_db[pkg]["arch"] != "any")):
-           return reverse_deps[pkg]
+        if args.haskell_check and not is_arch_haskell(pkg):
+            return reverse_deps[pkg]
 
         for _pkg in package_db:
-            if args.haskell_check and not ({"ghc", "ghc-libs"} & set(package_db[_pkg]["depends"]) and package_db[_pkg]["arch"] != "any"):
+            if args.haskell_check and not is_arch_haskell(_pkg):
                 continue
             if ({pkg}) & (package_db[_pkg]["depends"] | package_db[_pkg]["makedepends"] | \
                                                         package_db[_pkg]["checkdepends"]):
