@@ -92,18 +92,43 @@ original_rebuild_list = rebuild_list.copy()
 
 package_db = defaultdict(dict)
 pkglist = rebuild_list.copy()
-pkgbase = defaultdict(lambda: 'glibc')
+# A dependency name can be satisfied by several packages: `cargo` is provided by
+# both rust and rustup, `rust` and `go` are provided by rustup and gcc as well.
+# The real package names and the provides live in separate maps so that a
+# provider can never shadow a real package name.
+pkgbase = {}
+provides = defaultdict(set)
 reverse_deps = defaultdict(set)
 G = nx.DiGraph()
 handle = pyalpm.Handle(".", args.dbpath)
 
-for db in args.db:
+
+def dep_name(spec):
+    """Strip a version constraint: "libfoo.so=1-64" -> "libfoo.so"."""
+    return spec.split("=")[0].split(">")[0].split("<")[0]
+
+
+def resolve_dep(name):
+    """Every pkgbase that can satisfy a dependency name.
+
+    A dependency may be satisfied by any of its providers (cargo: rust or
+    rustup) and the real package name is always one of the candidates, so a
+    provider can never shadow it. Unresolvable names keep the historical
+    fallback of pulling in glibc.
+    """
+    name = dep_name(name)
+    candidates = set(provides[name])
+    if name in pkgbase:
+        candidates.add(pkgbase[name])
+    return candidates or {"glibc"}
+
+
+for db in sorted(args.db):
     db_handle = handle.register_syncdb(db, 0)
     for package in db_handle.search(""):
-        pkgbase[package.name] = package.base
-        for pkg in package.provides:
-            pkg = pkg.split("=")[0].split(">")[0].split("<")[0]
-            pkgbase[pkg] = package.base  # FIXME: There can be collision
+        pkgbase[package.name] = package.base  # FIXME: There can be collision
+        for provide in package.provides:
+            provides[dep_name(provide)].add(package.base)
         if package.name in args.ignore:
             continue
         for field in ("depends", "makedepends", "checkdepends"):
@@ -116,9 +141,8 @@ for db in args.db:
 
 
 for pkg in package_db:
-    package_db[pkg]["depends"] = {pkgbase[dep.split("=")[0].split(">")[0].split("<")[0]] for dep in package_db[pkg]["depends"]} - {pkg}
-    package_db[pkg]["makedepends"] = {pkgbase[dep.split("=")[0].split(">")[0].split("<")[0]] for dep in package_db[pkg]["makedepends"]} - {pkg}
-    package_db[pkg]["checkdepends"] = {pkgbase[dep.split("=")[0].split(">")[0].split("<")[0]] for dep in package_db[pkg]["checkdepends"]} - {pkg}
+    for field in ("depends", "makedepends", "checkdepends"):
+        package_db[pkg][field] = set().union(*(resolve_dep(dep) for dep in package_db[pkg][field])) - {pkg}
 
 
 def is_arch_haskell(pkg):
