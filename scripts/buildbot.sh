@@ -38,6 +38,13 @@ while [ 1 ]; do
         exit 1
     fi
 
+    if [[ "$pkg" == %wait ]]; then
+        # Other builders still work on this tasklist: the queue is not finished
+        # yet, so keep waiting instead of letting buildstag.sh move the repo.
+        sleep 60
+        continue
+    fi
+
     if [[ "$pkg" == *:nocheck ]]; then
         NOCHECK=--nocheck
         pkg=${pkg%:nocheck}

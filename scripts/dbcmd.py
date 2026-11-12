@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 
 import argparse
+import glob
 import psycopg2
 import json
 import os
+import re
 import sys
 from datetime import datetime, timedelta
 from enum import IntFlag
@@ -33,6 +35,16 @@ BIT_MAP = {
     'staging': PkgFlags.STAGING,
     'fail': PkgFlags.FAIL,
 }
+
+# x86_64 pacman sync databases used to resolve build dependencies.  Every
+# builder must look at the same snapshot; compare86.py refreshes it before a
+# build run starts.
+DEPDB_DEFAULT = os.path.join(os.path.expanduser('~'), '.cache', 'compare86', 'x86')
+DEP_REPOS = ('core', 'extra', 'core-testing', 'extra-testing',
+             'core-staging', 'extra-staging')
+
+# Key of the advisory lock that serializes task picking between builders.
+PICK_LOCK_KEY = 0x1d0b
 
 ERROR_MESSAGES = [
     "",
@@ -139,6 +151,111 @@ class BitManager:
                     print(f"No entry found for pkgbase '{base}'")
         except Exception as e:
             print(f"Update bits failed: {e}", file=sys.stderr)
+
+def dep_name(spec):
+    """Strip a version constraint: 'libfoo>=1.2' -> 'libfoo'."""
+    return re.split(r'[<>=]', spec, maxsplit=1)[0]
+
+
+def parse_pkgbase(entry):
+    """Split a task entry into (pkgbase, nocheck).
+
+    Entries look like 'foo', 'foo:nocheck', 'foo:1.2-3' or
+    'foo:1:1.2-3:nocheck'; only the first field is the pkgbase.
+    """
+    parts = entry.split(':')
+    return parts[0], 'nocheck' in parts[1:]
+
+
+class DepIndex:
+    """Build dependency lookup taken from the x86_64 pacman sync databases.
+
+    A queued package may only be built once the packages it needs at build
+    time (depends + makedepends + checkdepends) are built as well.  Only
+    names matter here, versions do not: a dependency is irrelevant unless its
+    provider is queued too.
+    """
+
+    def __init__(self, dbpath=None):
+        try:
+            import pyalpm
+        except ImportError:
+            raise RuntimeError("pyalpm is required to resolve build dependencies")
+
+        dbpath = dbpath or os.environ.get('DEPDB', DEPDB_DEFAULT)
+        handle = pyalpm.Handle('.', dbpath)
+
+        self.real = {}                      # package name -> pkgbase
+        self.provides = {}                  # provide name -> {pkgbase}
+        self.kinds = {}                     # pkgbase -> {kind: {dep specs}}
+        self._cache = {}                    # (pkgbase, nocheck) -> {pkgbase}
+
+        available = {os.path.basename(f)[:-3]
+                     for f in glob.glob(os.path.join(dbpath, 'sync', '*.db'))}
+        provides = []
+        for repo in [r for r in DEP_REPOS if r in available]:
+            try:
+                db = handle.register_syncdb(repo, 0)
+            except pyalpm.error as e:
+                print(f"Skip dep db {repo}: {e}", file=sys.stderr)
+                continue
+            for pkg in db.pkgcache:
+                base = pkg.base
+                self.real[pkg.name] = base
+                kinds = self.kinds.setdefault(
+                    base, {k: set() for k in
+                           ('depends', 'makedepends', 'checkdepends')})
+                for kind in kinds:
+                    kinds[kind] |= set(getattr(pkg, kind) or ())
+                provides.append((base, pkg.provides))
+
+        # Silently ignoring the dependencies would build packages in the wrong
+        # order, so a missing/empty database is an error; set DEPDB or run
+        # compare86.py first.
+        if not self.real:
+            raise RuntimeError(f"no package database found in {dbpath}/sync")
+
+        # A dependency name may be satisfied by a real package or by a
+        # provider; only fall back to providers when no real package exists.
+        for base, specs in provides:
+            for spec in specs or ():
+                name = dep_name(spec)
+                if name and name not in self.real:
+                    self.provides.setdefault(name, set()).add(base)
+
+    def dep_bases(self, base, nocheck=False):
+        """All pkgbases `base` needs before it can be built."""
+        key = (base, nocheck)
+        if key in self._cache:
+            return self._cache[key]
+
+        kinds = self.kinds.get(base, {})
+        specs = set(kinds.get('depends', ())) | set(kinds.get('makedepends', ()))
+        if not nocheck:
+            specs |= kinds.get('checkdepends', set())
+
+        deps = set()
+        for spec in specs:
+            name = dep_name(spec)
+            if name in self.real:
+                deps.add(self.real[name])
+            else:
+                deps |= self.provides.get(name, set())
+        deps.discard(base)
+
+        self._cache[key] = frozenset(deps)
+        return self._cache[key]
+
+
+_dep_index = None
+
+
+def get_dep_index():
+    global _dep_index
+    if _dep_index is None:
+        _dep_index = DepIndex()
+    return _dep_index
+
 
 # Task Operations
 class TaskManager:
@@ -329,23 +446,80 @@ class TaskManager:
             print(f"Show history failed: {e}", file=sys.stderr)
 
     def get_task(self, tasklist, building=False):
+        """Pick the next task to build in a way that is safe for parallel builders.
+
+        The tasklist order is authoritative (genrebuild already sorted it and
+        broke dependency cycles on the way), so the earliest waiting task wins.
+        A task is skipped while
+
+        * a pkgbase it depends on (depends + makedepends + checkdepends, taken
+          from the x86_64 sync databases) has an unfinished task *in front of
+          it*, i.e. a lower taskno that is still waiting or building, or
+        * the same pkgbase is already building, or an earlier instance of it is
+          still waiting (some packages are built several times, e.g. a first
+          :nocheck pass).
+
+        Only earlier tasks are considered, which keeps dependencies pointing
+        backwards in time: the first waiting task is always eligible, so a
+        cycle broken by the sorter cannot deadlock the queue, and a single
+        builder still walks the list in exactly the written order.
+
+        Returns the task entry, '%wait' when other builders still work on
+        this tasklist, or None when the tasklist is really finished.
+        """
         try:
             with self.db.transaction() as cursor:
-                # SKIP LOCKED for concurrency safety
-                cursor.execute("""
-                    SELECT taskno, pkgbase FROM tasks
-                    WHERE tasklist=%s AND info IS NULL
-                    ORDER BY taskno ASC LIMIT 1
-                    FOR UPDATE SKIP LOCKED
-                """, (tasklist,))
-                result = cursor.fetchone()
+                # Serialize picking between builders: the decision below must
+                # see a consistent picture of what is pending/building.
+                cursor.execute("SELECT pg_advisory_xact_lock(%s, %s)",
+                               (PICK_LOCK_KEY, tasklist))
+                cursor.execute("SELECT taskno, pkgbase, info FROM tasks WHERE tasklist=%s ORDER BY taskno ASC",
+                               (tasklist,))
+                rows = cursor.fetchall()
 
-                if result:
-                    taskno, pkgbase = result
+                pending = []
+                pending_bases = set()
+                busy_bases = set()
+                busy = False
+                for taskno, pkgbase, info in rows:
+                    base, nocheck = parse_pkgbase(pkgbase)
+                    if info is None:
+                        pending.append((taskno, pkgbase, base, nocheck))
+                        if not pkgbase.startswith('%'):
+                            pending_bases.add(base)
+                    elif info == 'building':
+                        busy_bases.add(base)
+                        busy = True
+
+                dep_index = get_dep_index() if pending_bases else None
+                # Bases of unfinished tasks seen so far, i.e. in front of the
+                # task being examined. Started with what other builders hold.
+                earlier = set(busy_bases)
+                chosen = None
+                for taskno, pkgbase, base, nocheck in pending:
+                    # Command entries ('%...') are not packages and keep their
+                    # place in the queue, exactly like before.
+                    if pkgbase.startswith('%'):
+                        chosen = (taskno, pkgbase)
+                        break
+                    if (base in earlier or
+                            dep_index.dep_bases(base, nocheck) & earlier):
+                        earlier.add(base)
+                        continue
+                    chosen = (taskno, pkgbase)
+                    break
+
+                if chosen is not None:
+                    taskno, pkgbase = chosen
                     if building and not pkgbase.startswith('%'):
                         cursor.execute("UPDATE tasks SET info='building' WHERE tasklist=%s AND taskno=%s",
                                        (tasklist, taskno))
                     return pkgbase
+
+                if pending or busy:
+                    # Still work in progress on this list (here or on another
+                    # builder), but nothing may start right now.
+                    return "%wait"
 
                 # Cleanup and stop logic
                 if building:
@@ -355,8 +529,12 @@ class TaskManager:
                 remain = cursor.fetchone()[0]
                 # Wait for other tasklist to finish if remain > 0
                 return "%stop" if remain > 0 else None
-        except Exception:
-            return None
+        except Exception as e:
+            print(f"Get task failed: {e}", file=sys.stderr)
+            # Never report 'finished' on an error: the master builder would
+            # move the built packages into the repo while other builders are
+            # still running.
+            return "%stop" if building else None
 
 def parse_bits(bit_arg):
     bitmask = 0
