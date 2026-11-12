@@ -355,10 +355,16 @@ class TaskManager:
                     logid = res[0] if res else 0
                     if not res: done = "nolog"
 
-                    cursor.execute("""
-                        UPDATE tasks SET info=%s, logid=%s
-                        WHERE pkgbase=%s AND tasklist=%s AND info='building'
-                    """, (done, logid, pkgbase, tasklist))
+                    if taskno == 0:
+                        cursor.execute("""
+                            UPDATE tasks SET info=%s, logid=%s
+                            WHERE pkgbase=%s AND tasklist=%s AND info='building'
+                        """, (done, logid, pkgbase, tasklist))
+                    else:
+                        cursor.execute("""
+                            UPDATE tasks SET info=%s, logid=%s
+                            WHERE pkgbase=%s AND tasklist=%s AND taskno=%s
+                        """, (done, logid, pkgbase, tasklist, taskno))
         except Exception as e:
             print(f"Remove task failed: {e}", file=sys.stderr)
 
@@ -621,7 +627,7 @@ def main():
             if args.get:
                 print(task_mgr.get_task(args.list, args.build))
             if args.remove: task_mgr.remove_task(args.remove, args.list, True, args.taskno)
-            if args.done: task_mgr.remove_task(args.done, args.list)
+            if args.done: task_mgr.remove_task(args.done, args.list, False, args.taskno)
             if args.show: task_mgr.show_task(args.list)
             if args.hist >= 0: task_mgr.show_hist(args.hist)
             if args.cost: task_mgr.show_task_by_cost(args.list)
