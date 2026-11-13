@@ -189,6 +189,7 @@ class DepIndex:
         self.provides = {}                  # provide name -> {pkgbase}
         self.kinds = {}                     # pkgbase -> {kind: {dep specs}}
         self._cache = {}                    # (pkgbase, nocheck) -> {pkgbase}
+        self._closure = {}                  # pkgbase -> {pkgbase}
 
         available = {os.path.basename(f)[:-3]
                      for f in glob.glob(os.path.join(dbpath, 'sync', '*.db'))}
@@ -245,6 +246,17 @@ class DepIndex:
 
         self._cache[key] = frozenset(deps)
         return self._cache[key]
+
+    def dep_closure(self, base):
+        """Everything `base` needs, directly or through another package."""
+        if base not in self._closure:
+            seen, frontier = set(), set(self.dep_bases(base))
+            while frontier:
+                seen |= frontier
+                frontier = set().union(
+                    *(self.dep_bases(b) for b in frontier)) - seen
+            self._closure[base] = frozenset(seen)
+        return self._closure[base]
 
 
 _dep_index = None
@@ -460,15 +472,35 @@ class TaskManager:
 
         * a pkgbase it depends on (depends + makedepends + checkdepends, taken
           from the x86_64 sync databases) has an unfinished task *in front of
-          it*, i.e. a lower taskno that is still waiting or building, or
+          it*, i.e. a lower taskno that is still waiting or building,
         * the same pkgbase is already building, or an earlier instance of it is
           still waiting (some packages are built several times, e.g. a first
-          :nocheck pass).
+          :nocheck pass), or
+        * a task of the same wave that has already been built, or is being
+          built right now, needs it, directly or transitively.  Such a task
+          was built against the previous build of this package, and rebuilding
+          it now puts a new one into the repo underneath that task: a haskell
+          rebuild changes the GHC ABI hash in the soname, so its result is
+          broken as soon as it lands, and everything installed after it fails
+          with "broken packages must be rebuilt before they can be used".
+
+        The wave is the part of the list between the previous build of the
+        same package and this one: earlier passes have already been ordered
+        against each other, and for a package built only once the whole list
+        in front of it counts.
+
+        A task that is merely waiting does not block: it is built after this
+        one, so it gets the new build.  Tasks that are already done do not
+        block either once this task is the first one waiting - it has to be
+        built at some point, and the list has already ordered its reverse
+        dependencies behind it.
 
         Only earlier tasks are considered, which keeps dependencies pointing
-        backwards in time: the first waiting task is always eligible, so a
-        cycle broken by the sorter cannot deadlock the queue, and a single
-        builder still walks the list in exactly the written order.
+        backwards in time: a cycle broken by the sorter cannot deadlock the
+        queue, because whatever blocks a task is either in front of it and
+        waiting (eventually started) or already being built (eventually
+        finished).  A single builder still walks the list in exactly the
+        written order.
 
         Returns the task entry, '%wait' when other builders still work on
         this tasklist, or None when the tasklist is really finished.
@@ -487,10 +519,16 @@ class TaskManager:
                 pending_bases = set()
                 busy_bases = set()
                 busy = False
-                for taskno, pkgbase, info in rows:
+                bases = []          # pkgbase of every row, in list order
+                previous = []       # row of the previous build of that pkgbase
+                last = {}
+                for i, (taskno, pkgbase, info) in enumerate(rows):
                     base, nocheck = parse_pkgbase(pkgbase)
+                    bases.append(base)
+                    previous.append(last.get(base, -1))
+                    last[base] = i
                     if info is None:
-                        pending.append((taskno, pkgbase, base, nocheck))
+                        pending.append((i, taskno, pkgbase, base, nocheck))
                         if not pkgbase.startswith('%'):
                             pending_bases.add(base)
                     elif info == 'building':
@@ -501,15 +539,29 @@ class TaskManager:
                 # Bases of unfinished tasks seen so far, i.e. in front of the
                 # task being examined. Started with what other builders hold.
                 earlier = set(busy_bases)
+                heading = pending[0][0] if pending else None
                 chosen = None
-                for taskno, pkgbase, base, nocheck in pending:
+                for i, taskno, pkgbase, base, nocheck in pending:
                     # Command entries ('%...') are not packages and keep their
                     # place in the queue, exactly like before.
                     if pkgbase.startswith('%'):
                         chosen = (taskno, pkgbase)
                         break
-                    if (base in earlier or
-                            dep_index.dep_bases(base, nocheck) & earlier):
+                    blocked = (base in earlier or
+                               dep_index.dep_bases(base, nocheck) & earlier)
+                    if not blocked:
+                        # Something of this wave that has already been built,
+                        # or is being built right now, needs this package: a
+                        # new build of it lands underneath that task.
+                        need = dep_index.dep_closure(base)
+                        for j in range(previous[i] + 1, i):
+                            state = rows[j][2]
+                            if state is None or bases[j] not in need:
+                                continue
+                            if state == 'building' or i != heading:
+                                blocked = True
+                                break
+                    if blocked:
                         earlier.add(base)
                         continue
                     chosen = (taskno, pkgbase)

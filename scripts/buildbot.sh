@@ -41,7 +41,9 @@ while [ 1 ]; do
     if [[ "$pkg" == %wait ]]; then
         # Other builders still work on this tasklist: the queue is not finished
         # yet, so keep waiting instead of letting buildstag.sh move the repo.
-        sleep 60
+        # Waiting is normal now: a task is not handed out before the tasks it
+        # would invalidate have started.
+        sleep 10
         continue
     fi
 
@@ -119,4 +121,11 @@ while [ 1 ]; do
     done
 
     $SCRIPTSPATH/dbcmd.py task --done $orig --list $BUILDLIST
+
+    # A haskell failure is usually the GHC package database being broken, not
+    # a problem of this package: every other builder would fail the same way,
+    # so stop them all instead of collecting the same error over and over.
+    if [[ "$BUILD_STATUS" -ne 0 ]] && [[ "$pkg" == haskell* ]]; then
+        $SCRIPTSPATH/dbcmd.py task --insert "%stop" --list $BUILDLIST
+    fi
 done
