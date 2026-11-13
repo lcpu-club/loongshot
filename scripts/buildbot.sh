@@ -35,6 +35,8 @@ while [ 1 ]; do
     fi
 
     if [[ "$pkg" == %stop ]]; then
+        echo "dbcmd.py returned %stop, stopping this builder." >&2
+        echo "  another builder hit a haskell failure, or a %stop entry is in the queue." >&2
         exit 1
     fi
 
@@ -78,7 +80,9 @@ while [ 1 ]; do
             break
         fi
 
-        if [ $(stat -c %s "$ALLLOGS") -lt $max_size ]; then
+        # ARCH=any packages have no build log at all, everything below only
+        # makes sense when there is one.
+        if [[ -f "$ALLLOGS" ]] && [ $(stat -c %s "$ALLLOGS") -lt $max_size ]; then
 
             # restart to download the corrupted packages
             grep "pkg.tar.zst is corrupted" $ALLLOGS >/dev/null 2>&1 && continue

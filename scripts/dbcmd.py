@@ -189,7 +189,9 @@ class DepIndex:
         self.provides = {}                  # provide name -> {pkgbase}
         self.kinds = {}                     # pkgbase -> {kind: {dep specs}}
         self._cache = {}                    # (pkgbase, nocheck) -> {pkgbase}
-        self._closure = {}                  # pkgbase -> {pkgbase}
+        self._closure = {}                  # (pkgbase, runtime) -> {pkgbase}
+        self._rev = {}                      # pkgbase -> {pkgbase} (runtime rdeps)
+        self._rdeps = {}                    # pkgbase -> {pkgbase}
 
         available = {os.path.basename(f)[:-3]
                      for f in glob.glob(os.path.join(dbpath, 'sync', '*.db'))}
@@ -224,16 +226,25 @@ class DepIndex:
                 if name and name not in self.real:
                     self.provides.setdefault(name, set()).add(base)
 
-    def dep_bases(self, base, nocheck=False):
-        """All pkgbases `base` needs before it can be built."""
-        key = (base, nocheck)
+    def dep_bases(self, base, nocheck=False, runtime=False):
+        """All pkgbases `base` needs before it can be built.
+
+        runtime=True only follows what the package links against.  The
+        build and check dependencies have to be there to build it, but they
+        are not part of its package: a rebuild of a tool it used at build
+        time (`fmt` makedepends on `mkdocs-material` for its docs) does not
+        invalidate its result.
+        """
+        key = (base, nocheck, runtime)
         if key in self._cache:
             return self._cache[key]
 
         kinds = self.kinds.get(base, {})
-        specs = set(kinds.get('depends', ())) | set(kinds.get('makedepends', ()))
-        if not nocheck:
-            specs |= kinds.get('checkdepends', set())
+        specs = set(kinds.get('depends', ()))
+        if not runtime:
+            specs |= set(kinds.get('makedepends', set()))
+            if not nocheck:
+                specs |= kinds.get('checkdepends', set())
 
         deps = set()
         for spec in specs:
@@ -247,16 +258,55 @@ class DepIndex:
         self._cache[key] = frozenset(deps)
         return self._cache[key]
 
-    def dep_closure(self, base):
+    def runtime_rdeps(self, base):
+        """Packages whose soname changes when `base` is rebuilt.
+
+        Rebuilding a package can change the soname it exports; everything
+        that links it, directly or through another library, then has to be
+        rebuilt too.  Only runtime dependencies matter here - a package that
+        merely used `base` to build is unaffected.
+        """
+        if not self._rev:
+            for b in self.kinds:
+                for d in self.dep_bases(b, runtime=True):
+                    self._rev.setdefault(d, set()).add(b)
+        if base not in self._rdeps:
+            seen, frontier = set(), {base}
+            while frontier:
+                nxt = set()
+                for x in frontier:
+                    for r in self._rev.get(x, ()):
+                        if r not in seen:
+                            seen.add(r)
+                            nxt.add(r)
+                frontier = nxt
+            self._rdeps[base] = frozenset(seen)
+        return self._rdeps[base]
+
+    def chroot_bases(self, base):
+        """Everything installed when `base` is built.
+
+        Its dependencies of any kind, plus everything those link against:
+        pacman installs the runtime closure of what the build needs, not the
+        build dependencies of those tools.
+        """
+        out = set()
+        for d in self.dep_bases(base):
+            out.add(d)
+            out |= self.dep_closure(d, runtime=True)
+        return out
+
+    def dep_closure(self, base, runtime=False):
         """Everything `base` needs, directly or through another package."""
-        if base not in self._closure:
-            seen, frontier = set(), set(self.dep_bases(base))
+        key = (base, runtime)
+        if key not in self._closure:
+            seen, frontier = set(), set(self.dep_bases(base, runtime=runtime))
             while frontier:
                 seen |= frontier
                 frontier = set().union(
-                    *(self.dep_bases(b) for b in frontier)) - seen
-            self._closure[base] = frozenset(seen)
-        return self._closure[base]
+                    *(self.dep_bases(b, runtime=runtime) for b in frontier)) - seen
+            self._closure[key] = frozenset(seen)
+        return self._closure[key]
 
 
 _dep_index = None
@@ -476,13 +526,14 @@ class TaskManager:
         * the same pkgbase is already building, or an earlier instance of it is
           still waiting (some packages are built several times, e.g. a first
           :nocheck pass), or
-        * a task of the same wave that has already been built, or is being
-          built right now, needs it, directly or transitively.  Such a task
-          was built against the previous build of this package, and rebuilding
-          it now puts a new one into the repo underneath that task: a haskell
-          rebuild changes the GHC ABI hash in the soname, so its result is
-          broken as soon as it lands, and everything installed after it fails
-          with "broken packages must be rebuilt before they can be used".
+        * a task of the same wave in front of it is exposed to this package
+          being rebuilt: one that was already built and links it, one that is
+          being built and either links it or has such a package installed in
+          its build environment, or one that is still waiting and whose build
+          would install such a package - a haskell rebuild changes the GHC ABI
+          hash in the soname, and then everything installed afterwards fails
+          with "broken packages must be rebuilt before they can be used" until
+          the reverse dependencies are rebuilt.
 
         The wave is the part of the list between the previous build of the
         same package and this one: earlier passes have already been ordered
@@ -502,8 +553,9 @@ class TaskManager:
         finished).  A single builder still walks the list in exactly the
         written order.
 
-        Returns the task entry, '%wait' when other builders still work on
-        this tasklist, or None when the tasklist is really finished.
+        Returns the task entry, '%wait' when nothing may start right now
+        (other builders are working, or the tasklist could not be read), or
+        None when the tasklist is really finished.
         """
         try:
             with self.db.transaction() as cursor:
@@ -550,17 +602,30 @@ class TaskManager:
                     blocked = (base in earlier or
                                dep_index.dep_bases(base, nocheck) & earlier)
                     if not blocked:
-                        # Something of this wave that has already been built,
-                        # or is being built right now, needs this package: a
-                        # new build of it lands underneath that task.
-                        need = dep_index.dep_closure(base)
-                        for j in range(previous[i] + 1, i):
-                            state = rows[j][2]
-                            if state is None or bases[j] not in need:
-                                continue
-                            if state == 'building' or i != heading:
-                                blocked = True
-                                break
+                        # A rebuild can change the soname of this package, and
+                        # then everything that links it has to be rebuilt too.
+                        # Do not start it while a task of this wave in front of
+                        # it is still exposed: one that was already built (or
+                        # is being built) and links it directly, or one that is
+                        # still waiting whose build would install such a
+                        # package.
+                        risky = dep_index.runtime_rdeps(base)
+                        if risky:
+                            for j in range(previous[i] + 1, i):
+                                state = rows[j][2]
+                                if state is None:
+                                    exposed = dep_index.chroot_bases(bases[j]) & risky
+                                elif state == 'building':
+                                    # the build environment already has those
+                                    # packages installed
+                                    exposed = (bases[j] in risky or
+                                               dep_index.chroot_bases(bases[j]) & risky)
+                                else:
+                                    # already built: only a direct link breaks
+                                    exposed = i != heading and bases[j] in risky
+                                if exposed:
+                                    blocked = True
+                                    break
                     if blocked:
                         earlier.add(base)
                         continue
@@ -588,11 +653,14 @@ class TaskManager:
                 # Wait for other tasklist to finish if remain > 0
                 return "%stop" if remain > 0 else None
         except Exception as e:
-            print(f"Get task failed: {e}", file=sys.stderr)
             # Never report 'finished' on an error: the master builder would
             # move the built packages into the repo while other builders are
-            # still running.
-            return "%stop" if building else None
+            # still running.  Report 'wait' rather than 'stop' so that a
+            # transient database or dependency index problem looks like what
+            # it is (keep polling, error on stderr) instead of a request to
+            # stop the run.
+            print(f"Get task failed, retrying: {e}", file=sys.stderr)
+            return "%wait"
 
 def parse_bits(bit_arg):
     bitmask = 0
