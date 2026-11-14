@@ -22,6 +22,24 @@ for para in "$@"; do
     fi
 done
 
+# Transient network errors that are worth a retry
+NET_ERRORS=(
+    "remote: GitLab is not responding"
+    "Resolving timed out after 10000 milliseconds"
+    "Connection timed out after 10001 milliseconds"
+    "fatal: unable to access 'https://gitlab.archlinux.org"
+    "Can't copy PKGBUILD to builder"
+    "error: RPC failed; HTTP 403 curl 22 The requested URL returned error: 403"
+)
+
+has_net_error() {
+    local pat
+    for pat in "${NET_ERRORS[@]}"; do
+        grep -e "$pat" "$1" && return 0
+    done
+    return 1
+}
+
 umask 002
 
 while [ 1 ]; do
@@ -110,7 +128,8 @@ while [ 1 ]; do
                 continue
             fi
 
-            if grep -e "remote: GitLab is not responding" -e "Resolving timed out after 10000 milliseconds" -e "Connection timed out after 10001 milliseconds" -e "fatal: unable to access 'https://gitlab.archlinux.org" -e "Can't copy PKGBUILD to builder"  $ALLLOGS; then
+            # gitlab/network hiccups: wait a bit and retry the same package
+            if has_net_error "$ALLLOGS"; then
                 sleep 100
                 ((retries--))
                 continue
