@@ -477,16 +477,17 @@ ABI_PKGS = {
 }
 
 
-def test_done_reverse_dependency_in_wave_blocks(monkeypatch, tmp_path):
-    """ansi-terminal was built before colour; rebuilding colour breaks it.
+def test_done_reverse_dependency_does_not_block(monkeypatch, tmp_path):
+    """A finished package linking the candidate does not keep it out.
 
-    The candidate is not the first waiting task (stuck is), so the already
-    built ansi-terminal must keep colour out of the queue.
+    Its build is over, so the rebuild cannot break it; the waiting rows are
+    what the rule looks at.  Blocking here only delayed ansi-terminal's
+    rebuild until the tasks in front had started, so it was removed.
     """
     rows = rows_of(("blocker", "building"), "stuck",
                    ("ansi-terminal", "done"), "colour")
     _, mgr, _ = make_env(monkeypatch, tmp_path, ABI_PKGS, rows)
-    assert pick(mgr) == "%wait"
+    assert pick(mgr) == "colour"
 
 
 def test_building_reverse_dependency_in_wave_blocks(monkeypatch, tmp_path):
@@ -495,10 +496,7 @@ def test_building_reverse_dependency_in_wave_blocks(monkeypatch, tmp_path):
     assert pick(mgr) == "%wait"
 
 
-def test_first_waiting_task_is_not_blocked_by_a_done_reverse_dependency(
-        monkeypatch, tmp_path):
-    # Finished tasks stop blocking once the candidate is the first one
-    # waiting, otherwise the queue could never move on.
+def test_first_waiting_task_is_not_blocked_by_finished_rows(monkeypatch, tmp_path):
     rows = rows_of(("ansi-terminal", "done"), "colour")
     _, mgr, _ = make_env(monkeypatch, tmp_path, ABI_PKGS, rows)
     assert pick(mgr) == "colour"
@@ -602,26 +600,25 @@ def test_risky_package_pulled_in_by_a_checkdepends_chain_blocks(
     assert pick(mgr) == "%wait"
 
 
-def test_failed_and_nolog_rows_are_treated_as_finished(monkeypatch, tmp_path):
-    # A row that is not waiting is history: for the wave rule only what was
-    # built matters, so a failed or log-less occurrence behaves like done.
+def test_failed_and_nolog_rows_do_not_block(monkeypatch, tmp_path):
+    # A failed or log-less row is history: its build is over and cannot be
+    # broken by the rebuild, so it does not keep colour out of the queue.
     for state in ("failed:8", "nolog"):
         rows = rows_of(("blocker", "building"), "stuck",
                        ("ansi-terminal", state), "colour")
         _, mgr, _ = make_env(monkeypatch, tmp_path, ABI_PKGS, rows)
-        assert pick(mgr) == "%wait", state
+        assert pick(mgr) == "colour", state
 
 
 def test_command_row_inside_the_wave_is_ignored(monkeypatch, tmp_path):
     # A consumed %stop row sits in colour's wave.  It is not a package, so it
-    # must neither crash the build environment lookup nor hide the dependency
-    # that does block colour.
+    # must not crash the build environment lookup, and it must not block.
     rows = rows_of(("%stop", "done"), ("blocker", "building"), "stuck",
                    ("ansi-terminal", "done"), "colour")
     _, mgr, index = make_env(monkeypatch, tmp_path, ABI_PKGS, rows)
     assert index.chroot_bases("%stop") == set()
     assert index.runtime_rdeps("%stop") == set()
-    assert pick(mgr) == "%wait"
+    assert pick(mgr) == "colour"
 
 
 def test_risky_set_is_transitive(monkeypatch, tmp_path):
@@ -636,7 +633,7 @@ def test_risky_set_is_transitive(monkeypatch, tmp_path):
 # Simulation: several builders on one tasklist
 # --------------------------------------------------------------------------
 
-def _check_pick(db, index, picked, snapshot, heading):
+def _check_pick(db, index, picked, snapshot):
     """Assert the safety properties of one pick on the current queue."""
     rows = sorted(db.tasks, key=lambda t: t["taskno"])
     i = next(k for k, t in enumerate(rows) if t["taskno"] == picked)
@@ -661,10 +658,11 @@ def _check_pick(db, index, picked, snapshot, heading):
                 f"task {picked} ({base}) started while {bases[j]} is "
                 f"{snapshot[j]!r} (row {j})")
 
-    # 3. soname wave rule: nothing of the wave in front may be exposed.  The
-    #    build environment is what the rule looks at (chroot_bases), not the
-    #    whole dependency closure: a makedepend of a makedepend is not
-    #    installed and cannot break.
+    # 3. soname wave rule: nothing unfinished of the wave in front may be
+    #    exposed.  The build environment is what the rule looks at
+    #    (chroot_bases), not the whole dependency closure: a makedepend of a
+    #    makedepend is not installed and cannot break.  Finished rows are not
+    #    checked: their build is over.
     risky = index.runtime_rdeps(base)
     if risky:
         previous = max((j for j in range(i) if bases[j] == base), default=-1)
@@ -680,10 +678,6 @@ def _check_pick(db, index, picked, snapshot, heading):
                     raise AssertionError(
                         f"task {picked} ({base}) started while {bases[j]} "
                         "is being built with a package it would rebuild")
-            elif i != heading and bases[j] in risky:
-                raise AssertionError(
-                    f"task {picked} ({base}) started under {bases[j]} "
-                    f"({state}) which links it")
 
 
 def simulate(monkeypatch, tmp_path, pkgs, order, builders, seed, rounds=10000):
@@ -702,8 +696,6 @@ def simulate(monkeypatch, tmp_path, pkgs, order, builders, seed, rounds=10000):
 
         rows = sorted(db.tasks, key=lambda t: t["taskno"])
         snapshot = [t["info"] for t in rows]
-        heading = next((j for j, state in enumerate(snapshot) if state is None),
-                       None)
 
         picked = pick(mgr)
         if picked is None:
@@ -718,7 +710,7 @@ def simulate(monkeypatch, tmp_path, pkgs, order, builders, seed, rounds=10000):
             continue
 
         taskno = db.last_picked
-        _check_pick(db, index, taskno, snapshot, heading)
+        _check_pick(db, index, taskno, snapshot)
         if taskno in started:
             raise AssertionError(f"task {taskno} picked twice")
         started.append(taskno)

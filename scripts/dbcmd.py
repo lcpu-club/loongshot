@@ -527,13 +527,13 @@ class TaskManager:
           still waiting (some packages are built several times, e.g. a first
           :nocheck pass), or
         * a task of the same wave in front of it is exposed to this package
-          being rebuilt: one that was already built and links it, one that is
-          being built and either links it or has such a package installed in
-          its build environment, or one that is still waiting and whose build
-          would install such a package - a haskell rebuild changes the GHC ABI
-          hash in the soname, and then everything installed afterwards fails
-          with "broken packages must be rebuilt before they can be used" until
-          the reverse dependencies are rebuilt.
+          being rebuilt: one that is still waiting and whose build would
+          install a package that links this one, or one that is being built
+          and either links this one or has such a package installed in its
+          build environment - a haskell rebuild changes the GHC ABI hash in
+          the soname, and then everything installed afterwards fails with
+          "broken packages must be rebuilt before they can be used" until the
+          reverse dependencies are rebuilt.
 
         The wave is the part of the list between the previous build of the
         same package and this one: earlier passes have already been ordered
@@ -541,10 +541,11 @@ class TaskManager:
         in front of it counts.
 
         A task that is merely waiting does not block: it is built after this
-        one, so it gets the new build.  Tasks that are already done do not
-        block either once this task is the first one waiting - it has to be
-        built at some point, and the list has already ordered its reverse
-        dependencies behind it.
+        one, so it gets the new build.  Finished tasks (done, failed, nolog) do
+        not block either: their build is over, so the rebuild cannot break it,
+        and the list has already ordered the reverse dependencies behind this
+        one.  Checking them only delayed the rebuild until the tasks in front
+        had started, without protecting anything.
 
         Only earlier tasks are considered, which keeps dependencies pointing
         backwards in time: a cycle broken by the sorter cannot deadlock the
@@ -588,10 +589,15 @@ class TaskManager:
                         busy = True
 
                 dep_index = get_dep_index() if pending_bases else None
-                # Bases of unfinished tasks seen so far, i.e. in front of the
-                # task being examined. Started with what other builders hold.
+                # Bases of unfinished tasks seen so far.  The ones in front are
+                # the ordering rules below; the initially added busy bases
+                # cover rows a builder is working on *behind* the candidate as
+                # well, which genrebuild's topological order should never need
+                # (a dependency behind its dependent only comes from a
+                # hand-edited or resumed list).  That part is defensive: for
+                # genrebuild's own lists it changes no pick, but it keeps a
+                # broken order from running two related builds at once.
                 earlier = set(busy_bases)
-                heading = pending[0][0] if pending else None
                 chosen = None
                 for i, taskno, pkgbase, base, nocheck in pending:
                     # Command entries ('%...') are not packages and keep their
@@ -599,16 +605,37 @@ class TaskManager:
                     if pkgbase.startswith('%'):
                         chosen = (taskno, pkgbase)
                         break
+                    # `base in earlier` is the one-build-per-pkgbase rule.  It
+                    # is defensive too: a repeated pkgbase normally sits inside
+                    # a wave whose dependency edges serialise the instances,
+                    # and only adjacent repeats need this check (an entry of a
+                    # manual loop_list order next to the pass2 rebuild of the
+                    # same package).  It still has to stay: buildbot.sh closes a
+                    # task with `task --done <pkgbase>`, whose SQL marks *every*
+                    # 'building' row of that pkgbase as finished, so two live
+                    # builds of one pkgbase would corrupt the queue.
                     blocked = (base in earlier or
                                dep_index.dep_bases(base, nocheck) & earlier)
                     if not blocked:
                         # A rebuild can change the soname of this package, and
                         # then everything that links it has to be rebuilt too.
-                        # Do not start it while a task of this wave in front of
-                        # it is still exposed: one that was already built (or
-                        # is being built) and links it directly, or one that is
-                        # still waiting whose build would install such a
-                        # package.
+                        # Skip the task while a task of this wave in front of it
+                        # would be exposed to that change:
+                        #
+                        # * still waiting: its build would install a package
+                        #   linking this one.  This is the run 1027 failure (13
+                        #   builds died on a broken ansi-terminal in their
+                        #   chroots) and the only part of this rule that pays
+                        #   for itself; it costs parallelism, which is accepted.
+                        # * already building: its own package links this one, so
+                        #   its result would be stale as soon as this lands, or
+                        #   its build environment has such a package installed.
+                        #   The chroot is a private copy whose dependencies are
+                        #   installed when the build starts, so the real exposure
+                        #   is only the window between handing the task out and
+                        #   installing them; the queue cannot see that window, so
+                        #   it assumes the worst.  Behind the window the wait
+                        #   only avoids a build that would have to be redone.
                         risky = dep_index.runtime_rdeps(base)
                         if risky:
                             for j in range(previous[i] + 1, i):
@@ -616,13 +643,12 @@ class TaskManager:
                                 if state is None:
                                     exposed = dep_index.chroot_bases(bases[j]) & risky
                                 elif state == 'building':
-                                    # the build environment already has those
-                                    # packages installed
                                     exposed = (bases[j] in risky or
                                                dep_index.chroot_bases(bases[j]) & risky)
                                 else:
-                                    # already built: only a direct link breaks
-                                    exposed = i != heading and bases[j] in risky
+                                    # finished: the build is over, nothing of it
+                                    # can break any more
+                                    continue
                                 if exposed:
                                     blocked = True
                                     break
