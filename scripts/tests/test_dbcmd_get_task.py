@@ -6,6 +6,9 @@ same tasklist.  The important properties are:
 
   * a package is only started once the packages it needs (depends +
     makedepends + checkdepends) that are queued *in front of it* are finished,
+    where a failed task counts as unfinished: it stops the queue for the
+    operator instead of being built against a package that is about to be
+    rebuilt,
   * the same pkgbase never runs twice at the same time,
   * a package is not rebuilt while a task of its wave in front of it is
     exposed to the soname change (the haskell ABI problem, run 1027),
@@ -378,6 +381,94 @@ def test_dependency_done_in_front_does_not_block(monkeypatch, tmp_path):
         {"lib": {}, "app": {"depends": ["lib"]}},
         rows_of(("lib", "done"), "app"))
     assert pick(mgr) == "app"
+
+
+def test_failed_dependency_in_front_is_skipped(monkeypatch, tmp_path):
+    # A failure is not the end of the package: it gets fixed and queued again,
+    # and then app has to be rebuilt against it.  So hand out other work first.
+    pkgs = {"lib": {}, "app": {"depends": ["lib"]}, "other": {}}
+    rows = rows_of(("lib", "failed:8"), "app", "other")
+    _, mgr, _ = make_env(monkeypatch, tmp_path, pkgs, rows)
+    assert pick(mgr) == "other"
+
+
+def test_failed_dependency_transitively_skips_its_dependents(monkeypatch, tmp_path):
+    pkgs = {"lib": {}, "mid": {"depends": ["lib"]},
+            "app": {"depends": ["mid"]}, "other": {}}
+    rows = rows_of(("lib", "failed:8"), "mid", "app", "other")
+    _, mgr, _ = make_env(monkeypatch, tmp_path, pkgs, rows)
+    assert pick(mgr) == "other"
+
+
+def test_failed_dependency_stops_the_queue(monkeypatch, tmp_path):
+    # Nothing else can start and a builder cannot fix the failure: stop with an
+    # error so the master does not move the build repo, and wait for the user.
+    pkgs = {"lib": {}, "app": {"depends": ["lib"]}}
+    rows = rows_of(("lib", "failed:8"), "app")
+    _, mgr, _ = make_env(monkeypatch, tmp_path, pkgs, rows)
+    assert pick(mgr) == "%stop"
+
+
+def test_failed_rows_alone_do_not_keep_the_tasklist_open(monkeypatch, tmp_path):
+    # Nothing is waiting any more: the run is over.  The failures are retried in
+    # a later run (filterpkg.py drops them), so the master may publish what was
+    # built.  Only tasks waiting *behind* a failure stop the run.
+    _, mgr, _ = make_env(monkeypatch, tmp_path, {"lib": {}},
+                         rows_of(("lib", "failed:8")))
+    assert pick(mgr) is None
+
+
+def test_failed_row_is_retried_after_being_set_back_to_waiting(
+        monkeypatch, tmp_path):
+    # The operator fixes the package and updates the row, it is not re-queued.
+    db, mgr, _ = make_env(monkeypatch, tmp_path, {"lib": {}},
+                          rows_of(("lib", "failed:8")))
+    db.set_info(1, None)
+    assert pick(mgr) == "lib"
+
+
+def test_nolog_dependency_does_not_block(monkeypatch, tmp_path):
+    # nolog means the build happened, only its log is missing.
+    pkgs = {"lib": {}, "app": {"depends": ["lib"]}, "other": {}}
+    rows = rows_of(("lib", "nolog"), "app", "other")
+    _, mgr, _ = make_env(monkeypatch, tmp_path, pkgs, rows)
+    assert pick(mgr) == "app"
+
+
+# --------------------------------------------------------------------------
+# task --block
+# --------------------------------------------------------------------------
+
+def test_show_block_names_the_failed_dependency(monkeypatch, tmp_path, capsys):
+    pkgs = {"lib": {}, "app": {"depends": ["lib"]}, "other": {}}
+    rows = rows_of(("lib", "failed:8"), "app", ("other", "building"))
+    _, mgr, _ = make_env(monkeypatch, tmp_path, pkgs, rows)
+    mgr.show_block(1)
+    out = capsys.readouterr().out
+    assert "lib (task 1, failed:8)" in out
+    assert "app" in out
+
+
+def test_show_block_follows_dependents(monkeypatch, tmp_path, capsys):
+    # app is not blocked by lib directly: it waits for mid, which waits for lib
+    pkgs = {"lib": {}, "mid": {"depends": ["lib"]},
+            "app": {"depends": ["mid"]}, "other": {}}
+    rows = rows_of(("lib", "failed:8"), "mid", "app", ("other", "building"))
+    _, mgr, _ = make_env(monkeypatch, tmp_path, pkgs, rows)
+    mgr.show_block(1)
+    out = capsys.readouterr().out
+    assert sum(1 for line in out.splitlines()
+               if "lib (task 1, failed:8)" in line) == 2
+
+
+def test_show_block_ignores_rows_after_a_running_task(monkeypatch, tmp_path,
+                                                      capsys):
+    # only rows in front of the first running task are what builders skipped
+    pkgs = {"lib": {}, "app": {"depends": ["lib"]}}
+    rows = rows_of(("busy", "building"), ("lib", "failed:8"), "app")
+    _, mgr, _ = make_env(monkeypatch, tmp_path, pkgs, rows)
+    mgr.show_block(1)
+    assert "No waiting task is blocked" in capsys.readouterr().out
 
 
 def test_waiting_dependency_of_a_blocked_task_blocks(monkeypatch, tmp_path):

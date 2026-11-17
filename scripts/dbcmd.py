@@ -513,6 +513,70 @@ class TaskManager:
         except Exception as e:
             print(f"Show history failed: {e}", file=sys.stderr)
 
+    def show_block(self, tasklist):
+        """Print why the waiting tasks in front of the running ones wait.
+
+        A failed task is not finished: the operator fixes the package and sets
+        the row back to waiting, and until then its dependents would only be
+        built against the old package.  This names the failed row behind each
+        waiting row a builder skipped over, so it can be handled first.  Only
+        rows in front of the first `building` row are reported: the ones behind
+        it are not what the builders passed over.
+        """
+        try:
+            with self.db.transaction() as cursor:
+                cursor.execute("SELECT taskno, pkgbase, info FROM tasks WHERE tasklist=%s ORDER BY taskno ASC",
+                               (tasklist,))
+                rows = cursor.fetchall()
+
+            failed = {}             # pkgbase -> [(taskno, info)]
+            waiting = []            # (taskno, pkgbase, nocheck)
+            first_building = None
+            for taskno, pkgbase, info in rows:
+                base, nocheck = parse_pkgbase(pkgbase)
+                if info is None:
+                    if not pkgbase.startswith('%'):
+                        waiting.append((taskno, base, nocheck))
+                elif info == 'building':
+                    if first_building is None:
+                        first_building = taskno
+                elif info.startswith('failed:'):
+                    failed.setdefault(base, []).append((taskno, info))
+
+            report = []
+            if waiting and failed:
+                dep_index = get_dep_index()
+                failed_bases = set(failed)
+                # pkgbase of a skipped row in front -> the failed pkgbases that
+                # keep it (and therefore everything below it) out
+                blocked = {}
+                for taskno, base, nocheck in waiting:
+                    if first_building is not None and taskno > first_building:
+                        break
+                    deps = dep_index.dep_bases(base, nocheck)
+                    roots = set(deps & failed_bases)
+                    if base in failed_bases:
+                        # another pass of this pkgbase failed
+                        roots.add(base)
+                    for dep in deps:
+                        roots |= blocked.get(dep, set())
+                    if roots:
+                        blocked[base] = roots
+                        report.append((taskno, base, sorted(roots)))
+
+            if not report:
+                print("No waiting task is blocked by a failed task.")
+                return
+
+            print("task pkgbase                            blocked by")
+            print("-" * 72)
+            for taskno, base, roots in report:
+                why = ", ".join(f"{root} (task {no}, {info})"
+                                for root in roots for no, info in failed[root])
+                print(f"{taskno:4} {base:34} {why}")
+        except Exception as e:
+            print(f"Show blocked tasks failed: {e}", file=sys.stderr)
+
     def get_task(self, tasklist, building=False):
         """Pick the next task to build in a way that is safe for parallel builders.
 
@@ -522,7 +586,12 @@ class TaskManager:
 
         * a pkgbase it depends on (depends + makedepends + checkdepends, taken
           from the x86_64 sync databases) has an unfinished task *in front of
-          it*, i.e. a lower taskno that is still waiting or building,
+          it*, i.e. a lower taskno that is still waiting or building, or one
+          that failed - a failure is fixed by hand and its row set back to
+          waiting, and until then a dependent would only be built against the
+          old package and have to be rebuilt afterwards.  A failed row blocks
+          from behind as well, since the row stays where it is; the retry
+          reuses it, so it is not blocked by itself.
         * the same pkgbase is already building, or an earlier instance of it is
           still waiting (some packages are built several times, e.g. a first
           :nocheck pass), or
@@ -541,22 +610,29 @@ class TaskManager:
         in front of it counts.
 
         A task that is merely waiting does not block: it is built after this
-        one, so it gets the new build.  Finished tasks (done, failed, nolog) do
-        not block either: their build is over, so the rebuild cannot break it,
-        and the list has already ordered the reverse dependencies behind this
-        one.  Checking them only delayed the rebuild until the tasks in front
-        had started, without protecting anything.
+        one, so it gets the new build.  In this wave check, finished rows (done,
+        failed, nolog) do not block either: their build is over, so the rebuild
+        cannot break it, and the list has already ordered the reverse
+        dependencies behind this one.
+
+        Waiting and building tasks are in front of the candidate, so the queue
+        can always make progress by starting them.  A failed task is different:
+        only the operator can unblock it, so a task held back by one is reported
+        as '%stop' instead of being built against a package that is about to be
+        rebuilt.
 
         Only earlier tasks are considered, which keeps dependencies pointing
         backwards in time: a cycle broken by the sorter cannot deadlock the
-        queue, because whatever blocks a task is either in front of it and
-        waiting (eventually started) or already being built (eventually
-        finished).  A single builder still walks the list in exactly the
-        written order.
+        queue, because whatever blocks a task is either a waiting task in front
+        of it (eventually started), a build in progress (eventually finished), or
+        a failed task, which stops the queue for the operator instead of hanging
+        silently.  A single builder still walks the list in exactly the written
+        order.
 
-        Returns the task entry, '%wait' when nothing may start right now
-        (other builders are working, or the tasklist could not be read), or
-        None when the tasklist is really finished.
+        Returns the task entry, '%wait' when nothing may start right now because
+        another builder is working or the tasklist could not be read, '%stop'
+        when the run cannot continue without the operator (a failed task keeps
+        the remaining ones out), or None when the tasklist is really finished.
         """
         try:
             with self.db.transaction() as cursor:
@@ -571,6 +647,7 @@ class TaskManager:
                 pending = []
                 pending_bases = set()
                 busy_bases = set()
+                failed_bases = set()
                 busy = False
                 bases = []          # pkgbase of every row, in list order
                 previous = []       # row of the previous build of that pkgbase
@@ -587,17 +664,24 @@ class TaskManager:
                     elif info == 'building':
                         busy_bases.add(base)
                         busy = True
+                    elif info.startswith('failed:'):
+                        # Unfinished too: the package is fixed by hand and its
+                        # row is set back to waiting, so a dependent built now
+                        # would only have to be rebuilt afterwards.  The retry
+                        # reuses the same row, so there is no duplicate to worry
+                        # about.
+                        failed_bases.add(base)
 
                 dep_index = get_dep_index() if pending_bases else None
                 # Bases of unfinished tasks seen so far.  The ones in front are
-                # the ordering rules below; the initially added busy bases
-                # cover rows a builder is working on *behind* the candidate as
-                # well, which genrebuild's topological order should never need
-                # (a dependency behind its dependent only comes from a
-                # hand-edited or resumed list).  That part is defensive: for
-                # genrebuild's own lists it changes no pick, but it keeps a
-                # broken order from running two related builds at once.
-                earlier = set(busy_bases)
+                # the ordering rules below; the initially added busy and failed
+                # bases cover rows *behind* the candidate as well, which
+                # genrebuild's topological order should never need (a dependency
+                # behind its dependent only comes from a hand-edited or resumed
+                # list).  That part is defensive: for genrebuild's own lists it
+                # changes no pick, but it keeps a broken order from running two
+                # related builds at once.
+                earlier = set(busy_bases) | failed_bases
                 chosen = None
                 for i, taskno, pkgbase, base, nocheck in pending:
                     # Command entries ('%...') are not packages and keep their
@@ -606,9 +690,9 @@ class TaskManager:
                         chosen = (taskno, pkgbase)
                         break
                     # `base in earlier` is the one-build-per-pkgbase rule.  It
-                    # is defensive too: a repeated pkgbase normally sits inside
-                    # a wave whose dependency edges serialise the instances,
-                    # and only adjacent repeats need this check (an entry of a
+                    # is defensive: a repeated pkgbase normally sits inside a
+                    # wave whose dependency edges serialise the instances, and
+                    # only adjacent repeats need this check (an entry of a
                     # manual loop_list order next to the pass2 rebuild of the
                     # same package).  It still has to stay: buildbot.sh closes a
                     # task with `task --done <pkgbase>`, whose SQL marks *every*
@@ -646,8 +730,12 @@ class TaskManager:
                                     exposed = (bases[j] in risky or
                                                dep_index.chroot_bases(bases[j]) & risky)
                                 else:
-                                    # finished: the build is over, nothing of it
-                                    # can break any more
+                                    # finished, or failed: nothing of that row
+                                    # can break any more.  A haskell failure
+                                    # stops every builder anyway (buildbot.sh
+                                    # inserts %stop), so failures never need to
+                                    # be a wave blocker; the dependency rule
+                                    # takes care of the rest.
                                     continue
                                 if exposed:
                                     blocked = True
@@ -665,10 +753,16 @@ class TaskManager:
                                        (tasklist, taskno))
                     return pkgbase
 
-                if pending or busy:
-                    # Still work in progress on this list (here or on another
-                    # builder), but nothing may start right now.
+                if busy:
+                    # Somebody is still building: that may unblock what is left.
                     return "%wait"
+                if pending:
+                    # Nobody is building and nothing can start: what is left
+                    # waits for a failed task to be dealt with (fixed, then its
+                    # row set back to waiting by hand).  Stop with an error so
+                    # that the master does not move the build repo as if the run
+                    # had finished; `task --block` names the failed ones.
+                    return "%stop"
 
                 # Cleanup and stop logic
                 if building:
@@ -717,6 +811,8 @@ def parse_args():
     task_parser.add_argument("--add", type=str, help="Packages to append")
     task_parser.add_argument("--insert", type=str, help="Packages to insert from top")
     task_parser.add_argument("--show", action="store_true", help="Show queue")
+    task_parser.add_argument("--block", action="store_true",
+                             help="Show the waiting tasks a failed task keeps out")
     task_parser.add_argument("--cost", action="store_true", help="Show queue by time cost")
     task_parser.add_argument("--remove", type=str, help="Remove package")
     task_parser.add_argument("--get", action="store_true", help="Get one package")
@@ -775,6 +871,7 @@ def main():
             if args.remove: task_mgr.remove_task(args.remove, args.list, True, args.taskno)
             if args.done: task_mgr.remove_task(args.done, args.list, False, args.taskno)
             if args.show: task_mgr.show_task(args.list)
+            if args.block: task_mgr.show_block(args.list)
             if args.hist >= 0: task_mgr.show_hist(args.hist)
             if args.cost: task_mgr.show_task_by_cost(args.list)
             if args.eta: task_mgr.show_eta(args.list)

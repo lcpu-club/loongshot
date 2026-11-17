@@ -55,6 +55,8 @@ while [ 1 ]; do
     if [[ "$pkg" == %stop ]]; then
         echo "dbcmd.py returned %stop, stopping this builder." >&2
         echo "  another builder hit a haskell failure, or a %stop entry is in the queue." >&2
+        echo "  a queue waiting for a failed task also stops this way; see:" >&2
+        echo "  dbcmd.py task --block --list $BUILDLIST" >&2
         exit 1
     fi
 
