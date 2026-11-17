@@ -270,6 +270,22 @@ def test_runtime_rdeps_resolve_through_provides(monkeypatch, tmp_path):
     assert index.runtime_rdeps("rust") == set()
 
 
+def test_is_haskell_follows_the_runtime_depends(monkeypatch, tmp_path):
+    # ghc-libs belongs to the ghc pkgbase, so a runtime dependency on it shows
+    # up as "ghc" here - the same marker genrebuild uses.
+    pkgs = {"ghc": {},
+            "haskell-lib": {"depends": ["ghc"]},
+            "haskell-tool": {"makedepends": ["ghc"]},
+            "numpy": {}}
+    _, _, index = make_env(monkeypatch, tmp_path, pkgs, [])
+    assert index.is_haskell("haskell-lib")
+    # ghc does not depend on its own pkgbase; genrebuild says the same
+    assert not index.is_haskell("ghc")
+    # only a build-time user: its own soname keeps the upstream name
+    assert not index.is_haskell("haskell-tool")
+    assert not index.is_haskell("numpy")
+
+
 def test_dep_closure(monkeypatch, tmp_path):
     pkgs = {
         "a": {"depends": ["b"]},
@@ -562,7 +578,9 @@ def test_busy_same_package_blocks(monkeypatch, tmp_path):
 ABI_PKGS = {
     "blocker": {},
     "stuck": {"depends": ["blocker"]},
-    "colour": {},
+    "ghc": {},
+    # a haskell library: ghc-libs normalises to ghc, so this is "links libHS"
+    "colour": {"depends": ["ghc"]},
     "ansi-terminal": {"depends": ["colour"]},
     "haskell-tool": {"depends": ["ansi-terminal"]},
 }
@@ -579,6 +597,25 @@ def test_done_reverse_dependency_does_not_block(monkeypatch, tmp_path):
                    ("ansi-terminal", "done"), "colour")
     _, mgr, _ = make_env(monkeypatch, tmp_path, ABI_PKGS, rows)
     assert pick(mgr) == "colour"
+
+
+def test_non_haskell_rebuild_is_not_blocked_by_a_building_chroot(
+        monkeypatch, tmp_path):
+    """run 1029: glibc was building and python-numpy waited for it.
+
+    glibc's build environment (its makedepends and their runtime closure) has
+    packages that link python-numpy, but rebuilding numpy keeps its soname, so
+    there is nothing to be exposed to and numpy must be handed out.
+    """
+    pkgs = {"glibc": {"makedepends": ["python", "python-scipy"]},
+            "python": {},
+            "python-numpy": {"depends": ["python"]},
+            "python-scipy": {"depends": ["python-numpy"]}}
+    rows = rows_of(("glibc", "building"), "python-numpy")
+    _, mgr, index = make_env(monkeypatch, tmp_path, pkgs, rows)
+    # the old code blocked exactly here
+    assert index.chroot_bases("glibc") & index.runtime_rdeps("python-numpy")
+    assert pick(mgr) == "python-numpy"
 
 
 def test_building_reverse_dependency_in_wave_blocks(monkeypatch, tmp_path):
@@ -753,8 +790,9 @@ def _check_pick(db, index, picked, snapshot):
     #    exposed.  The build environment is what the rule looks at
     #    (chroot_bases), not the whole dependency closure: a makedepend of a
     #    makedepend is not installed and cannot break.  Finished rows are not
-    #    checked: their build is over.
-    risky = index.runtime_rdeps(base)
+    #    checked: their build is over.  Like the code, only a rebuild that can
+    #    change the soname (haskell) is subject to this.
+    risky = index.runtime_rdeps(base) if index.is_haskell(base) else frozenset()
     if risky:
         previous = max((j for j in range(i) if bases[j] == base), default=-1)
         for j in range(previous + 1, i):

@@ -265,6 +265,9 @@ class DepIndex:
         that links it, directly or through another library, then has to be
         rebuilt too.  Only runtime dependencies matter here - a package that
         merely used `base` to build is unaffected.
+
+        `is_haskell()` decides whether that applies at all: a non-haskell
+        rebuild keeps the soname it gets from the upstream version info.
         """
         if not self._rev:
             for b in self.kinds:
@@ -282,6 +285,23 @@ class DepIndex:
                 frontier = nxt
             self._rdeps[base] = frozenset(seen)
         return self._rdeps[base]
+
+    def is_haskell(self, base):
+        """Whether rebuilding `base` can change the soname it exports.
+
+        Haskell libraries embed the GHC package ABI hash in the soname
+        (libHSfoo-<ver>-<abi>-ghc<ver>.so), so every rebuild breaks the
+        packages linking them.  The marker is a runtime dependency on ghc,
+        exactly what genrebuild's is_haskell() uses (its --haskell-check
+        filter, is_arch_haskell(), also drops arch=any packages): ghc-libs is a
+        subpackage of ghc, so normalisation turns "depends ghc-libs" into the
+        pkgbase "ghc".  A package that merely uses ghc as a build tool carries
+        no libHS, and a rebuilt non-haskell package keeps the soname from its
+        version info.  ghc itself is not haskell either (it does not depend on
+        its own pkgbase), same as in genrebuild, which handles it through
+        --ignore ghc,ghc-static.
+        """
+        return "ghc" in self.dep_bases(base, runtime=True)
 
     def chroot_bases(self, base):
         """Everything installed when `base` is built.
@@ -599,10 +619,13 @@ class TaskManager:
           being rebuilt: one that is still waiting and whose build would
           install a package that links this one, or one that is being built
           and either links this one or has such a package installed in its
-          build environment - a haskell rebuild changes the GHC ABI hash in
-          the soname, and then everything installed afterwards fails with
-          "broken packages must be rebuilt before they can be used" until the
-          reverse dependencies are rebuilt.
+          build environment.  Only for packages whose rebuild can change the
+          soname they export (see is_haskell()), which means haskell: their
+          soname embeds the GHC ABI hash, and everything installed afterwards
+          fails with "broken packages must be rebuilt before they can be
+          used" until the reverse dependencies are rebuilt.  A non-haskell
+          rebuild keeps its soname and its reverse dependencies are ordered
+          behind it, so there is nothing to wait for.
 
         The wave is the part of the list between the previous build of the
         same package and this one: earlier passes have already been ordered
@@ -720,7 +743,12 @@ class TaskManager:
                         #   installing them; the queue cannot see that window, so
                         #   it assumes the worst.  Behind the window the wait
                         #   only avoids a build that would have to be redone.
-                        risky = dep_index.runtime_rdeps(base)
+                        # Only a haskell rebuild can change the soname it
+                        # exports (see is_haskell()); anything else keeps it,
+                        # and its reverse dependencies are ordered behind it by
+                        # genrebuild, so there is nothing to be exposed to.
+                        risky = (dep_index.runtime_rdeps(base)
+                                 if dep_index.is_haskell(base) else frozenset())
                         if risky:
                             for j in range(previous[i] + 1, i):
                                 state = rows[j][2]
