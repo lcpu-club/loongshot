@@ -172,25 +172,39 @@ def compare_all():
             pkglist.append(p)
     return pkglist
 
-def show_reverse_depends(depend):
-    queue = deque()
-    queue.append(depend)
+def strip_dep(dep):
+    return dep.split("=")[0].split(">")[0].split("<")[0]
+
+
+def build_reverse_index():
+    rev = {}
+    provided = {}
+    for repo in source_repos:
+        x86_db = load_repo(os.path.join(cache_dir, x86_repo_path), repo)
+        for pkg in x86_db.pkgcache:
+            for name in {strip_dep(d) for d in pkg.depends}:
+                rev.setdefault(name, set()).add(pkg.base)
+            provided.setdefault(pkg.base, set()).add(pkg.name)
+            provided[pkg.base] |= {strip_dep(p) for p in pkg.provides}
+    return rev, provided
+
+
+def show_reverse_depends(depend, deep=False):
+    rev, provided = build_reverse_index()
     depends = set()
-    allchecked = set()
+    queue = deque([depend, *provided.get(depend, ())])
     while queue:
         curpkg = queue.popleft()
-        for repo in source_repos:
-            x86_db = load_repo(os.path.join(cache_dir, x86_repo_path), repo)
-            for pkg in x86_db.pkgcache:
-                if curpkg in pkg.depends and pkg.name not in allchecked:
-                    allchecked.add(pkg.name)
-                    queue.append(pkg.name)
-                    for provide in pkg.provides:
-                        queue.append(provide)
-                    depends.add(pkg.base)
+        for pkgbase in rev.get(curpkg, ()):
+            if pkgbase in depends:
+                continue
+            depends.add(pkgbase)
+            if deep:
+                queue.extend(provided.get(pkgbase, ()))
     print(depend)
-    for pkg in depends:
+    for pkg in sorted(depends):
         print(pkg)
+
 
 def move_repos(ignore_version=False):
     x86 = {}
@@ -327,6 +341,7 @@ def main():
     parser.add_argument("-M", "--movehard", action="store_true", help="Show packages in wrong repos(ignore version difference.")
     parser.add_argument("-l", "--lint", action="store_true", help="Check for db errors.")
     parser.add_argument("-d", "--depend", type=str, help="List reverse depends.")
+    parser.add_argument("-D", "--deep", action="store_true", help="Include transitive reverse depends.")
     parser.add_argument("-o", "--output", type=str, help="Save output to file.")
     parser.add_argument("--mirror_x86", type=str, help="Mirror of x86.")
     parser.add_argument("--mirror_loong", type=str, help="Mirror of loong.")
@@ -398,7 +413,7 @@ def main():
         show_group(args.group, repo)
 
     if args.depend:
-        show_reverse_depends(args.depend)
+        show_reverse_depends(args.depend, args.deep)
 
     if args.lint:
         loong_lint()
