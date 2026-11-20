@@ -154,6 +154,23 @@ def test_non_haskell_failure_never_stops_the_others(tmp_path):
     assert not any("--insert" in c for c in calls(tmp_path))
 
 
+def test_signature_failure_stops_without_retrying(tmp_path):
+    # 0build.sh exits 3 when the package itself built but gpg --detach-sign
+    # failed on the builder: not a build failure, so no retry, but the other
+    # builders would hit the same signing problem.
+    proc = run_buildbot(tmp_path, sandbox(tmp_path, ["cc-tool", "None"], status=3))
+    assert proc.returncode == 0
+    assert len([c for c in calls(tmp_path) if c.startswith("0build")]) == 1
+    assert any("--done cc-tool" in c for c in calls(tmp_path))
+    assert any("--insert %stop" in c for c in calls(tmp_path))
+
+
+def test_signature_failure_on_haskell_inserts_stop_once(tmp_path):
+    proc = run_buildbot(tmp_path, sandbox(tmp_path, ["haskell-tools", "None"], status=3))
+    assert proc.returncode == 0
+    assert len([c for c in calls(tmp_path) if "--insert %stop" in c]) == 1
+
+
 def test_successful_build_marks_done_and_continues(tmp_path):
     proc = run_buildbot(tmp_path, sandbox(tmp_path, ["any-package", "None"]))
     assert proc.returncode == 0

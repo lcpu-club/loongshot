@@ -8,7 +8,7 @@ BUILDDIR=${BUILDDIR:=/mnt/repos}
 BUILDLIST=${BUILDLIST:="1"}
 
 max_retries=3
-max_size=102400  # if the build fails quick ( with small size ), try to recovery
+max_size=204800  # if the build fails quick ( with small size ), try to recovery
 DOUBLEDASH="--"
 
 for para in "$@"; do
@@ -95,8 +95,10 @@ while [ 1 ]; do
             ALLLOGS=$ZSTLOGDIR/$pkg/$pkg-$PKGVER.log
         fi
 
-        # only try to recover from a failed build
-        if [[ "$BUILD_STATUS" -eq 0 ]]; then
+        # only try to recover from a failed build; status 3 is a signing
+        # failure on the builder, retrying would just rebuild the package and
+        # fail to sign it again
+        if [[ "$BUILD_STATUS" -eq 0 ]] || [[ "$BUILD_STATUS" -eq 3 ]]; then
             break
         fi
 
@@ -147,10 +149,16 @@ while [ 1 ]; do
 
     $SCRIPTSPATH/dbcmd.py task --done $orig --list $BUILDLIST
 
+    # A signing failure (status 3) means the package was built and added to the
+    # local-repo, but the .sig is missing.  Signing goes through the same key on
+    # every builder, so stop them all instead of rebuilding the same packages.
+    if [[ "$BUILD_STATUS" -eq 3 ]]; then
+        $SCRIPTSPATH/dbcmd.py task --insert "%stop" --list $BUILDLIST
+
     # A haskell failure is usually the GHC package database being broken, not
     # a problem of this package: every other builder would fail the same way,
     # so stop them all instead of collecting the same error over and over.
-    if [[ "$BUILD_STATUS" -ne 0 ]] && [[ "$pkg" == haskell* ]]; then
+    elif [[ "$BUILD_STATUS" -ne 0 ]] && [[ "$pkg" == haskell* ]]; then
         $SCRIPTSPATH/dbcmd.py task --insert "%stop" --list $BUILDLIST
     fi
 done

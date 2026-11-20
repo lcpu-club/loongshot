@@ -272,8 +272,14 @@ build_package() {
                 scp $BUILDER:$BUILDPATH/$PKGBASE/$FILENAME .
                 ssh -t loong1 "sshfs pluto@tier0:$LOCALREPO/temp-$BUILDREPO$TESTING/os/loong64 $BUILDER; gpg --yes --detach-sign $BUILDER/$FILENAME; fusermount3 -u $BUILDER"
             fi
-            chmod 664 $FILENAME{,.sig}
+            chmod 664 $FILENAME
+            [[ -f $FILENAME.sig ]] && chmod 664 $FILENAME.sig
             repo-add -w $REMOVEFLAG temp-$BUILDREPO$TESTING.db.tar.gz $FILENAME
+            # repo-add works without a signature, the .sig can be added later
+            if [[ ! -f $FILENAME.sig ]]; then
+                msg "$FILENAME.sig not found, gpg --detach-sign failed."
+                touch $SIGFAILFLAG
+            fi
         done)
         DEBUGPKG=$PKGBASE-debug-$PKGVERREL-loong64.pkg.tar.zst
         # echo $DEBUGPKG
@@ -294,6 +300,8 @@ build_package() {
     fi
 }
 
+SIGFAILFLAG=/tmp/loongshot-sigfail.$$
+rm -f $SIGFAILFLAG
 build_package | tee all.log.$BUILDER
 BUILDSTATUS=${PIPESTATUS[0]}
 
@@ -309,6 +317,14 @@ if [[ -f $WORKDIR/$PKGBASE/PKGBUILD ]]; then
     PKGVERREL=$(source $WORKDIR/$PKGBASE/PKGBUILD; echo $epoch${epoch:+:}$pkgver-$pkgrel)
     mkdir -p $ZSTLOGDIR/$PKGBASE
     mv all.log.$BUILDER $ZSTLOGDIR/$PKGBASE/$PKGBASE-$PKGVERREL.log
+fi
+
+if [[ -f $SIGFAILFLAG ]]; then
+    rm -f $SIGFAILFLAG
+    # 3: the package was built and added to the local-repo, only gpg
+    # --detach-sign failed on the builder and the .sig has to be added later.
+    # buildbot.sh must not retry this, but still has to stop the queue.
+    exit 3
 fi
 
 exit $BUILDSTATUS
