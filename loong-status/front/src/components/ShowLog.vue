@@ -155,8 +155,10 @@ export default {
 
 <style scoped>
 .log-container {
-  background-color: #282c34;
-  color: #abb2bf;
+  /* 默认跟随站点主题变量（浅色） */
+  background-color: var(--color-background);
+  color: var(--color-text);
+  border: 1px solid var(--color-border);
   font-family: "Fira Code", "Courier New", monospace;
   padding: 1rem;
   border-radius: 6px;
@@ -199,13 +201,13 @@ export default {
 .page-total,
 .line-meta {
   font-size: 0.8rem;
-  color: #5c6370;
+  color: var(--color-text-mute, #5c6370);
   white-space: nowrap;
 }
 
 .download-link {
   font-size: 0.8rem;
-  color: #61afef;
+  color: var(--color-link, #2c7be5);
   padding: 0;
 }
 
@@ -217,7 +219,7 @@ pre {
 }
 
 .line-number {
-  color: #5c6370;
+  color: var(--color-text-mute, #5c6370);
   display: inline-block;
   min-width: 4em;
   padding-right: 0.75em;
@@ -227,15 +229,41 @@ pre {
 }
 
 .log-status {
-  color: #5c6370;
+  color: var(--color-text-mute, #5c6370);
   padding: 1rem;
 }
 
 .error-message {
-  color: #e06c75;
+  color: var(--color-error, #c0392b);
   padding: 1rem;
-  border: 1px solid #e06c7555;
-  background: #e06c7510;
+  border: 1px solid color-mix(in srgb, var(--color-error, #c0392b) 35%, transparent);
+  background: color-mix(in srgb, var(--color-error, #c0392b) 8%, transparent);
   border-radius: 4px;
+}
+
+/* 暗色模式：沿用原 One Dark 观感 */
+@media (prefers-color-scheme: dark) {
+  .log-container {
+    background-color: var(--color-background);
+    color: var(--color-text);
+    border-color: var(--color-border);
+  }
+
+  .page-total,
+  .line-meta,
+  .line-number,
+  .log-status {
+    color: var(--vt-c-text-dark-2);
+  }
+
+  .download-link {
+    color: #61afef;
+  }
+
+  .error-message {
+    color: #e06c75;
+    border-color: #e06c7555;
+    background: #e06c7510;
+  }
 }
 </style>
