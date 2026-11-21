@@ -21,6 +21,7 @@ class PkgFlags(IntFlag):
     SKIPHASH  = 1 << 6
     TESTING   = 1 << 7
     STAGING   = 1 << 8
+    BIGMEM    = 1 << 9
     FAIL      = 1 << 15
 
 BIT_MAP = {
@@ -33,6 +34,7 @@ BIT_MAP = {
     'skiphash': PkgFlags.SKIPHASH,
     'testing': PkgFlags.TESTING,
     'staging': PkgFlags.STAGING,
+    'bigmem': PkgFlags.BIGMEM,
     'fail': PkgFlags.FAIL,
 }
 
@@ -597,13 +599,18 @@ class TaskManager:
         except Exception as e:
             print(f"Show blocked tasks failed: {e}", file=sys.stderr)
 
-    def get_task(self, tasklist, building=False):
+    def get_task(self, tasklist, building=False, small=False):
         """Pick the next task to build in a way that is safe for parallel builders.
 
         The tasklist order is authoritative (genrebuild already sorted it and
         broke dependency cycles on the way), so the earliest waiting task wins.
         A task is skipped while
 
+        * `small` is set and the package carries the BIGMEM bit: it needs a
+          big-memory machine, so this builder leaves it for one.  The task
+          keeps its place in the list and its dependents behind it are held
+          back as if it were building, so they are never built against the
+          old package;
         * a pkgbase it depends on (depends + makedepends + checkdepends, taken
           from the x86_64 sync databases) has an unfinished task *in front of
           it*, i.e. a lower taskno that is still waiting or building, or one
@@ -653,7 +660,8 @@ class TaskManager:
         order.
 
         Returns the task entry, '%wait' when nothing may start right now because
-        another builder is working or the tasklist could not be read, '%stop'
+        another builder is working, a --small builder is holding back for a
+        big-memory one, or the tasklist could not be read, '%stop'
         when the run cannot continue without the operator (a failed task keeps
         the remaining ones out), or None when the tasklist is really finished.
         """
@@ -696,6 +704,14 @@ class TaskManager:
                         failed_bases.add(base)
 
                 dep_index = get_dep_index() if pending_bases else None
+                # Packages that need a big-memory machine.  Only a --small
+                # builder filters on them; left empty for everybody else.
+                bigmem = set()
+                if small and pending_bases:
+                    cursor.execute("SELECT DISTINCT base FROM packages"
+                                   " WHERE base = ANY(%s) AND flags & %s != 0",
+                                   (list(pending_bases), int(PkgFlags.BIGMEM)))
+                    bigmem = {row[0] for row in cursor.fetchall()}
                 # Bases of unfinished tasks seen so far.  The ones in front are
                 # the ordering rules below; the initially added busy and failed
                 # bases cover rows *behind* the candidate as well, which
@@ -712,6 +728,13 @@ class TaskManager:
                     if pkgbase.startswith('%'):
                         chosen = (taskno, pkgbase)
                         break
+                    # A --small builder leaves the big-memory packages to a
+                    # big-memory one.  Held back like a blocked task: its
+                    # dependents behind it wait for it instead of building
+                    # against the old package.
+                    if base in bigmem:
+                        earlier.add(base)
+                        continue
                     # `base in earlier` is the one-build-per-pkgbase rule.  It
                     # is defensive: a repeated pkgbase normally sits inside a
                     # wave whose dependency edges serialise the instances, and
@@ -785,6 +808,13 @@ class TaskManager:
                     # Somebody is still building: that may unblock what is left.
                     return "%wait"
                 if pending:
+                    if small and not failed_bases:
+                        # Nothing waits for the operator: without a failed task
+                        # the only reason nothing can start is a BIGMEM package
+                        # this --small builder leaves to a big-memory one, so
+                        # wait for it (another builder is not required to be
+                        # building right now for it to exist).
+                        return "%wait"
                     # Nobody is building and nothing can start: what is left
                     # waits for a failed task to be dealt with (fixed, then its
                     # row set back to waiting by hand).  Stop with an error so
@@ -852,6 +882,8 @@ def parse_args():
     task_parser.add_argument("--test", action="store_true", help="Testing repo")
     task_parser.add_argument("--taskno", type=int, default=0)
     task_parser.add_argument("--eta", action="store_true", help="Show ETA for remaining tasks")
+    task_parser.add_argument("--small", action="store_true",
+                             help="With --get: skip packages that need a big-memory machine (bigmem)")
 
     return parser.parse_args()
 
@@ -895,7 +927,7 @@ def main():
             if args.add: task_mgr.insert_task(args.add, args.list, repo)
             if args.insert: task_mgr.insert_task(args.insert, args.list, repo, True, args.taskno)
             if args.get:
-                print(task_mgr.get_task(args.list, args.build))
+                print(task_mgr.get_task(args.list, args.build, args.small))
             if args.remove: task_mgr.remove_task(args.remove, args.list, True, args.taskno)
             if args.done: task_mgr.remove_task(args.done, args.list, False, args.taskno)
             if args.show: task_mgr.show_task(args.list)

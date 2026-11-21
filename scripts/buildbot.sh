@@ -6,6 +6,7 @@ SCRIPTSPATH=${SCRIPTSPATH:=$HOME/loongshot/scripts}
 BUILDER=${BUILDER:=loong1}
 BUILDDIR=${BUILDDIR:=/mnt/repos}
 BUILDLIST=${BUILDLIST:="1"}
+SMALL=${SMALL:-}  # set SMALL=1 on a builder without enough memory for bigmem packages
 
 max_retries=3
 max_size=204800  # if the build fails quick ( with small size ), try to recovery
@@ -45,7 +46,7 @@ umask 002
 while [ 1 ]; do
     retries=0
 
-    pkg=`$SCRIPTSPATH/dbcmd.py task --get --build --list $BUILDLIST`
+    pkg=`$SCRIPTSPATH/dbcmd.py task --get --build --list $BUILDLIST ${SMALL:+--small}`
     orig=$pkg
 
     if [[ "$pkg" == None ]]; then
