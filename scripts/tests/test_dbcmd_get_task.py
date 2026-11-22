@@ -12,8 +12,8 @@ same tasklist.  The important properties are:
   * the same pkgbase never runs twice at the same time,
   * a package is not rebuilt while a task of its wave in front of it is
     exposed to the soname change (the haskell ABI problem, run 1027),
-  * a --small builder never picks a package marked bigmem, and it waits
-    instead of stopping when only bigmem packages are left for it,
+  * a --small builder never picks a package in the bigmem group, and it
+    waits instead of stopping when only bigmem packages are left for it,
   * the queue makes progress and ends with %stop/None, never with a silent
     %wait deadlock.
 
@@ -59,9 +59,9 @@ class FakeCursor:
         if stmt.startswith("SELECT pg_advisory_xact_lock"):
             return
 
-        if stmt.startswith("SELECT DISTINCT base FROM packages"):
-            bases, mask = params
-            self.rows = [(b,) for b in bases if self.db.flags.get(b, 0) & mask]
+        if stmt.startswith("SELECT base FROM grouplist"
+                           " WHERE group_name='bigmem'"):
+            self.rows = [(b,) for b in self.db.bigmem]
             return
 
         if stmt.startswith("SELECT taskno, pkgbase, info FROM tasks"
@@ -113,11 +113,11 @@ class FakeCursor:
 class FakeDatabase:
     """Minimal stand-in for DatabaseManager."""
 
-    def __init__(self, rows, flags=None):
+    def __init__(self, rows, bigmem=None):
         # rows are copied so a test case owns its queue
         self.tasks = [dict(row) for row in rows]
-        # pkgbase -> flags of the packages table (bigmem, ...)
-        self.flags = dict(flags or {})
+        # bases of the grouplist table's 'bigmem' group
+        self.bigmem = set(bigmem or ())
         self.last_picked = None
 
     @contextmanager
@@ -191,11 +191,11 @@ def write_syncdb(dbpath, pkgs, repo="core"):
             tar.add(workdir / member, arcname=member)
 
 
-def make_env(monkeypatch, tmp_path, pkgs, rows, flags=None):
+def make_env(monkeypatch, tmp_path, pkgs, rows, bigmem=None):
     dbpath = tmp_path / "x86"
     write_syncdb(dbpath, pkgs)
     index = dbcmd.DepIndex(str(dbpath))
-    db = FakeDatabase(rows, flags)
+    db = FakeDatabase(rows, bigmem)
     monkeypatch.setattr(dbcmd, "get_dep_index", lambda: index)
     return db, dbcmd.TaskManager(db), index
 
@@ -464,7 +464,7 @@ def test_nolog_dependency_does_not_block(monkeypatch, tmp_path):
 # get_task: --small (packages that need a big-memory machine)
 # --------------------------------------------------------------------------
 
-BIGMEM = dbcmd.PkgFlags.BIGMEM
+BIGMEM = {"heavy"}
 
 
 def test_small_builder_skips_bigmem_and_leaves_it_to_a_big_one(
@@ -472,7 +472,7 @@ def test_small_builder_skips_bigmem_and_leaves_it_to_a_big_one(
     pkgs = {"heavy": {}, "app": {"depends": ["heavy"]}, "light": {}}
     db, mgr, _ = make_env(monkeypatch, tmp_path, pkgs,
                           rows_of("heavy", "app", "light"),
-                          flags={"heavy": BIGMEM})
+                          bigmem=BIGMEM)
     # the small builder goes around the big-memory package
     assert pick(mgr, small=True) == "light"
     # app is not built against the old heavy: it waits for the new one
@@ -489,7 +489,7 @@ def test_small_builder_waits_when_only_bigmem_tasks_remain(
     # Not a finished queue and not a failure to report: a big-memory builder has
     # to take these, so keep polling instead of stopping the run.
     db, mgr, _ = make_env(monkeypatch, tmp_path, {"heavy": {}}, rows_of("heavy"),
-                          flags={"heavy": BIGMEM})
+                          bigmem=BIGMEM)
     assert pick(mgr, small=True) == "%wait"
     assert db.tasks[0]["info"] is None     # neither claimed nor dropped
     assert pick(mgr) == "heavy"
@@ -499,7 +499,7 @@ def test_small_builder_still_stops_on_a_failed_task(monkeypatch, tmp_path):
     pkgs = {"heavy": {}, "lib": {}, "app": {"depends": ["lib"]}}
     rows = rows_of("heavy", ("lib", "failed:8"), "app")
     _, mgr, _ = make_env(monkeypatch, tmp_path, pkgs, rows,
-                         flags={"heavy": BIGMEM})
+                         bigmem=BIGMEM)
     # the failure is what the queue waits for, not the big-memory package
     assert pick(mgr, small=True) == "%stop"
 
@@ -507,7 +507,7 @@ def test_small_builder_still_stops_on_a_failed_task(monkeypatch, tmp_path):
 def test_small_builder_picks_everything_without_bigmem_packages(
         monkeypatch, tmp_path):
     _, mgr, _ = make_env(monkeypatch, tmp_path, {"a": {}, "b": {}},
-                         rows_of("a", "b"), flags={"b": dbcmd.PkgFlags.PATCH})
+                         rows_of("a", "b"))
     assert pick(mgr, small=True) == "a"
 
 

@@ -21,7 +21,6 @@ class PkgFlags(IntFlag):
     SKIPHASH  = 1 << 6
     TESTING   = 1 << 7
     STAGING   = 1 << 8
-    BIGMEM    = 1 << 9
     FAIL      = 1 << 15
 
 BIT_MAP = {
@@ -34,7 +33,6 @@ BIT_MAP = {
     'skiphash': PkgFlags.SKIPHASH,
     'testing': PkgFlags.TESTING,
     'staging': PkgFlags.STAGING,
-    'bigmem': PkgFlags.BIGMEM,
     'fail': PkgFlags.FAIL,
 }
 
@@ -606,11 +604,11 @@ class TaskManager:
         broke dependency cycles on the way), so the earliest waiting task wins.
         A task is skipped while
 
-        * `small` is set and the package carries the BIGMEM bit: it needs a
-          big-memory machine, so this builder leaves it for one.  The task
-          keeps its place in the list and its dependents behind it are held
-          back as if it were building, so they are never built against the
-          old package;
+        * `small` is set and the package is in the 'bigmem' group of the
+          grouplist table: it needs a big-memory machine, so this builder
+          leaves it for one.  The task keeps its place in the list and its
+          dependents behind it are held back as if it were building, so they
+          are never built against the old package;
         * a pkgbase it depends on (depends + makedepends + checkdepends, taken
           from the x86_64 sync databases) has an unfinished task *in front of
           it*, i.e. a lower taskno that is still waiting or building, or one
@@ -704,13 +702,12 @@ class TaskManager:
                         failed_bases.add(base)
 
                 dep_index = get_dep_index() if pending_bases else None
-                # Packages that need a big-memory machine.  Only a --small
-                # builder filters on them; left empty for everybody else.
+                # Bases that need a big-memory machine.  The group is small,
+                # so read it whole; only a --small builder filters on it.
                 bigmem = set()
-                if small and pending_bases:
-                    cursor.execute("SELECT DISTINCT base FROM packages"
-                                   " WHERE base = ANY(%s) AND flags & %s != 0",
-                                   (list(pending_bases), int(PkgFlags.BIGMEM)))
+                if small:
+                    cursor.execute("SELECT base FROM grouplist"
+                                   " WHERE group_name='bigmem'")
                     bigmem = {row[0] for row in cursor.fetchall()}
                 # Bases of unfinished tasks seen so far.  The ones in front are
                 # the ordering rules below; the initially added busy and failed
@@ -728,7 +725,7 @@ class TaskManager:
                     if pkgbase.startswith('%'):
                         chosen = (taskno, pkgbase)
                         break
-                    # A --small builder leaves the big-memory packages to a
+                    # A --small builder leaves the bigmem packages to a
                     # big-memory one.  Held back like a blocked task: its
                     # dependents behind it wait for it instead of building
                     # against the old package.
@@ -810,7 +807,7 @@ class TaskManager:
                 if pending:
                     if small and not failed_bases:
                         # Nothing waits for the operator: without a failed task
-                        # the only reason nothing can start is a BIGMEM package
+                        # the only reason nothing can start is a bigmem package
                         # this --small builder leaves to a big-memory one, so
                         # wait for it (another builder is not required to be
                         # building right now for it to exist).
@@ -883,7 +880,7 @@ def parse_args():
     task_parser.add_argument("--taskno", type=int, default=0)
     task_parser.add_argument("--eta", action="store_true", help="Show ETA for remaining tasks")
     task_parser.add_argument("--small", action="store_true",
-                             help="With --get: skip packages that need a big-memory machine (bigmem)")
+                             help="With --get: skip packages in the bigmem group")
 
     return parser.parse_args()
 
