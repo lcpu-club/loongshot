@@ -48,12 +48,17 @@ BIT_MAP = {
     'fail': PkgFlags.FAIL,
 }
 
-# x86_64 pacman sync databases used to resolve build dependencies.  Every
-# builder must look at the same snapshot; compare86.py refreshes it before a
-# build run starts.
+# x86_64 pacman sync databases used to resolve build dependencies, one set per
+# tasklist: 1 is the plain repos, 2 testing, 3 staging (see buildbot.sh, which
+# derives the tasklist from the repo switch).  A package awaiting its move out of
+# testing/staging is still in the stable repos, and everything else in the
+# distribution never leaves them, so the stable pair is always the base and the
+# testing/staging pair only overrides the names it holds.  Every builder must
+# look at the same snapshot; compare86.py refreshes it before a build run starts.
 DEPDB_DEFAULT = os.path.join(os.path.expanduser('~'), '.cache', 'compare86', 'x86')
-DEP_REPOS = ('core', 'extra', 'core-testing', 'extra-testing',
-             'core-staging', 'extra-staging')
+DEP_REPOS = {1: ('core', 'extra'),
+             2: ('core', 'extra', 'core-testing', 'extra-testing'),
+             3: ('core', 'extra', 'core-staging', 'extra-staging')}
 
 # Key of the advisory lock that serializes task picking between builders.
 PICK_LOCK_KEY = 0x1d0b
@@ -151,11 +156,15 @@ class DepIndex:
     provider is queued too.
     """
 
-    def __init__(self, dbpath=None):
+    def __init__(self, dbpath=None, tasklist=1):
         try:
             import pyalpm
         except ImportError:
             raise RuntimeError("pyalpm is required to resolve build dependencies")
+
+        repos = DEP_REPOS.get(tasklist)
+        if repos is None:
+            raise RuntimeError(f"unknown tasklist {tasklist}")
 
         dbpath = dbpath or os.environ.get('DEPDB', DEPDB_DEFAULT)
         handle = pyalpm.Handle('.', dbpath)
@@ -171,7 +180,7 @@ class DepIndex:
         available = {os.path.basename(f)[:-3]
                      for f in glob.glob(os.path.join(dbpath, 'sync', '*.db'))}
         provides = []
-        for repo in [r for r in DEP_REPOS if r in available]:
+        for repo in [r for r in repos if r in available]:
             try:
                 db = handle.register_syncdb(repo, 0)
             except pyalpm.error as e:
@@ -304,14 +313,14 @@ class DepIndex:
         return self._closure[key]
 
 
-_dep_index = None
+_dep_index = {}                        # tasklist -> DepIndex
 
 
-def get_dep_index():
-    global _dep_index
-    if _dep_index is None:
-        _dep_index = DepIndex()
-    return _dep_index
+def get_dep_index(tasklist=1):
+    """The DepIndex of that tasklist: each one reads its own repos."""
+    if tasklist not in _dep_index:
+        _dep_index[tasklist] = DepIndex(tasklist=tasklist)
+    return _dep_index[tasklist]
 
 
 # The sub-commands live in their own modules; db_bit and db_task import this

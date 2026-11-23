@@ -251,7 +251,7 @@ class TaskManager:
             held = {}               # failed pkgbase -> waiting rows kept out
             skipped = {}            # failed pkgbase -> [rows a builder skipped]
             if waiting and failed:
-                dep_index = dbcmd.get_dep_index()
+                dep_index = dbcmd.get_dep_index(tasklist)
                 failed_bases = set(failed)
                 if latest is not None:
                     failed_bases &= {latest}
@@ -403,7 +403,7 @@ class TaskManager:
                         # about.
                         failed_bases.add(base)
 
-                dep_index = dbcmd.get_dep_index() if pending_bases else None
+                dep_index = dbcmd.get_dep_index(tasklist) if pending_bases else None
                 # Bases that need a big-memory machine.  The group is small,
                 # so read it whole; only a --small builder filters on it.
                 bigmem = set()

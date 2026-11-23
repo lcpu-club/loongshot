@@ -86,7 +86,6 @@ def sandbox(tmp_path, answers, log=None, status=0):
         "ZSTLOGDIR": str(sandbox / "logs"),
         "BUILDER": "loong1",
         "BUILDDIR": "/tmp",
-        "BUILDLIST": "1",
         "PATH": f"{sandbox}:{env['PATH']}",
         "FAKE_STATUS": str(status),
     })
@@ -97,9 +96,10 @@ def sandbox(tmp_path, answers, log=None, status=0):
     return env
 
 
-def run_buildbot(tmp_path, env):
+def run_buildbot(tmp_path, env, extra=()):
     import subprocess
-    return subprocess.run(["bash", str(BUILDBOT), "--builder", "loong1:/tmp",
+    return subprocess.run(["bash", str(BUILDBOT), *extra,
+                           "--builder", "loong1:/tmp",
                            "--", "--skippgpcheck"],
                           cwd=str(tmp_path), env=env,
                           capture_output=True, text=True, timeout=60)
@@ -180,6 +180,28 @@ def test_successful_build_marks_done_and_continues(tmp_path):
     assert proc.returncode == 0
     assert any("--done any-package" in c for c in calls(tmp_path))
     assert not any("--insert" in c for c in calls(tmp_path))
+
+
+def test_unknown_arguments_reach_0build(tmp_path):
+    # buildstag.sh passes the repo switch as --stag/--test (REPOSWITCH) and
+    # relies on buildbot forwarding it untouched: 0build is what sets TESTING,
+    # i.e. which temp repo, chroot and debug pool the package lands in.
+    proc = run_buildbot(tmp_path, sandbox(tmp_path, ["any-package", "None"]),
+                        extra=["--stag"])
+    assert proc.returncode == 0
+    build = [c for c in calls(tmp_path) if c.startswith("0build ")][0]
+    assert "--stag" in build
+
+
+def test_tasklist_follows_the_repo_switch(tmp_path):
+    # No env var any more: 1 is the plain repos, 2 testing, 3 staging, so every
+    # dbcmd.py call has to carry the derived --list.
+    for extra, listno in (([], 1), (["--test"], 2), (["--stag"], 3)):
+        env = sandbox(tmp_path, ["any-package", "None"])
+        proc = run_buildbot(tmp_path, env, extra=extra)
+        assert proc.returncode == 0
+        gets = [c for c in calls(tmp_path) if "--get" in c]
+        assert gets and all(c.endswith(f"--list {listno}") for c in gets), gets
 
 
 def with_inform(tmp_path):

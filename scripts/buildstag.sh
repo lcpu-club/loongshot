@@ -3,7 +3,6 @@
 SCRIPTSPATH=${SCRIPTSPATH:=$HOME/loongshot/scripts}
 BUILDER=${BUILDER:=loong1}
 BUILDDIR=${BUILDDIR:=/mnt/repos}
-BUILDLIST=${BUILDLIST:="1"}
 TESTING=""
 
 while [[ $# -gt 0 ]]; do
@@ -47,6 +46,13 @@ fi
 if [[ ! -z "$TESTING" ]]; then
     REPOSWITCH=-${TESTING%ing}
 fi
+
+# One tasklist per repo family: 1 is extra/core, 2 testing, 3 staging.
+case "$TESTING" in
+    -testing) BUILDLIST=2 ;;
+    -staging) BUILDLIST=3 ;;
+    *)        BUILDLIST=1 ;;
+esac
 
 if [[ -z "$RESUME" ]]; then
     if [[ -z "$SKIP" ]]; then

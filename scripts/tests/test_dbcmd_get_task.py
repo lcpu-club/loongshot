@@ -184,12 +184,12 @@ def write_syncdb(dbpath, pkgs, repo="core"):
             tar.add(workdir / member, arcname=member)
 
 
-def make_env(monkeypatch, tmp_path, pkgs, rows, bigmem=None):
+def make_env(monkeypatch, tmp_path, pkgs, rows, bigmem=None, repo="core"):
     dbpath = tmp_path / "x86"
-    write_syncdb(dbpath, pkgs)
+    write_syncdb(dbpath, pkgs, repo)
     index = dbcmd.DepIndex(str(dbpath))
     db = FakeDatabase(rows, bigmem)
-    monkeypatch.setattr(dbcmd, "get_dep_index", lambda: index)
+    monkeypatch.setattr(dbcmd, "get_dep_index", lambda tasklist=1: index)
     return db, dbcmd.TaskManager(db), index
 
 
@@ -223,6 +223,28 @@ def test_dep_bases_kinds_and_nocheck(monkeypatch, tmp_path):
     assert index.dep_bases("p") == {"d", "m", "c"}
     assert index.dep_bases("p", nocheck=True) == {"d", "m"}
     assert index.dep_bases("p", runtime=True) == {"d"}
+
+
+def test_dep_index_reads_the_repos_of_its_tasklist(tmp_path):
+    dbpath = tmp_path / "x86"
+    write_syncdb(dbpath, {"plain": {}}, "extra")
+    write_syncdb(dbpath, {"testing-pkg": {}}, "extra-testing")
+    write_syncdb(dbpath, {"staging-pkg": {}}, "extra-staging")
+
+    # testing/staging are additional versions of the same packages, so the
+    # stable repos stay in the picture and only the extra one is added
+    assert dbcmd.DepIndex(str(dbpath), tasklist=1).real.keys() == {"plain"}
+    assert dbcmd.DepIndex(str(dbpath), tasklist=2).real.keys() == {
+        "plain", "testing-pkg"}
+    assert dbcmd.DepIndex(str(dbpath), tasklist=3).real.keys() == {
+        "plain", "staging-pkg"}
+
+
+def test_dep_index_rejects_an_unknown_tasklist(tmp_path):
+    dbpath = tmp_path / "x86"
+    write_syncdb(dbpath, {"plain": {}}, "extra")
+    with pytest.raises(RuntimeError):
+        dbcmd.DepIndex(str(dbpath), tasklist=4)
 
 
 def test_provides_only_used_when_the_real_name_is_absent(monkeypatch, tmp_path):
@@ -660,11 +682,27 @@ def test_dependency_index_failure_returns_wait(monkeypatch, tmp_path):
     # the master builder would move the repo while builders are still running.
     db = FakeDatabase(rows_of("a"))
 
-    def broken():
+    def broken(tasklist=1):
         raise RuntimeError("no package database found")
 
     monkeypatch.setattr(dbcmd, "get_dep_index", broken)
     assert pick(dbcmd.TaskManager(db)) == "%wait"
+
+
+def test_get_task_asks_for_the_index_of_its_tasklist(monkeypatch, tmp_path):
+    # Each tasklist is built against its own repos (1 plain, 2 testing, 3
+    # staging), so get_task() must pass the tasklist through.
+    _, mgr, index = make_env(monkeypatch, tmp_path, {"a": {}},
+                             rows_of("a", tasklist=3))
+    asked = []
+
+    def recorder(tasklist=1):
+        asked.append(tasklist)
+        return index
+
+    monkeypatch.setattr(dbcmd, "get_dep_index", recorder)
+    assert pick(mgr, tasklist=3) == "a"
+    assert asked == [3]
 
 
 # --------------------------------------------------------------------------

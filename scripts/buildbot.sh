@@ -5,7 +5,7 @@ ZSTLOGDIR=${ZSTLOGDIR:=$HOME/logs}
 SCRIPTSPATH=${SCRIPTSPATH:=$HOME/loongshot/scripts}
 BUILDER=${BUILDER:=loong1}
 BUILDDIR=${BUILDDIR:=/mnt/repos}
-BUILDLIST=${BUILDLIST:="1"}
+BUILDLIST=1  # 1 is the plain repos, 2 testing, 3 staging; set below
 SMALL=${SMALL:-}  # set SMALL=1 on a builder without enough memory for bigmem packages
 
 max_retries=3
@@ -21,6 +21,13 @@ for para in "$@"; do
         BUILDER=${para%:*}
         BUILDDIR=${para#*:}
     fi
+    # One tasklist per repo family, the same mapping buildstag.sh uses.  The
+    # tasklist picks the pacman databases get_task() resolves build
+    # dependencies from, so it has to follow the repo switch.
+    case "$para" in
+        --stag) BUILDLIST=3 ;;
+        --test) BUILDLIST=2 ;;
+    esac
 done
 
 # Transient network errors that are worth a retry
