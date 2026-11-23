@@ -94,8 +94,11 @@ if [[ $? -eq 0 ]]; then
     $SCRIPTSPATH/move-repo.sh extra${TESTING}
     cd /srv/http/build-repo/temp-core${TESTING}/os/loong64
     $SCRIPTSPATH/move-repo.sh core${TESTING}
+    # Only the staging directory is split per -staging/-testing run, like the
+    # temp-* repos above: the published pool stays shared, all runs land there.
     DEBUG_POOL=/srv/http/debug-pool
-    cd /srv/http/build-repo/debug-pool
+    DEBUGSTAGE=/srv/http/build-repo/debug-pool${TESTING}
+    cd "$DEBUGSTAGE" || exit 1
     for pkg in *.zst; do
         pkgname=${pkg%-debug-*}
         # remove older version

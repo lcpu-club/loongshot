@@ -3,5 +3,8 @@ directories:
   - path: /srv/http/loongarch
   - path: /srv/http/build-repo
   - path: /srv/http/debug-pool
+  - path: /srv/http/build-repo/debug-pool
+  - path: /srv/http/build-repo/debug-pool-staging
+  - path: /srv/http/build-repo/debug-pool-testing
   - path: /home/arch/loong-status
   - path: /home/arch/loong-status/build_logs

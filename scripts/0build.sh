@@ -285,12 +285,12 @@ build_package() {
         # echo $DEBUGPKG
         if ssh -t $BUILDER "cd $BUILDPATH/$PKGBASE; gpg --yes --detach-sign $DEBUGPKG; [ -f $BUILDPATH/$PKGBASE/$DEBUGPKG ]" 2>/dev/null; then
             if [ "$BUILDER" = "loong1" ]; then
-                scp $BUILDER:$BUILDPATH/$PKGBASE/$DEBUGPKG{,.sig} $LOCALREPO/debug-pool
+                scp $BUILDER:$BUILDPATH/$PKGBASE/$DEBUGPKG{,.sig} $LOCALREPO/debug-pool$TESTING
             else # Only loong1 has the signing key
-                scp $BUILDER:$BUILDPATH/$PKGBASE/$DEBUGPKG $LOCALREPO/debug-pool
-                ssh -t loong1 "sshfs pluto@tier0:$LOCALREPO/debug-pool $BUILDER; gpg --yes --detach-sign $BUILDER/$DEBUGPKG; fusermount3 -u $BUILDER"
+                scp $BUILDER:$BUILDPATH/$PKGBASE/$DEBUGPKG $LOCALREPO/debug-pool$TESTING
+                ssh -t loong1 "sshfs pluto@tier0:$LOCALREPO/debug-pool$TESTING $BUILDER; gpg --yes --detach-sign $BUILDER/$DEBUGPKG; fusermount3 -u $BUILDER"
             fi
-            chmod 664 $LOCALREPO/debug-pool/$DEBUGPKG{,.sig}
+            chmod 664 $LOCALREPO/debug-pool$TESTING/$DEBUGPKG{,.sig}
         fi
         msg "$PKGBASE-$PKGVERREL built on $BUILDER, time cost: $TIMECOST"
         return 0
