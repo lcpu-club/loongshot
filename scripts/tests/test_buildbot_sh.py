@@ -54,6 +54,10 @@ NOOPSTUB = """#!/bin/sh
 exit 0
 """
 
+INFORMSTUB = """#!/bin/bash
+printf '%s\\n' "$1" >> "$(dirname "$0")/inform.log"
+"""
+
 PKGBUILD = """pkgver=1.0
 pkgrel=1
 """
@@ -176,3 +180,57 @@ def test_successful_build_marks_done_and_continues(tmp_path):
     assert proc.returncode == 0
     assert any("--done any-package" in c for c in calls(tmp_path))
     assert not any("--insert" in c for c in calls(tmp_path))
+
+
+def with_inform(tmp_path):
+    inform = tmp_path / "inform.sh"
+    inform.write_text(INFORMSTUB)
+    inform.chmod(inform.stat().st_mode | stat.S_IEXEC)
+
+
+def test_failure_that_blocks_tasks_notifies_the_hook(tmp_path):
+    msg = "cc-tool failed, will block 3 more tasks in queue"
+    with_inform(tmp_path)
+    proc = run_buildbot(tmp_path, sandbox(tmp_path,
+                                          ["cc-tool", "done", msg], status=1))
+    assert proc.returncode == 0
+    assert any("--block cc-tool" in c for c in calls(tmp_path))
+    assert (tmp_path / "inform.log").read_text().strip() == msg
+
+
+def test_failure_that_blocks_nothing_does_not_notify(tmp_path):
+    msg = "cc-tool failed, will block 0 more tasks in queue"
+    with_inform(tmp_path)
+    proc = run_buildbot(tmp_path, sandbox(tmp_path,
+                                          ["cc-tool", "done", msg], status=1))
+    assert proc.returncode == 0
+    assert any("--block cc-tool" in c for c in calls(tmp_path))
+    assert not (tmp_path / "inform.log").exists()
+
+
+def test_failure_without_a_hook_does_not_ask_for_the_report(tmp_path):
+    proc = run_buildbot(tmp_path, sandbox(tmp_path, ["cc-tool", "None"],
+                                          status=1))
+    assert proc.returncode == 0
+    assert not any("--block" in c for c in calls(tmp_path))
+
+
+def test_signature_failure_notifies_the_hook(tmp_path):
+    # signing goes through the same key on every builder: the run is stopped
+    # and the message says so instead of reporting what the queue waits for
+    with_inform(tmp_path)
+    proc = run_buildbot(tmp_path, sandbox(tmp_path, ["cc-tool"], status=3))
+    assert proc.returncode == 0
+    assert (tmp_path / "inform.log").read_text().strip() == \
+        "cc-tool signing failure"
+    assert not any("--block" in c for c in calls(tmp_path))
+
+
+def test_haskell_failure_notifies_the_hook(tmp_path):
+    with_inform(tmp_path)
+    proc = run_buildbot(tmp_path, sandbox(tmp_path, ["haskell-tools"],
+                                          log=None, status=1))
+    assert proc.returncode == 0
+    assert (tmp_path / "inform.log").read_text().strip() == \
+        "haskell-tools build failure"
+    assert not any("--block" in c for c in calls(tmp_path))

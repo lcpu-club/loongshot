@@ -41,6 +41,15 @@ has_net_error() {
     return 1
 }
 
+# Hand a message to the operator; the hook is a plain script next to this one
+# and receives the message as its only argument.  Without a hook nothing is
+# sent.
+inform() {
+    if [[ -f $SCRIPTSPATH/inform.sh ]]; then
+        $SCRIPTSPATH/inform.sh "$1"
+    fi
+}
+
 umask 002
 
 while [ 1 ]; do
@@ -153,13 +162,33 @@ while [ 1 ]; do
     # A signing failure (status 3) means the package was built and added to the
     # local-repo, but the .sig is missing.  Signing goes through the same key on
     # every builder, so stop them all instead of rebuilding the same packages.
+    stopped=""
     if [[ "$BUILD_STATUS" -eq 3 ]]; then
         $SCRIPTSPATH/dbcmd.py task --insert "%stop" --list $BUILDLIST
+        stopped=1
+        inform "$pkg signing failure"
 
     # A haskell failure is usually the GHC package database being broken, not
     # a problem of this package: every other builder would fail the same way,
     # so stop them all instead of collecting the same error over and over.
     elif [[ "$BUILD_STATUS" -ne 0 ]] && [[ "$pkg" == haskell* ]]; then
         $SCRIPTSPATH/dbcmd.py task --insert "%stop" --list $BUILDLIST
+        stopped=1
+        inform "$pkg build failure"
+    fi
+
+    # The two failures above stop the run by themselves, so they are reported
+    # as they are.  What is left is a failure that only the queue order makes
+    # harmful: tell the operator when it holds other tasks back, with the
+    # one-line report from `task --block <pkgbase>`.  The pkgbase is passed
+    # explicitly: another builder's newer failure must not be reported in its
+    # place.
+    if [[ "$BUILD_STATUS" -ne 0 ]] && [[ -z "$stopped" ]] &&
+       [[ -f $SCRIPTSPATH/inform.sh ]]; then
+        blocked=$($SCRIPTSPATH/dbcmd.py task --block "$pkg" --list $BUILDLIST)
+        if [[ "$blocked" =~ will\ block\ ([0-9]+)\ more\ tasks ]] &&
+           (( BASH_REMATCH[1] > 0 )); then
+            inform "$blocked"
+        fi
     fi
 done
