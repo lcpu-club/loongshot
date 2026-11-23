@@ -108,4 +108,7 @@ if [[ $? -eq 0 ]]; then
         echo "WARNING: Remaining .zst files found in temp-extra${TESTING}"
     fi
     ${SCRIPTSPATH}/compare86.py -l
+    if [[ -f $SCRIPTSPATH/inform.sh ]]; then
+        $SCRIPTSPATH/inform.sh "All tasks are done!"
+    fi
 fi
