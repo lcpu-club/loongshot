@@ -202,15 +202,22 @@ class TaskManager:
         except Exception as e:
             print(f"Show history failed: {e}", file=sys.stderr)
 
-    def show_block(self, tasklist):
-        """Print why the waiting tasks in front of the running ones wait.
+    def show_block(self, tasklist, only=None):
+        """Print the failed tasks that keep waiting tasks out of the queue.
 
         A failed task is not finished: the operator fixes the package and sets
         the row back to waiting, and until then its dependents would only be
-        built against the old package.  This names the failed row behind each
-        waiting row a builder skipped over, so it can be handled first.  Only
-        rows in front of the first `building` row are reported: the ones behind
-        it are not what the builders passed over.
+        built against the old package.  This names each failed task that holds
+        others back, the waiting rows a builder already skipped over for it
+        (the ones in front of the first `building` row), and how many further
+        waiting rows in the queue it will hold back.  A dependency chain is
+        reported under its root cause: a task kept out only through another
+        waiting task is attributed to the failed task behind that one.
+
+        `only` names the failed pkgbase to report and reduces the output to
+        one line: `pkgbase failed, will block N more tasks`.  A builder passes
+        the package it just failed; the failure with the newest log is not
+        used, since another builder's failure may be newer.
         """
         try:
             with self.db.transaction() as cursor:
@@ -232,16 +239,26 @@ class TaskManager:
                 elif info.startswith('failed:'):
                     failed.setdefault(base, []).append((taskno, info))
 
-            report = []
+            latest = None
+            if only is not None:
+                # The pkgbase may appear several times (a :nocheck pass, a
+                # retry): report it only if one of its rows really failed.
+                latest, _ = dbcmd.parse_pkgbase(only)
+                if latest not in failed:
+                    print(f"No failed task for {latest} in the queue.")
+                    return
+
+            held = {}               # failed pkgbase -> waiting rows kept out
+            skipped = {}            # failed pkgbase -> [rows a builder skipped]
             if waiting and failed:
                 dep_index = dbcmd.get_dep_index()
                 failed_bases = set(failed)
-                # pkgbase of a skipped row in front -> the failed pkgbases that
-                # keep it (and therefore everything below it) out
+                if latest is not None:
+                    failed_bases &= {latest}
+                # pkgbase of a skipped row -> the failed pkgbases that keep it
+                # (and therefore everything below it) out
                 blocked = {}
                 for taskno, base, nocheck in waiting:
-                    if first_building is not None and taskno > first_building:
-                        break
                     deps = dep_index.dep_bases(base, nocheck)
                     roots = set(deps & failed_bases)
                     if base in failed_bases:
@@ -249,20 +266,36 @@ class TaskManager:
                         roots.add(base)
                     for dep in deps:
                         roots |= blocked.get(dep, set())
-                    if roots:
-                        blocked[base] = roots
-                        report.append((taskno, base, sorted(roots)))
+                    if not roots:
+                        continue
+                    blocked[base] = roots
+                    for root in roots:
+                        held[root] = held.get(root, 0) + 1
+                        if first_building is None or taskno < first_building:
+                            skipped.setdefault(root, []).append(base)
 
-            if not report:
+            if latest is not None:
+                print(f"{latest} failed, will block {held.get(latest, 0)}"
+                      " more tasks in queue")
+                return
+
+            if not held:
                 print("No waiting task is blocked by a failed task.")
                 return
 
-            print("task pkgbase                            blocked by")
-            print("-" * 72)
-            for taskno, base, roots in report:
-                why = ", ".join(f"{root} (task {no}, {info})"
-                                for root in roots for no, info in failed[root])
-                print(f"{taskno:4} {base:34} {why}")
+            for root in sorted(held, key=lambda b: failed[b][0][0]):
+                info = failed[root][0][1]
+                try:
+                    code = int(info.split(':', 1)[1])
+                    reason = (dbcmd.ERROR_MESSAGES[code]
+                              if 0 < code < len(dbcmd.ERROR_MESSAGES) else '')
+                except (IndexError, ValueError):
+                    reason = ''
+                names = skipped.get(root, [])
+                print(f"{root} ({reason or info})")
+                print("    blocks: " +
+                      (", ".join(names) if names else "(none)"))
+                print(f"    will block {held[root] - len(names)} more tasks in queue")
         except Exception as e:
             print(f"Show blocked tasks failed: {e}", file=sys.stderr)
 

@@ -339,8 +339,9 @@ def parse_args():
     task_parser.add_argument("--add", type=str, help="Packages to append")
     task_parser.add_argument("--insert", type=str, help="Packages to insert from top")
     task_parser.add_argument("--show", action="store_true", help="Show queue")
-    task_parser.add_argument("--block", action="store_true",
-                             help="Show the waiting tasks a failed task keeps out")
+    task_parser.add_argument("--block", nargs='?', const='', metavar='PKGBASE',
+                             help="Show the failed tasks that keep waiting tasks out;"
+                                  " with a pkgbase, one line for that failed task")
     task_parser.add_argument("--cost", action="store_true", help="Show queue by time cost")
     task_parser.add_argument("--remove", type=str, help="Remove package")
     task_parser.add_argument("--get", action="store_true", help="Get one package")
@@ -417,7 +418,8 @@ def main():
             if args.remove: task_mgr.remove_task(args.remove, args.list, True, args.taskno)
             if args.done: task_mgr.remove_task(args.done, args.list, False, args.taskno)
             if args.show: task_mgr.show_task(args.list)
-            if args.block: task_mgr.show_block(args.list)
+            if args.block is not None:
+                task_mgr.show_block(args.list, args.block or None)
             if args.hist >= 0: task_mgr.show_hist(args.hist)
             if args.cost: task_mgr.show_task_by_cost(args.list)
             if args.eta: task_mgr.show_eta(args.list)

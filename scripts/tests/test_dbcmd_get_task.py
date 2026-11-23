@@ -521,30 +521,89 @@ def test_show_block_names_the_failed_dependency(monkeypatch, tmp_path, capsys):
     _, mgr, _ = make_env(monkeypatch, tmp_path, pkgs, rows)
     mgr.show_block(1)
     out = capsys.readouterr().out
-    assert "lib (task 1, failed:8)" in out
-    assert "app" in out
+    assert "lib (A failure occurred in build)" in out
+    assert "blocks: app" in out
+    assert "will block 0 more tasks in queue" in out
 
 
 def test_show_block_follows_dependents(monkeypatch, tmp_path, capsys):
-    # app is not blocked by lib directly: it waits for mid, which waits for lib
+    # app is not blocked by lib directly: it waits for mid, which waits for lib,
+    # so both are reported under the root cause lib
     pkgs = {"lib": {}, "mid": {"depends": ["lib"]},
             "app": {"depends": ["mid"]}, "other": {}}
     rows = rows_of(("lib", "failed:8"), "mid", "app", ("other", "building"))
     _, mgr, _ = make_env(monkeypatch, tmp_path, pkgs, rows)
     mgr.show_block(1)
     out = capsys.readouterr().out
-    assert sum(1 for line in out.splitlines()
-               if "lib (task 1, failed:8)" in line) == 2
+    assert "blocks: mid, app" in out
+    assert "will block 0 more tasks in queue" in out
 
 
-def test_show_block_ignores_rows_after_a_running_task(monkeypatch, tmp_path,
+def test_show_block_counts_rows_behind_a_running_task(monkeypatch, tmp_path,
                                                       capsys):
-    # only rows in front of the first running task are what builders skipped
+    # rows behind the running one are not named, but they are still held back
     pkgs = {"lib": {}, "app": {"depends": ["lib"]}}
     rows = rows_of(("busy", "building"), ("lib", "failed:8"), "app")
     _, mgr, _ = make_env(monkeypatch, tmp_path, pkgs, rows)
     mgr.show_block(1)
-    assert "No waiting task is blocked" in capsys.readouterr().out
+    out = capsys.readouterr().out
+    assert "blocks: (none)" in out
+    assert "will block 1 more tasks in queue" in out
+
+
+def test_show_block_new_reports_the_named_pkgbase(monkeypatch, tmp_path,
+                                                 capsys):
+    # a builder reports its own failure; the other failed task and its
+    # dependent must not leak into the one-line report
+    pkgs = {"old": {}, "new": {}, "a": {"depends": ["old"]},
+            "b": {"depends": ["new"]}}
+    rows = rows_of(("old", "failed:8"), ("new", "failed:3"), "a", "b")
+    _, mgr, _ = make_env(monkeypatch, tmp_path, pkgs, rows)
+    mgr.show_block(1, only="old:nocheck")
+    assert capsys.readouterr().out.strip() == \
+        "old failed, will block 1 more tasks in queue"
+
+
+def test_show_block_new_counts_all_blocked_rows(monkeypatch, tmp_path, capsys):
+    # the one-line form has no blocks list, so N is the whole count
+    pkgs = {"lib": {}, "mid": {"depends": ["lib"]},
+            "app": {"depends": ["mid"]}}
+    rows = rows_of(("busy", "building"), ("lib", "failed:8"), "mid", "app")
+    _, mgr, _ = make_env(monkeypatch, tmp_path, pkgs, rows)
+    mgr.show_block(1, only="lib")
+    assert capsys.readouterr().out.strip() == \
+        "lib failed, will block 2 more tasks in queue"
+
+
+def test_show_block_new_finds_the_failed_row_of_a_repeated_pkgbase(
+        monkeypatch, tmp_path, capsys):
+    # the same pkgbase can be queued twice (a :nocheck pass, a retry); the
+    # report is about the row that failed, not the waiting ones next to it
+    pkgs = {"lib": {}, "app": {"depends": ["lib"]}}
+    rows = rows_of("lib:nocheck", ("lib", "failed:8"), "app")
+    _, mgr, _ = make_env(monkeypatch, tmp_path, pkgs, rows)
+    mgr.show_block(1, only="lib")
+    assert capsys.readouterr().out.strip() == \
+        "lib failed, will block 2 more tasks in queue"
+
+
+def test_show_block_new_for_a_pkgbase_that_did_not_fail(
+        monkeypatch, tmp_path, capsys):
+    pkgs = {"lib": {}, "app": {"depends": ["lib"]}}
+    rows = rows_of(("lib", "failed:8"), "app")
+    _, mgr, _ = make_env(monkeypatch, tmp_path, pkgs, rows)
+    mgr.show_block(1, only="app")
+    assert capsys.readouterr().out.strip() == \
+        "No failed task for app in the queue."
+
+
+def test_show_block_new_without_any_failed_task(monkeypatch, tmp_path,
+                                                capsys):
+    _, mgr, _ = make_env(monkeypatch, tmp_path, {"a": {}, "b": {}},
+                         rows_of("a", "b"))
+    mgr.show_block(1, only="a")
+    assert capsys.readouterr().out.strip() == \
+        "No failed task for a in the queue."
 
 
 def test_waiting_dependency_of_a_blocked_task_blocks(monkeypatch, tmp_path):
