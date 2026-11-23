@@ -17,7 +17,7 @@ class GroupManager:
 
     @staticmethod
     def parse_pkgs(pkgs):
-        """Split a --pkg argument: 'a, b' -> ['a', 'b'], duplicates dropped."""
+        """Split a --add/--remove argument: 'a, b' -> ['a', 'b'], duplicates dropped."""
         return list(dict.fromkeys(
             pkg.strip() for pkg in (pkgs or '').split(',') if pkg.strip()))
 
@@ -76,7 +76,7 @@ class GroupManager:
         """Add packages to a group, skipping the ones already in it."""
         bases = self.parse_pkgs(pkgs)
         if not bases:
-            print("Error: '--pkg' required to add packages.", file=sys.stderr)
+            print("Error: '--add' requires package names.", file=sys.stderr)
             return
 
         try:
@@ -110,7 +110,7 @@ class GroupManager:
         """Remove packages from a group."""
         bases = self.parse_pkgs(pkgs)
         if not bases:
-            print("Error: '--pkg' required to remove packages.", file=sys.stderr)
+            print("Error: '--remove' requires package names.", file=sys.stderr)
             return
 
         try:

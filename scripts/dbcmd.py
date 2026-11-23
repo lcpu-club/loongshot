@@ -367,15 +367,14 @@ def parse_args():
 
     # Group Command
     group_parser = subparsers.add_parser("group", help="Manage package groups")
-    group_parser.add_argument("--add", action="store_true",
-                              help="Add --pkg to the group")
-    group_parser.add_argument("--remove", action="store_true",
-                              help="Remove --pkg from the group")
+    group_parser.add_argument("--add", type=str, metavar='PKG',
+                              help="Packages to add, comma separated")
+    group_parser.add_argument("--remove", type=str, metavar='PKG',
+                              help="Packages to remove, comma separated")
     group_parser.add_argument("--list", action="store_true",
                               help="List the packages of the group")
     group_parser.add_argument("--list_group", action="store_true",
                               help="List all group names")
-    group_parser.add_argument("--pkg", type=str, help="Packages, comma separated")
     group_parser.add_argument("--info", type=str,
                               help="Note stored with --add, or matched by --list")
     group_parser.add_argument("group_name", type=str, nargs='?', help="Group name")
@@ -439,14 +438,16 @@ def main():
             if args.list_group:
                 group_mgr.list_groups()
 
-            if args.list or args.add or args.remove:
+            if args.list or args.add is not None or args.remove is not None:
                 if not args.group_name:
                     print("Error: 'group_name' required.", file=sys.stderr)
                     return
 
                 if args.list: group_mgr.list_packages(args.group_name, args.info)
-                if args.add: group_mgr.add_packages(args.group_name, args.pkg, args.info)
-                if args.remove: group_mgr.remove_packages(args.group_name, args.pkg)
+                if args.add is not None:
+                    group_mgr.add_packages(args.group_name, args.add, args.info)
+                if args.remove is not None:
+                    group_mgr.remove_packages(args.group_name, args.remove)
 
 if __name__ == "__main__":
     try:
