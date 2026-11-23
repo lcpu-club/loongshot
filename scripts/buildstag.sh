@@ -85,6 +85,9 @@ if [[ -z "$RESUME" ]]; then
     # Add version parameters to packages that need to be built multiple times
     PKG=$(${SCRIPTSPATH}/addver.py $REPOSWITCH $PKG)
     ./dbcmd.py task --add "$PKG" $REPOSWITCH --list $BUILDLIST
+    if [[ $? -ne 0 ]]; then
+        exit 1
+    fi
 fi
 
 ./buildbot.sh $REPOSWITCH --builder $BUILDER:$BUILDDIR -- --skippgpcheck

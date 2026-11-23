@@ -420,8 +420,10 @@ def main():
         elif args.command == "task":
             repo = 1 if args.test else 2 if args.stag else 0
 
-            if args.add: task_mgr.insert_task(args.add, args.list, repo)
-            if args.insert: task_mgr.insert_task(args.insert, args.list, repo, True, args.taskno)
+            if args.add and not task_mgr.insert_task(args.add, args.list, repo):
+                sys.exit(1)
+            if args.insert and not task_mgr.insert_task(args.insert, args.list, repo, True, args.taskno):
+                sys.exit(1)
             if args.get:
                 print(task_mgr.get_task(args.list, args.build, args.small))
             if args.remove: task_mgr.remove_task(args.remove, args.list, True, args.taskno)
