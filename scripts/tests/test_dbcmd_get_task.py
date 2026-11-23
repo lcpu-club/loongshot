@@ -91,13 +91,6 @@ class FakeCursor:
                     self.rowcount += 1
             return
 
-        if stmt.startswith("SELECT count(*) from tasks"
-                           " WHERE tasklist!=%s AND tasklist!=0"):
-            (tasklist,) = params
-            self.rows = [(sum(1 for t in self.db.tasks
-                              if t["tasklist"] not in (tasklist, 0)),)]
-            return
-
         raise AssertionError(f"unexpected SQL: {stmt}")
 
     def fetchall(self):
@@ -331,10 +324,10 @@ def test_get_without_build_never_touches_the_queue(monkeypatch, tmp_path):
     assert pick(mgr, building=False) == "%wait"
     assert db.tasks[0]["info"] == "building"
 
-    # %stop: a different tasklist is unfinished
+    # None: a different tasklist no longer matters, this one is finished
     rows = rows_of(("a", "done")) + rows_of("b", tasklist=2)
     db, mgr, _ = make_env(monkeypatch, tmp_path, {"a": {}, "b": {}}, rows)
-    assert pick(mgr, building=False) == "%stop"
+    assert pick(mgr, building=False) is None
     assert db.tasks[0]["tasklist"] == 1
 
     # None: this tasklist is done, but the history rows stay where they are
@@ -365,11 +358,15 @@ def test_finished_tasklist_returns_none(monkeypatch, tmp_path):
     assert db.tasks[0]["tasklist"] == 0
 
 
-def test_other_tasklist_keeps_the_master_waiting(monkeypatch, tmp_path):
+def test_other_tasklist_does_not_block_the_run(monkeypatch, tmp_path):
+    # Another list still has tasks: this run is finished anyway, so the master
+    # may move the build repo instead of staying stopped.
     rows = rows_of(("a", "done"))
     rows += rows_of("b", tasklist=2)
-    _, mgr, _ = make_env(monkeypatch, tmp_path, {"a": {}, "b": {}}, rows)
-    assert pick(mgr) == "%stop"
+    db, mgr, _ = make_env(monkeypatch, tmp_path, {"a": {}, "b": {}}, rows)
+    assert pick(mgr) is None
+    assert db.tasks[0]["tasklist"] == 0
+    assert db.tasks[1]["tasklist"] == 2
 
 
 def test_stop_command_keeps_its_place(monkeypatch, tmp_path):
@@ -950,7 +947,7 @@ def simulate(monkeypatch, tmp_path, pkgs, order, builders, seed, rounds=10000):
             finished = True
             break
         if picked == "%stop":
-            raise AssertionError("unexpected %stop: another tasklist exists")
+            raise AssertionError(f"unexpected %stop; queue={snapshot}")
         if picked == "%wait":
             if not active:
                 raise AssertionError(

@@ -525,10 +525,7 @@ class TaskManager:
                 if building:
                     cursor.execute("UPDATE tasks SET tasklist=0 WHERE tasklist=%s AND info IS NOT NULL", (tasklist,))
 
-                cursor.execute("SELECT count(*) from tasks WHERE tasklist!=%s AND tasklist!=0", (tasklist,))
-                remain = cursor.fetchone()[0]
-                # Wait for other tasklist to finish if remain > 0
-                return "%stop" if remain > 0 else None
+                return None
         except Exception as e:
             # Never report 'finished' on an error: the master builder would
             # move the built packages into the repo while other builders are
