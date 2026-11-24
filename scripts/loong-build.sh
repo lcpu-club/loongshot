@@ -163,6 +163,12 @@ build_package() {
         PKGNAME=$(. PKGBUILD; echo $pkgname)
     fi
 
+    # duplicated prepare() would break makepkg
+    if [[ $(grep -cE '^[[:space:]]*prepare[[:space:]]*\(\)' PKGBUILD) -gt 1 ]]; then
+        error "More than one prepare() function found in PKGBUILD."
+        return 1
+    fi
+
     PKGVERREL=$(source PKGBUILD; echo $epoch${epoch:+:}$pkgver-$pkgrel)
 
     # Try to find the pkgver from tier0 server
