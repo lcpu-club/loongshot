@@ -34,9 +34,11 @@ if [[ -n $PKGRELDIFF ]]; then
     die "pkgrel must not be modified, revert it before creating the patch."
 fi
 
-# Print every entry of the source arrays (source, source_x86_64, ...) of a
-# PKGBUILD.  The file is sourced in a subshell so that variable references
-# such as ${pkgname} or ${pkgver} are expanded.
+# Print the entries of the source arrays (source, source_x86_64, ...) of a
+# PKGBUILD that are not tracked by the current git repository: files we track
+# are covered by the git diff, only the untracked ones have to travel through
+# $LOONGREPO/$PKG.  The file is sourced in a subshell so that variable
+# references such as ${pkgname} or ${pkgver} are expanded.
 list_sources() {
     (
         set +u
@@ -47,7 +49,13 @@ list_sources() {
             [[ $(declare -p "$var" 2>/dev/null) == "declare -a"* ]] || continue
             eval "for e in \"\${$var[@]}\"; do printf '%s\n' \"\$e\"; done"
         done
-    ) | sort -u
+    ) | sort -u | while IFS= read -r entry; do
+        path=${entry##*::}
+        path=${path#file://}
+        path=${path#./}
+        git ls-files --error-unmatch -- ":(literal)$path" >/dev/null 2>&1 && continue
+        printf '%s\n' "$entry"
+    done
 }
 
 # Return true if the source entry is downloaded by makepkg.
