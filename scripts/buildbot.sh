@@ -7,6 +7,7 @@ BUILDER=${BUILDER:=loong1}
 BUILDDIR=${BUILDDIR:=/mnt/repos}
 BUILDLIST=1  # 1 is the plain repos, 2 testing, 3 staging; set below
 SMALL=${SMALL:-}  # set SMALL=1 on a builder without enough memory for bigmem packages
+NOSTOP=${NOSTOP:-}  # set NOSTOP=1 (or --nostop) to treat %stop like %wait
 
 max_retries=3
 max_size=204800  # if the build fails quick ( with small size ), try to recovery
@@ -27,6 +28,9 @@ for para in "$@"; do
     case "$para" in
         --stag) BUILDLIST=3 ;;
         --test) BUILDLIST=2 ;;
+        # Keep this builder running when the queue says %stop: treat it as
+        # %wait and retry after the usual wait instead of exiting.
+        --nostop) NOSTOP=1 ;;
     esac
 done
 
@@ -67,6 +71,11 @@ while [ 1 ]; do
 
     if [[ "$pkg" == None ]]; then
         exit 0
+    fi
+
+    if [[ "$pkg" == %stop ]] && [[ -n "$NOSTOP" ]]; then
+        sleep 10
+        continue
     fi
 
     if [[ "$pkg" == %stop ]]; then

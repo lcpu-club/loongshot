@@ -90,7 +90,7 @@ if [[ -z "$RESUME" ]]; then
     fi
 fi
 
-./buildbot.sh $REPOSWITCH --builder $BUILDER:$BUILDDIR -- --skippgpcheck
+./buildbot.sh $REPOSWITCH --builder $BUILDER:$BUILDDIR --nostop -- --skippgpcheck
 
 if [[ $? -eq 0 ]]; then
     cd /srv/http/build-repo/temp-extra${TESTING}/os/loong64
