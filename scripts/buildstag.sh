@@ -121,6 +121,6 @@ if [[ $? -eq 0 ]]; then
     fi
     ${SCRIPTSPATH}/compare86.py -l
     if [[ -f $SCRIPTSPATH/inform.sh ]]; then
-        $SCRIPTSPATH/inform.sh "All tasks are done!"
+        $SCRIPTSPATH/inform.sh "All tasks are done for list $BUILDLIST!"
     fi
 fi
